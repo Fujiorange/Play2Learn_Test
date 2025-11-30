@@ -80,7 +80,7 @@ const Contact = () => {
                 <h4>📋 Sales Inquiry</h4>
                 <p>Contact our sales team for pricing and demonstrations</p>
                 <a href="mailto:sales@Play2Learn.com" className="support-link">
-                  sales@eduadapt.com
+                  sales@Play2Learn.com
                 </a>
               </div>
 
@@ -88,7 +88,7 @@ const Contact = () => {
                 <h4>🔧 Technical Support</h4>
                 <p>Get help with technical issues and platform questions</p>
                 <a href="mailto:support@Play2Learn.com" className="support-link">
-                  support@eduadapt.com
+                  support@Play2Learn.com
                 </a>
               </div>
 
@@ -96,7 +96,7 @@ const Contact = () => {
                 <h4>🏫 School Partnerships</h4>
                 <p>Discuss institutional partnerships and bulk licensing</p>
                 <a href="mailto:partnerships@Play2Learn.com" className="support-link">
-                  partnerships@eduadapt.com
+                  partnerships@Play2Learn.com
                 </a>
               </div>
             </div>
