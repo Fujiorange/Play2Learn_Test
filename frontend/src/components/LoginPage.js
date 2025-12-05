@@ -323,11 +323,11 @@ export default function LoginPage() {
                 }}
               >
                 <option value="">Select your role</option>
-                <option value="school-admin">School Admin</option>
-                <option value="platform-admin">Platform Admin</option>
-                <option value="teacher">Teacher</option>
                 <option value="student">Student</option>
                 <option value="parent">Parent</option>
+                <option value="teacher">Teacher</option>
+                <option value="school-admin">School Admin</option>
+                <option value="platform-admin">Platform Admin</option>
               </select>
             </div>
 

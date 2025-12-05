@@ -43,16 +43,8 @@ export default function RegisterPage() {
       return;
     }
 
-    // Business registration number is only required for School Admins with certain org types
-    const organizationTypes = ['tuition-center', 'government-school', 'private-school', 'business'];
-    const rolesRequiringBusinessNumber = ['school-admin', 'platform-admin'];
-    
-    if (rolesRequiringBusinessNumber.includes(formData.role) && 
-        organizationTypes.includes(formData.organizationType) && 
-        !formData.businessRegistrationNumber) {
-      setError('Business / School Registration Number is required for administrators');
-      return;
-    }
+    // Students and parents don't need business registration numbers
+    // (Teachers and admins are created by the system, not through registration)
     
     if (!formData.name || !formData.email || !formData.password || !formData.contact || 
         !formData.gender || !formData.organizationName || !formData.organizationType || !formData.role) {
@@ -88,12 +80,6 @@ export default function RegisterPage() {
       handleSubmit();
     }
   };
-
-  // Show business reg field for school/business org types
-  const showBusinessReg = ['tuition-center', 'government-school', 'private-school', 'business'].includes(formData.organizationType);
-  
-  // Only required for admins
-  const businessRegRequired = ['school-admin', 'platform-admin'].includes(formData.role) && showBusinessReg;
 
   const styles = {
     container: {
@@ -432,30 +418,6 @@ export default function RegisterPage() {
               </select>
             </div>
 
-            {showBusinessReg && (
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  Business / School Registration Number
-                  {!businessRegRequired && <span style={{color: '#6b7280', fontWeight: 'normal'}}> (Optional)</span>}
-                </label>
-                <input
-                  type="text"
-                  name="businessRegistrationNumber"
-                  value={formData.businessRegistrationNumber}
-                  onChange={handleChange}
-                  onKeyPress={handleKeyPress}
-                  onFocus={() => setFocusedField('businessRegistrationNumber')}
-                  onBlur={() => setFocusedField('')}
-                  placeholder={businessRegRequired ? "Required for administrators" : "E.g., 202012345A (UEN for Singapore)"}
-                  disabled={loading}
-                  style={{
-                    ...styles.input,
-                    ...(focusedField === 'businessRegistrationNumber' ? styles.inputFocus : {}),
-                  }}
-                />
-              </div>
-            )}
-
             <div style={styles.formGroup}>
               <label style={styles.label}>Your Role</label>
               <select
@@ -471,8 +433,6 @@ export default function RegisterPage() {
                 }}
               >
                 <option value="">Select your role</option>
-                <option value="school-admin">School Admin</option>
-                <option value="teacher">Teacher</option>
                 <option value="student">Student</option>
                 <option value="parent">Parent</option>
               </select>

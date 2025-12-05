@@ -27,10 +27,8 @@ USE play2learn;
 SELECT * FROM users;
 * It should display all the user that was created by me, alternative you can just sign up one dummy account.
 
-email: John@test.com password: W3lcome2025! Role: Student
-email: smith@test.com password: Teacher2025! Role: Teacher
-email: tammy@test.com password: W3lcome2025! Role: Student
-
+Email:admin@play2learn.com
+Password:admin123
 
 * Key Things to take note
 
