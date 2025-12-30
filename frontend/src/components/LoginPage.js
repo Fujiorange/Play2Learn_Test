@@ -25,8 +25,22 @@ export default function LoginPage() {
       const result = await authService.login(email, password, role);
 
       if (result.success) {
-        // Navigate to dashboard
-        navigate('/dashboard');
+        // Redirect based on user role
+        const userRole = result.user.role;
+        
+        if (userRole === 'platform-admin') {
+          navigate('/platform-admin');
+        } else if (userRole === 'school-admin') {
+          navigate('/school-admin');
+        } else if (userRole === 'teacher') {
+          navigate('/teacher');
+        } else if (userRole === 'student') {
+          navigate('/student');
+        } else if (userRole === 'parent') {
+          navigate('/parent');
+        } else {
+          navigate('/login');
+        }
       } else {
         setError(result.error || 'Login failed');
       }
@@ -192,6 +206,25 @@ export default function LoginPage() {
       color: '#6b7280',
       textAlign: 'center',
     },
+    helpSection: {
+      marginTop: '25px',
+      padding: '20px',
+      background: '#f0f9ff',
+      borderRadius: '12px',
+      border: '2px solid #bfdbfe',
+    },
+    helpTitle: {
+      fontSize: '15px',
+      color: '#1e40af',
+      margin: '0 0 12px 0',
+      fontWeight: '600',
+    },
+    helpText: {
+      fontSize: '13px',
+      color: '#1e40af',
+      margin: '6px 0',
+      lineHeight: '1.5',
+    },
     link: {
       color: '#10b981',
       fontWeight: '600',
@@ -351,6 +384,19 @@ export default function LoginPage() {
                 ⚠️ {error}
               </div>
             )}
+
+            {/* Forgot Password Help */}
+            <div style={styles.helpSection}>
+              <p style={styles.helpTitle}>
+                🔐 Forgot your password?
+              </p>
+              <p style={styles.helpText}>
+                <strong>Teachers, Students, Parents:</strong> Contact your School Administrator
+              </p>
+              <p style={styles.helpText}>
+                <strong>School Admins:</strong> Contact Platform Support
+              </p>
+            </div>
 
             <p style={styles.registerLink}>
               Don't have an account?{' '}

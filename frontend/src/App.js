@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
+
+// Landing Page Components
 import Header from './components/Header/Header';
 import Hero from './components/Hero/Hero';
 import Features from './components/Feature/Features';
@@ -10,18 +12,68 @@ import Testimonials from './components/Testimonials/Testimonials';
 import Pricing from './components/Pricing/Pricing';
 import Contact from './components/Contact/Contact';
 import Footer from './components/Footer/Footer';
+
+// Auth Components
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
-import Dashboard from './components/Dashboard';
+
+// Teacher Components
+import TeacherDashboard from './components/Teacher/TeacherDashboard';
+import TeacherViewProfile from './components/Teacher/ViewProfile';
+import TeacherEditProfile from './components/Teacher/EditProfile';
+import TeacherUpdatePicture from './components/Teacher/UpdatePicture';
+import StudentList from './components/Teacher/StudentList';
+import StudentPerformance from './components/Teacher/StudentPerformance';
+import StudentLeaderboard from './components/Teacher/StudentLeaderboard';
+import StudentMatrix from './components/Teacher/StudentMatrix';
+import CreateAssignment from './components/Teacher/CreateAssignment';
+import ModifyAssignment from './components/Teacher/ModifyAssignment';
+import ViewSubmissions from './components/Teacher/ViewSubmissions';
+import TrackCompletion from './components/Teacher/TrackCompletion';
+import CreateFeedback from './components/Teacher/CreateFeedback';
+import ViewFeedback from './components/Teacher/ViewFeedback';
+import Chat from './components/Teacher/Chat';
+import WriteTestimonial from './components/Teacher/WriteTestimonial';
+import TeacherCreateTicket from './components/Teacher/CreateTicket';
+import TeacherTrackTicket from './components/Teacher/TrackTicket';
+
+// Student Components
+import StudentDashboard from './components/Student/StudentDashboard';
+import StudentViewProfile from './components/Student/ViewProfile';
+import StudentEditProfile from './components/Student/EditProfile';
+import StudentUpdatePicture from './components/Student/UpdatePicture';
+import ViewResults from './components/Student/ViewResults';
+import TrackProgress from './components/Student/TrackProgress';
+import ViewLeaderboard from './components/Student/ViewLeaderboard';
+import DisplaySkillMatrix from './components/Student/DisplaySkillMatrix';
+import ViewDetailedSubjectInfo from './components/Student/ViewDetailedSubjectInfo';
+import AttemptQuiz from './components/Student/AttemptQuiz';
+import AttemptAssignment from './components/Student/AttemptAssignment';
+import ViewResultHistory from './components/Student/ViewResultHistory';
+import StudentWriteTestimonial from './components/Student/WriteTestimonial';
+import StudentCreateSupportTicket from './components/Student/CreateSupportTicket';
+import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
+
+// Parent Components
+import ParentDashboard from './components/Parents/ParentDashboard';
+import ParentViewProfile from './components/Parents/ViewProfile';
+import ParentEditProfile from './components/Parents/EditProfile';
+import ParentUpdatePicture from './components/Parents/UpdatePicture';
+import ParentViewChildren from './components/Parents/ViewChildren';
+import ParentViewChildPerformance from './components/Parents/ViewChildPerformance';
+import ParentViewChildProgress from './components/Parents/ViewChildProgress';
+import ParentViewFeedback from './components/Parents/ViewFeedback';
+import ParentChatWithTeacher from './components/Parents/ChatWithTeacher';
+import ParentWriteTestimonial from './components/Parents/WriteTestimonial';
+import ParentCreateSupportTicket from './components/Parents/CreateSupportTicket';
+import ParentTrackSupportTicket from './components/Parents/TrackSupportTicket';
 
 function App() {
   return (
     <Router>
       <div className="App">
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          {/* ========== LANDING PAGE ========== */}
           <Route path="/" element={
             <>
               <Header />
@@ -35,6 +87,61 @@ function App() {
               <Footer />
             </>
           } />
+
+          {/* ========== AUTHENTICATION ========== */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+
+          {/* ========== TEACHER ROUTES ========== */}
+          <Route path="/teacher" element={<TeacherDashboard />} />
+          <Route path="/teacher/profile" element={<TeacherViewProfile />} />
+          <Route path="/teacher/profile/edit" element={<TeacherEditProfile />} />
+          <Route path="/teacher/profile/picture" element={<TeacherUpdatePicture />} />
+          <Route path="/teacher/students" element={<StudentList />} />
+          <Route path="/teacher/students/performance" element={<StudentPerformance />} />
+          <Route path="/teacher/students/leaderboard" element={<StudentLeaderboard />} />
+          <Route path="/teacher/students/matrix" element={<StudentMatrix />} />
+          <Route path="/teacher/assignment/create" element={<CreateAssignment />} />
+          <Route path="/teacher/assignment/modify" element={<ModifyAssignment />} />
+          <Route path="/teacher/submissions" element={<ViewSubmissions />} />
+          <Route path="/teacher/completion" element={<TrackCompletion />} />
+          <Route path="/teacher/feedback/create" element={<CreateFeedback />} />
+          <Route path="/teacher/feedback/view" element={<ViewFeedback />} />
+          <Route path="/teacher/chat" element={<Chat />} />
+          <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
+          <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
+          <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
+
+          {/* ========== STUDENT ROUTES ========== */}
+          <Route path="/student" element={<StudentDashboard />} />
+          <Route path="/student/profile" element={<StudentViewProfile />} />
+          <Route path="/student/profile/edit" element={<StudentEditProfile />} />
+          <Route path="/student/profile/picture" element={<StudentUpdatePicture />} />
+          <Route path="/student/results" element={<ViewResults />} />
+          <Route path="/student/progress" element={<TrackProgress />} />
+          <Route path="/student/leaderboard" element={<ViewLeaderboard />} />
+          <Route path="/student/skills" element={<DisplaySkillMatrix />} />
+          <Route path="/student/subjects" element={<ViewDetailedSubjectInfo />} />
+          <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
+          <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
+          <Route path="/student/results/history" element={<ViewResultHistory />} />
+          <Route path="/student/testimonial" element={<StudentWriteTestimonial />} />
+          <Route path="/student/support/create" element={<StudentCreateSupportTicket />} />
+          <Route path="/student/support/track" element={<StudentTrackSupportTicket />} />
+
+          {/* ========== PARENT ROUTES ========== */}
+          <Route path="/parent" element={<ParentDashboard />} />
+          <Route path="/parent/profile" element={<ParentViewProfile />} />
+          <Route path="/parent/profile/edit" element={<ParentEditProfile />} />
+          <Route path="/parent/profile/picture" element={<ParentUpdatePicture />} />
+          <Route path="/parent/children" element={<ParentViewChildren />} />
+          <Route path="/parent/children/performance" element={<ParentViewChildPerformance />} />
+          <Route path="/parent/children/progress" element={<ParentViewChildProgress />} />
+          <Route path="/parent/feedback" element={<ParentViewFeedback />} />
+          <Route path="/parent/chat" element={<ParentChatWithTeacher />} />
+          <Route path="/parent/testimonial" element={<ParentWriteTestimonial />} />
+          <Route path="/parent/support/create" element={<ParentCreateSupportTicket />} />
+          <Route path="/parent/support/track" element={<ParentTrackSupportTicket />} />
         </Routes>
       </div>
     </Router>

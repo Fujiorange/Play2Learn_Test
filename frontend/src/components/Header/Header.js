@@ -38,7 +38,12 @@ const Header = () => {
           </ul>
 
           <div className="nav-actions">
-            <button className="btn btn-primary">Get Started</button>
+            <button 
+              className="btn btn-primary"
+              onClick={() => window.location.href = '/register'}
+            >
+              Get Started
+            </button>
           </div>
 
           <div 
