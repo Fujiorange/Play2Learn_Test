@@ -27,7 +27,7 @@ mongoose.connect(process.env.MONGODB_URI)
   });
 
 // ==================== MONGODB AUTH ROUTES ====================
-const mongoAuthRoutes = require('./routes/MongoAuthRoutes');
+const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
 app.use('/api/mongo/auth', mongoAuthRoutes);
 
 // ==================== MONGODB STUDENT ROUTES ====================
