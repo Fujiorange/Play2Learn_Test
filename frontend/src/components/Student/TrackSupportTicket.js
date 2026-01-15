@@ -1,12 +1,15 @@
+// TrackSupportTicket.js - UPDATED with real backend connection
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import studentService from '../../services/studentService';
 
 export default function TrackSupportTicket() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const loadTickets = async () => {
@@ -15,14 +18,23 @@ export default function TrackSupportTicket() {
         return;
       }
 
-      const mockTickets = [
-        { id: 'TKT-001', subject: 'Cannot submit quiz answers', category: 'quiz', priority: 'high', status: 'in-progress', createdOn: '2024-12-10', lastUpdate: '2024-12-11' },
-        { id: 'TKT-002', subject: 'Question about assignment deadline', category: 'assignment', priority: 'normal', status: 'open', createdOn: '2024-12-09', lastUpdate: '2024-12-09' },
-        { id: 'TKT-003', subject: 'Profile picture not uploading', category: 'technical', priority: 'low', status: 'resolved', createdOn: '2024-12-05', lastUpdate: '2024-12-06' },
-      ];
-      
-      setTickets(mockTickets);
-      setLoading(false);
+      try {
+        // REAL API CALL - Get tickets from database
+        const result = await studentService.getSupportTickets();
+
+        if (result.success) {
+          setTickets(result.tickets || []);
+        } else {
+          setError('Failed to load support tickets');
+          setTickets([]);
+        }
+      } catch (error) {
+        console.error('Load tickets error:', error);
+        setError('Failed to load support tickets');
+        setTickets([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadTickets();
@@ -44,17 +56,18 @@ export default function TrackSupportTicket() {
     headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    filterButtons: { display: 'flex', gap: '8px' },
+    filterButtons: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
     filterButton: { padding: '8px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', background: 'white' },
     filterButtonActive: { borderColor: '#10b981', background: '#d1fae5', color: '#065f46' },
     ticketGrid: { display: 'flex', flexDirection: 'column', gap: '16px' },
     ticketCard: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
-    ticketHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' },
+    ticketHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' },
     ticketId: { fontSize: '14px', fontWeight: '700', color: '#10b981' },
     ticketSubject: { fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '12px' },
-    ticketInfo: { display: 'flex', gap: '16px', marginBottom: '12px' },
+    ticketInfo: { display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap' },
     badge: { display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' },
     emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
+    errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
   };
@@ -69,9 +82,20 @@ export default function TrackSupportTicket() {
             <h1 style={styles.title}>🎫 My Support Tickets</h1>
             <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
           </div>
+          
+          {error && (
+            <div style={styles.errorMessage}>
+              ⚠️ {error}
+            </div>
+          )}
+          
           <div style={styles.filterButtons}>
             {['all', 'open', 'in-progress', 'resolved'].map(status => (
-              <button key={status} onClick={() => setFilter(status)} style={{...styles.filterButton, ...(filter === status ? styles.filterButtonActive : {})}}>
+              <button 
+                key={status} 
+                onClick={() => setFilter(status)} 
+                style={{...styles.filterButton, ...(filter === status ? styles.filterButtonActive : {})}}
+              >
                 {status === 'all' ? 'All' : status === 'in-progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)}
               </button>
             ))}
@@ -103,6 +127,22 @@ export default function TrackSupportTicket() {
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎫</div>
             <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No tickets found</p>
             <p>You don't have any {filter === 'all' ? '' : filter} support tickets</p>
+            <button
+              onClick={() => navigate('/student/support/create')}
+              style={{
+                marginTop: '20px',
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '15px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Create New Ticket
+            </button>
           </div>
         )}
       </div>

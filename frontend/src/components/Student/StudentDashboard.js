@@ -591,18 +591,6 @@ export default function StudentDashboard() {
               <li
                 style={{
                   ...styles.menuItem,
-                  ...(hoveredItem === 'view-result' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('view-result')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('quiz', 'view-result')}
-              >
-                <span>View Result</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
                   ...(hoveredItem === 'result-history' ? styles.menuItemHover : {}),
                 }}
                 onMouseEnter={() => setHoveredItem('result-history')}

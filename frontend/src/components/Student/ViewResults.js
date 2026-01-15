@@ -1,12 +1,14 @@
+// ViewResults.js - Math Quiz Results Only
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import studentService from '../../services/studentService';
 
 export default function ViewResults() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState([]);
-  const [filter, setFilter] = useState('all');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const loadResults = async () => {
@@ -15,21 +17,27 @@ export default function ViewResults() {
         return;
       }
 
-      const mockResults = [
-        { id: 1, type: 'Quiz', subject: 'Mathematics', title: 'Algebra Basics', score: 85, maxScore: 100, date: '2024-12-10', status: 'passed' },
-        { id: 2, type: 'Assignment', subject: 'English', title: 'Essay Writing', score: 92, maxScore: 100, date: '2024-12-08', status: 'passed' },
-        { id: 3, type: 'Quiz', subject: 'Science', title: 'Physics Chapter 1', score: 78, maxScore: 100, date: '2024-12-05', status: 'passed' },
-        { id: 4, type: 'Assignment', subject: 'Mathematics', title: 'Geometry Problems', score: 68, maxScore: 100, date: '2024-12-03', status: 'passed' },
-      ];
-      
-      setResults(mockResults);
-      setLoading(false);
+      try {
+        // REAL API CALL - Get math quiz results from database
+        const result = await studentService.getMathQuizResults();
+
+        if (result.success) {
+          setResults(result.results || []);
+        } else {
+          setError('Failed to load results');
+          setResults([]);
+        }
+      } catch (error) {
+        console.error('Load results error:', error);
+        setError('Failed to load results');
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadResults();
   }, [navigate]);
-
-  const filteredResults = filter === 'all' ? results : results.filter(r => r.type.toLowerCase() === filter);
 
   const getScoreColor = (score, max) => {
     const percentage = (score / max) * 100;
@@ -38,26 +46,29 @@ export default function ViewResults() {
     return '#ef4444';
   };
 
+  const getProfileColor = (profile) => {
+    const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6'];
+    return colors[profile - 1] || colors[0];
+  };
+
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
     content: { maxWidth: '1200px', margin: '0 auto' },
     header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
-    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
-    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    filterButtons: { display: 'flex', gap: '8px' },
-    filterButton: { padding: '8px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', background: 'white' },
-    filterButtonActive: { borderColor: '#10b981', background: '#d1fae5', color: '#065f46' },
-    resultsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' },
+    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
+    subtitle: { fontSize: '15px', color: '#6b7280' },
+    errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
+    resultsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' },
     resultCard: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', cursor: 'pointer', transition: 'all 0.3s' },
-    resultType: { display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', marginBottom: '12px' },
-    quizType: { background: '#dbeafe', color: '#1e40af' },
-    assignmentType: { background: '#fef3c7', color: '#92400e' },
+    profileBadge: { display: 'inline-block', padding: '6px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: '700', color: 'white', marginBottom: '12px' },
     resultTitle: { fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' },
-    resultSubject: { fontSize: '14px', color: '#6b7280', marginBottom: '16px' },
+    resultDate: { fontSize: '14px', color: '#6b7280', marginBottom: '16px' },
     scoreSection: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid #e5e7eb' },
-    score: { fontSize: '24px', fontWeight: '700' },
-    date: { fontSize: '13px', color: '#6b7280' },
+    scoreFraction: { fontSize: '24px', fontWeight: '700' },
+    scorePercentage: { fontSize: '20px', fontWeight: '700' },
+    emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
   };
@@ -69,35 +80,99 @@ export default function ViewResults() {
       <div style={styles.content}>
         <div style={styles.header}>
           <div style={styles.headerTop}>
-            <h1 style={styles.title}>📊 My Results</h1>
-            <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
+            <h1 style={styles.title}>📊 My Math Quiz Results</h1>
+            <button 
+              style={styles.backButton} 
+              onClick={() => navigate('/student')}
+              onMouseEnter={(e) => e.target.style.background = '#4b5563'}
+              onMouseLeave={(e) => e.target.style.background = '#6b7280'}
+            >
+              ← Back to Dashboard
+            </button>
           </div>
-          <div style={styles.filterButtons}>
-            {['all', 'quiz', 'assignment'].map(type => (
-              <button key={type} onClick={() => setFilter(type)} style={{...styles.filterButton, ...(filter === type ? styles.filterButtonActive : {})}}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </button>
-            ))}
-          </div>
+          <p style={styles.subtitle}>
+            View all your math quiz attempts and scores
+          </p>
+          
+          {error && (
+            <div style={styles.errorMessage}>
+              ⚠️ {error}
+            </div>
+          )}
         </div>
 
-        <div style={styles.resultsGrid}>
-          {filteredResults.map(result => (
-            <div key={result.id} style={styles.resultCard} onClick={() => navigate('/student/results/history')} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <span style={{...styles.resultType, ...(result.type === 'Quiz' ? styles.quizType : styles.assignmentType)}}>
-                {result.type}
-              </span>
-              <div style={styles.resultTitle}>{result.title}</div>
-              <div style={styles.resultSubject}>📚 {result.subject}</div>
-              <div style={styles.scoreSection}>
-                <span style={{...styles.score, color: getScoreColor(result.score, result.maxScore)}}>
-                  {result.score}/{result.maxScore}
-                </span>
-                <span style={styles.date}>{result.date}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        {results.length > 0 ? (
+          <div style={styles.resultsGrid}>
+            {results.map(result => {
+              const percentage = Math.round((result.score / result.maxScore) * 100);
+              const scoreColor = getScoreColor(result.score, result.maxScore);
+              
+              return (
+                <div 
+                  key={result.id} 
+                  style={styles.resultCard} 
+                  onClick={() => navigate(`/student/results/${result.id}`)} 
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'} 
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    ...styles.profileBadge,
+                    background: `linear-gradient(135deg, ${getProfileColor(result.profile)} 0%, ${getProfileColor(result.profile)}dd 100%)`
+                  }}>
+                    Profile {result.profile}
+                  </div>
+                  <div style={styles.resultTitle}>Primary 1 Math Quiz</div>
+                  <div style={styles.resultDate}>📅 {result.date}</div>
+                  <div style={styles.scoreSection}>
+                    <div>
+                      <div style={{...styles.scoreFraction, color: scoreColor}}>
+                        {result.score}/{result.maxScore}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                        {result.questions} questions
+                      </div>
+                    </div>
+                    <div style={{...styles.scorePercentage, color: scoreColor}}>
+                      {percentage}%
+                    </div>
+                  </div>
+                  {percentage >= 70 && (
+                    <div style={{ marginTop: '12px', padding: '8px', background: '#d1fae5', borderRadius: '6px', fontSize: '13px', color: '#065f46', fontWeight: '600', textAlign: 'center' }}>
+                      ✅ Passed!
+                    </div>
+                  )}
+                  {percentage < 50 && (
+                    <div style={{ marginTop: '12px', padding: '8px', background: '#fee2e2', borderRadius: '6px', fontSize: '13px', color: '#991b1b', fontWeight: '600', textAlign: 'center' }}>
+                      💪 Keep practicing!
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={styles.emptyState}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No quiz results yet</p>
+            <p>Take your first math quiz to see your results here!</p>
+            <button
+              onClick={() => navigate('/student/quiz/attempt')}
+              style={{
+                marginTop: '20px',
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '15px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              🎯 Take Quiz Now
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

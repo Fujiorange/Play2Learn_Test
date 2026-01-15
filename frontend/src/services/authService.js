@@ -1,12 +1,15 @@
 // src/services/authService.js
-// MongoDB Authentication Service for Play2Learn
+// Real API authentication service for Play2Learn - MONGODB VERSION
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 class AuthService {
-  // Register new user (MongoDB)
+  // Register new user - MONGODB
   async register(userData) {
     try {
+      console.log('📤 Sending registration to:', `${API_URL}/mongo/auth/register`);
+      console.log('📦 Data:', userData);
+
       const response = await fetch(`${API_URL}/mongo/auth/register`, {
         method: 'POST',
         headers: {
@@ -18,6 +21,7 @@ class AuthService {
           password: userData.password,
           contact: userData.contact,
           gender: userData.gender,
+          dateOfBirth: userData.dateOfBirth, // ✅ This matches backend
           organizationName: userData.organizationName,
           organizationType: userData.organizationType,
           businessRegistrationNumber: userData.businessRegistrationNumber,
@@ -26,17 +30,16 @@ class AuthService {
       });
 
       const data = await response.json();
+      console.log('📥 Registration response:', data);
 
       if (data.success) {
-        // Store token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        return { success: true, message: 'Account created successfully', user: data.user };
+        // Don't store token - user needs to login manually
+        return { success: true, message: data.message || 'Account created successfully' };
       } else {
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('❌ Registration error:', error);
       return { 
         success: false, 
         error: 'Network error. Please check your connection and try again.' 
@@ -44,9 +47,12 @@ class AuthService {
     }
   }
 
-  // Login user (MongoDB)
+  // Login user - MONGODB
   async login(email, password, role) {
     try {
+      console.log('📤 Sending login to:', `${API_URL}/mongo/auth/login`);
+      console.log('📦 Data:', { email, role });
+
       const response = await fetch(`${API_URL}/mongo/auth/login`, {
         method: 'POST',
         headers: {
@@ -56,17 +62,20 @@ class AuthService {
       });
 
       const data = await response.json();
+      console.log('📥 Login response:', data);
 
       if (data.success) {
         // Store token and user data in localStorage
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        console.log('✅ Login successful, token stored');
         return { success: true, user: data.user };
       } else {
+        console.log('❌ Login failed:', data.error);
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       return { 
         success: false, 
         error: 'Network error. Please check your connection and try again.' 
@@ -80,8 +89,12 @@ class AuthService {
       const token = this.getToken();
       
       if (token) {
-        // Optional: call logout endpoint if you add one
-        // await fetch(`${API_URL}/mongo/auth/logout`, {...});
+        await fetch(`${API_URL}/mongo/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
       }
     } catch (error) {
       console.error('Logout error:', error);
@@ -127,13 +140,23 @@ class AuthService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      // This would need a corresponding MongoDB endpoint
-      // For now, return stored user
-      const user = this.getCurrentUser();
-      if (user) {
-        return { success: true, user: user };
+      const response = await fetch(`${API_URL}/mongo/auth/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update stored user data
+        localStorage.setItem('user', JSON.stringify(data.user));
+        return { success: true, user: data.user };
       } else {
-        return { success: false, error: 'No user found' };
+        // Token might be invalid, clear auth
+        this.logout();
+        return { success: false, error: data.error };
       }
     } catch (error) {
       console.error('Get current user error:', error);
@@ -141,7 +164,7 @@ class AuthService {
     }
   }
 
-  // Get dashboard data (MongoDB)
+  // Get dashboard data
   async getDashboardData() {
     try {
       const token = this.getToken();
@@ -150,33 +173,15 @@ class AuthService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      // For now, return success with stored user data
-      // You can add MongoDB dashboard endpoint later
-      const user = this.getCurrentUser();
-      
-      if (user) {
-        // Return mock dashboard data based on role
-        let dashboardData = {};
-        
-        if (user.role === 'student') {
-          dashboardData = {
-            points: 0,
-            level: 1,
-            total_courses: 0
-          };
-        } else if (user.role === 'teacher') {
-          dashboardData = {
-            total_courses: 0
-          };
-        }
+      const response = await fetch(`${API_URL}/mongo/dashboard`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-        return { 
-          success: true, 
-          data: dashboardData 
-        };
-      }
-
-      return { success: false, error: 'No user data' };
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('Dashboard error:', error);
       return { success: false, error: 'Failed to load dashboard data' };

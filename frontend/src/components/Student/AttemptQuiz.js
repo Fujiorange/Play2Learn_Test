@@ -1,99 +1,198 @@
+// AttemptQuiz.js - FULLY DYNAMIC
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import studentService from '../../services/studentService';
 
 export default function AttemptQuiz() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [quizzes, setQuizzes] = useState([]);
+  const [profileData, setProfileData] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const loadQuizzes = async () => {
+    const loadQuizData = async () => {
       if (!authService.isAuthenticated()) {
         navigate('/login');
         return;
       }
 
-      const mockQuizzes = [
-        { id: 1, title: 'Algebra Fundamentals', subject: 'Mathematics', questions: 15, duration: 30, difficulty: 'Medium', status: 'available' },
-        { id: 2, title: 'Grammar Basics', subject: 'English', questions: 20, duration: 25, difficulty: 'Easy', status: 'available' },
-        { id: 3, title: 'Physics Chapter 3', subject: 'Science', questions: 12, duration: 35, difficulty: 'Hard', status: 'available' },
-        { id: 4, title: 'World War II', subject: 'History', questions: 18, duration: 40, difficulty: 'Medium', status: 'completed' },
-      ];
-      
-      setQuizzes(mockQuizzes);
-      setLoading(false);
+      try {
+        // DYNAMIC: Get profile data from database
+        const result = await studentService.getMathProfile();
+
+        if (result.success) {
+          setProfileData(result.profile);
+        } else {
+          setError('Failed to load quiz data');
+        }
+      } catch (error) {
+        console.error('Load quiz data error:', error);
+        setError('Failed to load quiz data');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    loadQuizzes();
+    loadQuizData();
   }, [navigate]);
 
-  const getDifficultyColor = (difficulty) => {
-    if (difficulty === 'Easy') return '#10b981';
-    if (difficulty === 'Medium') return '#f59e0b';
-    return '#ef4444';
+  const formatOperations = (operations) => {
+    if (!operations || !Array.isArray(operations)) return '';
+    
+    const opSymbols = {
+      'addition': '➕ Addition',
+      'subtraction': '➖ Subtraction',
+      'multiplication': '✖️ Multiplication',
+      'division': '➗ Division'
+    };
+    
+    return operations.map(op => opSymbols[op] || op).join(', ');
+  };
+
+  const canTakeQuiz = profileData && profileData.attemptsToday < 2;
+
+  const handleStartQuiz = () => {
+    if (!canTakeQuiz) {
+      alert('You have used all 2 attempts for today. Come back tomorrow!');
+      return;
+    }
+    navigate('/student/quiz/take');
   };
 
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
     content: { maxWidth: '1200px', margin: '0 auto' },
-    header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' },
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
-    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    quizzesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' },
-    quizCard: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', transition: 'all 0.3s' },
-    quizTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' },
-    quizSubject: { fontSize: '14px', color: '#6b7280', marginBottom: '16px' },
-    quizInfo: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' },
-    infoItem: { display: 'flex', alignItems: 'center', fontSize: '14px', color: '#374151' },
-    difficultyBadge: { display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' },
-    startButton: { width: '100%', padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
-    completedButton: { background: '#e5e7eb', color: '#6b7280', cursor: 'not-allowed' },
+    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
+    errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', width: '100%' },
+    profileCard: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    profileBadge: { display: 'inline-block', padding: '12px 24px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: 'white', borderRadius: '12px', fontSize: '24px', fontWeight: '700', marginBottom: '24px' },
+    infoGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' },
+    infoBox: { padding: '16px', background: '#f9fafb', borderRadius: '12px', border: '2px solid #e5e7eb' },
+    infoLabel: { fontSize: '13px', color: '#6b7280', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase' },
+    infoValue: { fontSize: '20px', color: '#1f2937', fontWeight: '700' },
+    attemptsBox: { padding: '20px', borderRadius: '12px', marginBottom: '24px', border: '2px solid' },
+    attemptsText: { fontSize: '18px', fontWeight: '600', textAlign: 'center' },
+    quizCard: { background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', textAlign: 'center' },
+    quizTitle: { fontSize: '24px', fontWeight: '700', color: '#1f2937', marginBottom: '16px' },
+    quizDetails: { fontSize: '16px', color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' },
+    startButton: { padding: '16px 48px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.3s' },
+    disabledButton: { cursor: 'not-allowed', opacity: 0.5 },
+    lastScoreBox: { marginTop: '24px', padding: '16px', background: '#f0f9ff', borderRadius: '12px', border: '2px solid #3b82f6' },
+    lastScoreText: { fontSize: '16px', color: '#1e40af', fontWeight: '600' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
   };
 
   if (loading) return (<div style={styles.loadingContainer}><div style={styles.loadingText}>Loading...</div></div>);
 
+  const attemptsToday = profileData?.attemptsToday || 0;
+
   return (
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>📝 Available Quizzes</h1>
-          <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
+          <h1 style={styles.title}>📝 Primary 1 Math Quiz</h1>
+          <button 
+            style={styles.backButton} 
+            onClick={() => navigate('/student')}
+            onMouseEnter={(e) => e.target.style.background = '#4b5563'}
+            onMouseLeave={(e) => e.target.style.background = '#6b7280'}
+          >
+            ← Back to Dashboard
+          </button>
+          {error && (
+            <div style={styles.errorMessage}>
+              ⚠️ {error}
+            </div>
+          )}
         </div>
 
-        <div style={styles.quizzesGrid}>
-          {quizzes.map(quiz => (
-            <div key={quiz.id} style={styles.quizCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <div style={styles.quizTitle}>{quiz.title}</div>
-              <div style={styles.quizSubject}>📚 {quiz.subject}</div>
+        {profileData && (
+          <>
+            {/* Profile Info Card - ALL DYNAMIC */}
+            <div style={styles.profileCard}>
+              <div style={styles.profileBadge}>
+                🎯 {profileData.profile_name || `Profile ${profileData.current_profile}`}
+              </div>
               
-              <div style={styles.quizInfo}>
-                <div style={styles.infoItem}>❓ {quiz.questions} questions</div>
-                <div style={styles.infoItem}>⏱️ {quiz.duration} minutes</div>
-                <div style={styles.infoItem}>
-                  <span style={{...styles.difficultyBadge, background: getDifficultyColor(quiz.difficulty), color: 'white'}}>
-                    {quiz.difficulty}
-                  </span>
+              <div style={styles.infoGrid}>
+                <div style={styles.infoBox}>
+                  <div style={styles.infoLabel}>Number Range</div>
+                  <div style={styles.infoValue}>
+                    🔢 {profileData.number_range_min}-{profileData.number_range_max}
+                  </div>
+                </div>
+                <div style={styles.infoBox}>
+                  <div style={styles.infoLabel}>Operations</div>
+                  <div style={styles.infoValue}>
+                    {formatOperations(profileData.operations)}
+                  </div>
+                </div>
+                <div style={styles.infoBox}>
+                  <div style={styles.infoLabel}>Questions</div>
+                  <div style={styles.infoValue}>📋 15 Questions</div>
+                </div>
+                <div style={styles.infoBox}>
+                  <div style={styles.infoLabel}>Pass Score</div>
+                  <div style={styles.infoValue}>✅ {profileData.pass_threshold}%</div>
                 </div>
               </div>
 
+              {/* Attempts Counter - DYNAMIC */}
+              <div style={{
+                ...styles.attemptsBox,
+                background: attemptsToday >= 2 ? '#fee2e2' : '#d1fae5',
+                borderColor: attemptsToday >= 2 ? '#f87171' : '#34d399'
+              }}>
+                <div style={{
+                  ...styles.attemptsText,
+                  color: attemptsToday >= 2 ? '#991b1b' : '#065f46'
+                }}>
+                  {attemptsToday === 0 && '🎮 2 quiz attempts available today!'}
+                  {attemptsToday === 1 && '🎮 1 quiz attempt remaining today!'}
+                  {attemptsToday >= 2 && '⏰ No attempts left today. Come back tomorrow!'}
+                </div>
+              </div>
+
+              {/* Last Score - DYNAMIC */}
+              {profileData.lastScore && (
+                <div style={styles.lastScoreBox}>
+                  <div style={styles.lastScoreText}>
+                    📊 Last Quiz Score: {profileData.lastScore.score}/{profileData.lastScore.total_questions} ({Math.round(profileData.lastScore.percentage)}%)
+                    {profileData.lastScore.percentage >= profileData.pass_threshold ? ' - Great job! 🎉' : ' - Keep practicing! 💪'}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quiz Start Card - DYNAMIC */}
+            <div style={styles.quizCard}>
+              <div style={styles.quizTitle}>🚀 Ready to Take the Quiz?</div>
+              <div style={styles.quizDetails}>
+                • 15 random math questions<br/>
+                • Numbers between {profileData.number_range_min}-{profileData.number_range_max}<br/>
+                • {formatOperations(profileData.operations)}<br/>
+                • Score {profileData.pass_threshold}% or higher to advance to next profile!<br/>
+                • Score below {profileData.fail_threshold}% six times to move down<br/>
+              </div>
               <button
                 style={{
                   ...styles.startButton,
-                  ...(quiz.status === 'completed' ? styles.completedButton : {})
+                  ...(canTakeQuiz ? {} : styles.disabledButton)
                 }}
-                disabled={quiz.status === 'completed'}
-                onClick={() => alert('Quiz feature coming soon!')}
-                onMouseEnter={(e) => quiz.status === 'available' && (e.target.style.transform = 'translateY(-2px)')}
-                onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                onClick={handleStartQuiz}
+                disabled={!canTakeQuiz}
+                onMouseEnter={(e) => canTakeQuiz && (e.target.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => canTakeQuiz && (e.target.style.transform = 'translateY(0)')}
               >
-                {quiz.status === 'completed' ? '✅ Completed' : '🚀 Start Quiz'}
+                {canTakeQuiz ? '🎯 Start Quiz Now!' : '🔒 No Attempts Left'}
               </button>
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

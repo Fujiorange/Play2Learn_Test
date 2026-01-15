@@ -30,6 +30,10 @@ mongoose.connect(process.env.MONGODB_URI)
 const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
 app.use('/api/mongo/auth', mongoAuthRoutes);
 
+// ==================== MONGODB STUDENT ROUTES ====================
+const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
+app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
+
 // ==================== MONGODB ITEM ROUTES (Your test routes) ====================
 
 // Create item

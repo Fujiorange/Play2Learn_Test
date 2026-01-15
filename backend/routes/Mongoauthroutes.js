@@ -16,6 +16,7 @@ router.post('/register', async (req, res) => {
       password,
       contact,
       gender,
+      dateOfBirth,
       organizationName,
       organizationType,
       businessRegistrationNumber,
@@ -63,6 +64,7 @@ router.post('/register', async (req, res) => {
       password_hash: passwordHash,
       contact: contact || null,
       gender: gender || null,
+      date_of_birth: dateOfBirth || null,
       organization_name: organizationName,
       organization_type: organizationType,
       business_registration_number: businessRegistrationNumber || null,
@@ -98,6 +100,7 @@ router.post('/register', async (req, res) => {
       organization_type: organizationType,
       contact,
       gender,
+      date_of_birth: dateOfBirth,
       is_active: true,
       approval_status: 'approved',
       created_at: newUser.created_at
@@ -205,6 +208,7 @@ router.post('/login', async (req, res) => {
       organization_type: user.organization_type,
       contact: user.contact,
       gender: user.gender,
+      date_of_birth: user.date_of_birth,
       is_active: user.is_active,
       approval_status: user.approval_status,
       created_at: user.created_at,
@@ -227,6 +231,83 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ==================== UPDATE PROFILE ====================
+router.put('/update-profile', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'No token provided' 
+      });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid token' 
+      });
+    }
+
+    const { name, contact, gender, date_of_birth } = req.body;
+    const userId = new mongoose.Types.ObjectId(decoded.userId);
+
+    const db = mongoose.connection.db;
+    const usersCollection = db.collection('users');
+
+    // Update user profile
+    const updateData = {
+      updated_at: new Date()
+    };
+
+    if (name) updateData.name = name;
+    if (contact !== undefined) updateData.contact = contact;
+    if (gender) updateData.gender = gender;
+    if (date_of_birth) updateData.date_of_birth = date_of_birth;
+
+    const result = await usersCollection.updateOne(
+      { _id: userId },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
+    }
+
+    // Get updated user
+    const updatedUser = await usersCollection.findOne({ _id: userId });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        contact: updatedUser.contact,
+        gender: updatedUser.gender,
+        date_of_birth: updatedUser.date_of_birth,
+        role: updatedUser.role
+      }
+    });
+
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update profile' 
+    });
+  }
+});
+
 // Helper function to create role-specific entries
 async function createRoleSpecificEntry(db, userId, role, name, email) {
   try {
@@ -241,7 +322,11 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           grade_level: 'Primary 1',
           points: 0,
           level: 1,
-          created_at: timestamp
+          current_profile: 1,
+          streak: 0,
+          total_quizzes: 0,
+          created_at: timestamp,
+          updated_at: timestamp
         });
         break;
       
