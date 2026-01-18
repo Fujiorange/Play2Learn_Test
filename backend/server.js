@@ -27,34 +27,17 @@ mongoose.connect(process.env.MONGODB_URI)
   });
 
 // ==================== MONGODB AUTH ROUTES ====================
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
-=======
-const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
->>>>>>> Stashed changes
-=======
-const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
->>>>>>> Stashed changes
-=======
-const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
->>>>>>> Stashed changes
-=======
-const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
->>>>>>> Stashed changes
-=======
-const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
->>>>>>> Stashed changes
 app.use('/api/mongo/auth', mongoAuthRoutes);
+
+// For backward compatibility, also support /api/auth
+app.use('/api/auth', mongoAuthRoutes);
 
 // ==================== MONGODB STUDENT ROUTES ====================
 const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
 app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
 
-// ==================== MONGODB ITEM ROUTES (Your test routes) ====================
+// ==================== MONGODB ITEM ROUTES (Test routes) ====================
 
 // Create item
 app.post('/api/mongo/items', authenticateToken, async (req, res) => {
