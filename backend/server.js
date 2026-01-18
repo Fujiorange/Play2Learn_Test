@@ -30,7 +30,11 @@ mongoose.connect(process.env.MONGODB_URI)
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
+=======
+const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
+>>>>>>> Stashed changes
 =======
 const mongoAuthRoutes = require('./routes/mongoAuthRoutes'); // ✅ FIXED case-sensitivity
 >>>>>>> Stashed changes
