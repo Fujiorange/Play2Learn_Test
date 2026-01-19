@@ -1,4 +1,4 @@
-// backend/server.js - Play2Learn Backend
+// backend/server.js - UPDATED VERSION
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
@@ -10,76 +10,118 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// ==================== MIDDLEWARE ====================
+// Fix CORS - specify your frontend URL
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'https://play2learn-test.onrender.com',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+// ==================== DATABASE CONNECTION ====================
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/play2learn';
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => {
-    console.error('❌ MongoDB connection failed:', err.message);
-    process.exit(1);
-  });
+console.log('🔗 Connecting to MongoDB...');
 
-// Import routes
-const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
-app.use('/api/mongo/auth', mongoAuthRoutes);
-app.use('/api/auth', mongoAuthRoutes);
-
-const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
-app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
-
-// API Routes
-app.post('/api/mongo/items', authenticateToken, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const collection = db.collection('items');
-    const item = {
-      title: req.body.title,
-      description: req.body.description,
-      created_by: req.user.email,
-      created_at: new Date()
-    };
-    const result = await collection.insertOne(item);
-    res.status(201).json({ success: true, message: 'Item created', item: { ...item, _id: result.insertedId } });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => {
+  console.log('✅ Connected to MongoDB');
+  
+  // Store db reference globally
+  global.mongoDb = mongoose.connection.db;
+  
+  // Test database connection
+  mongoose.connection.db.admin().ping()
+    .then(() => console.log('✅ MongoDB ping successful'))
+    .catch(err => console.error('❌ MongoDB ping failed:', err));
+})
+.catch(err => {
+  console.error('❌ MongoDB connection failed:', err.message);
+  process.exit(1);
 });
 
-app.get('/api/mongo/items', authenticateToken, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const collection = db.collection('items');
-    const items = await collection.find({}).toArray();
-    res.json({ success: true, count: items.length, items: items });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+// ==================== AUTHENTICATION MIDDLEWARE ====================
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Access token required' 
+    });
   }
+  
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.error('❌ JWT verification failed:', err.message);
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Invalid or expired token' 
+      });
+    }
+    req.user = user;
+    next();
+  });
+}
+
+// ==================== ROUTES ====================
+// Import routes
+const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
+const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
+
+// ✅ ONLY USE ONE PATH - remove duplicate routes
+app.use('/api/auth', mongoAuthRoutes);
+
+// ✅ Add authentication middleware to student routes
+app.use('/api/students', authenticateToken, mongoStudentRoutes);
+
+// Test routes
+app.get('/api/test/public', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Public API endpoint is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/test/protected', authenticateToken, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Protected API endpoint is working',
+    user: req.user,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const mongoStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+  
   res.json({ 
     success: true, 
     message: 'Server is running',
-    mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    mongodb: mongoStatus,
+    environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
 });
 
 // ==================== SERVE FRONTEND ====================
-// Frontend is in ../frontend/ relative to backend/
 const frontendPath = path.join(__dirname, '..', 'frontend', 'build');
-const frontendPublicPath = path.join(__dirname, '..', 'frontend', 'public');
 
 console.log('🔍 Looking for frontend at:', frontendPath);
 
-// Serve static files from frontend/build if it exists
 if (fs.existsSync(frontendPath)) {
   console.log('✅ Found frontend build at:', frontendPath);
   app.use(express.static(frontendPath));
@@ -92,48 +134,86 @@ if (fs.existsSync(frontendPath)) {
     next();
   });
 } else {
-  console.log('❌ Frontend build not found at:', frontendPath);
+  console.log('⚠️  Frontend build not found at:', frontendPath);
   
-  // Show simple dashboard
+  // Simple dashboard
   app.get('/', (req, res) => {
     res.send(`
       <!DOCTYPE html>
       <html>
-      <head><title>Play2Learn Backend</title><style>body{font-family:Arial;padding:40px;text-align:center;}</style></head>
+      <head>
+        <title>Play2Learn Backend</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+          .container { max-width: 800px; margin: 0 auto; }
+          .endpoints { text-align: left; background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0; }
+          code { background: #333; color: #fff; padding: 2px 5px; border-radius: 3px; }
+        </style>
+      </head>
       <body>
-        <h1>✅ Play2Learn Backend Running</h1>
-        <p>Frontend not built yet. To build:</p>
-        <pre style="background:#f0f0f0;padding:10px;display:inline-block;">
+        <div class="container">
+          <h1>✅ Play2Learn Backend Running</h1>
+          <p>Server is up and running. Available API endpoints:</p>
+          
+          <div class="endpoints">
+            <h3>📡 API Endpoints:</h3>
+            <ul>
+              <li><strong>Health Check:</strong> <a href="/api/health"><code>GET /api/health</code></a></li>
+              <li><strong>Public Test:</strong> <a href="/api/test/public"><code>GET /api/test/public</code></a></li>
+              <li><strong>Protected Test:</strong> <code>GET /api/test/protected</code> (requires token)</li>
+              <li><strong>Login:</strong> <code>POST /api/auth/login</code></li>
+              <li><strong>Register:</strong> <code>POST /api/auth/register</code></li>
+              <li><strong>Student Dashboard:</strong> <code>GET /api/students/dashboard</code> (requires token)</li>
+            </ul>
+          </div>
+          
+          <p>To build the frontend:</p>
+          <pre style="background:#f0f0f0;padding:10px;display:inline-block;">
 cd frontend && npm run build</pre>
-        <p>Or update Render build settings to include frontend build.</p>
-        <p><a href="/api/health">API Health Check</a></p>
+          
+          <p style="margin-top: 30px; color: #666;">
+            Backend running on port ${process.env.PORT || 5000}<br>
+            MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}
+          </p>
+        </div>
       </body>
       </html>
     `);
   });
 }
 
-// Authentication middleware
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ success: false, error: 'Access token required' });
-  
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ success: false, error: 'Invalid or expired token' });
-    req.user = user;
-    next();
+// ==================== ERROR HANDLING ====================
+app.use((req, res) => {
+  res.status(404).json({ 
+    success: false, 
+    error: 'Route not found',
+    path: req.path 
   });
-}
+});
 
-// Start server
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err.stack);
+  res.status(500).json({ 
+    success: false, 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// ==================== START SERVER ====================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`
-╔═══════════════════════════════╗
-║   🚀 Server running on ${PORT}   ║
-║   📁 Backend: backend/       ║
-║   📁 Frontend: frontend/     ║
-╚═══════════════════════════════╝
+╔═══════════════════════════════════════════════╗
+║    🚀 Play2Learn Server running on port ${PORT}    ║
+║    🌍 Environment: ${process.env.NODE_ENV || 'development'}                     ║
+║    🗄️  Database: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}                ║
+║                                               ║
+║    📡 API Endpoints:                          ║
+║    • GET  /api/health                         ║
+║    • POST /api/auth/login                     ║
+║    • POST /api/auth/register                  ║
+║    • GET  /api/students/* (protected)         ║
+╚═══════════════════════════════════════════════╝
   `);
 });
