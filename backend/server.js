@@ -113,6 +113,10 @@ app.use('/api/auth', mongoAuthRoutes); // Backward compatibility
 const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
 app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
 
+// ==================== SCHOOL ADMIN ROUTES ====================
+const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
+app.use('/api/mongo/school-admin', schoolAdminRoutes);
+
 // ==================== ITEM ROUTES (TEST) ====================
 app.post('/api/mongo/items', authenticateToken, async (req, res) => {
   try {
@@ -184,7 +188,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/api/health',
       auth: '/api/auth/* or /api/mongo/auth/*',
-      student: '/api/mongo/student/*'
+      student: '/api/mongo/student/*',
+      schoolAdmin: '/api/mongo/school-admin/*'
     }
   });
 });
@@ -215,7 +220,7 @@ app.listen(PORT, () => {
   console.log('║   🚀 Play2Learn Server Running        ║');
   console.log(`║   📍 Port: ${PORT}                        ║`);
   console.log(`║   🌐 http://localhost:${PORT}            ║`);
-  console.log('║   🍃 Database: MongoDB Atlas          ║');
+  console.log('║   🗃️ Database: MongoDB Atlas          ║');
   console.log('╚═══════════════════════════════════════╝');
 });
 
