@@ -1,7 +1,12 @@
 // src/services/studentService.js
 // Student Service for MongoDB Operations - WITH QUIZ SYSTEM & Fully Dynamic
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:5000/api'
+    : `${window.location.origin}/api`);
+
+console.log('🌐 Student Service API_URL:', API_URL); // Debug log
 
 const studentService = {
   // ==================== PROFILE METHODS ====================

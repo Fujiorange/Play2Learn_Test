@@ -1,7 +1,12 @@
 // src/services/authService.js
 // Real API authentication service for Play2Learn - MONGODB VERSION
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:5000/api'
+    : `${window.location.origin}/api`);
+
+console.log('🌐 API_URL:', API_URL); // Debug log
 
 class AuthService {
   // Register new user - MONGODB
@@ -21,7 +26,7 @@ class AuthService {
           password: userData.password,
           contact: userData.contact,
           gender: userData.gender,
-          dateOfBirth: userData.dateOfBirth, // ✅ This matches backend
+          dateOfBirth: userData.dateOfBirth,
           organizationName: userData.organizationName,
           organizationType: userData.organizationType,
           businessRegistrationNumber: userData.businessRegistrationNumber,
@@ -33,7 +38,6 @@ class AuthService {
       console.log('📥 Registration response:', data);
 
       if (data.success) {
-        // Don't store token - user needs to login manually
         return { success: true, message: data.message || 'Account created successfully' };
       } else {
         return { success: false, error: data.error };

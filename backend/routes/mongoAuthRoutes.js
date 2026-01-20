@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-// ==================== MONGODB REGISTER ====================
+// ==================== REGISTER ====================
 router.post('/register', async (req, res) => {
   try {
     const {
@@ -122,10 +122,12 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ==================== MONGODB LOGIN ====================
+// ==================== LOGIN ====================
 router.post('/login', async (req, res) => {
   try {
     const { email, password, role } = req.body;
+
+    console.log('🔐 Login attempt:', { email, role });
 
     // Validation
     if (!email || !password || !role) {
@@ -145,6 +147,7 @@ router.post('/login', async (req, res) => {
     });
 
     if (!user) {
+      console.log('❌ User not found:', email);
       return res.status(401).json({ 
         success: false, 
         error: 'Invalid email, password, or role' 
@@ -178,6 +181,7 @@ router.post('/login', async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!passwordMatch) {
+      console.log('❌ Password mismatch for:', email);
       return res.status(401).json({ 
         success: false, 
         error: 'Invalid email, password, or role' 
@@ -196,6 +200,8 @@ router.post('/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    console.log('✅ Login successful for:', email);
 
     // Remove password hash from response
     const userData = {
@@ -227,6 +233,114 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Login failed. Please try again.' 
+    });
+  }
+});
+
+// ==================== GET CURRENT USER (Token Verification) ====================
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    console.log('🔍 /me route called');
+    
+    if (!token) {
+      console.log('❌ No token provided');
+      return res.status(401).json({ 
+        success: false, 
+        error: 'No token provided' 
+      });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+      console.log('✅ Token verified for user:', decoded.userId);
+    } catch (err) {
+      console.log('❌ Token verification failed:', err.message);
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid or expired token' 
+      });
+    }
+
+    const db = mongoose.connection.db;
+    const usersCollection = db.collection('users');
+    
+    // Get user from database
+    const user = await usersCollection.findOne({ 
+      _id: new mongoose.Types.ObjectId(decoded.userId) 
+    });
+
+    if (!user) {
+      console.log('❌ User not found:', decoded.userId);
+      return res.status(404).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
+    }
+
+    // Check if account is active
+    if (!user.is_active) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Account is deactivated' 
+      });
+    }
+
+    console.log('✅ User data retrieved for:', user.email);
+
+    // Return user data (without password)
+    const userData = {
+      user_id: user._id.toString(),
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      organization_name: user.organization_name,
+      organization_type: user.organization_type,
+      contact: user.contact,
+      gender: user.gender,
+      date_of_birth: user.date_of_birth,
+      is_active: user.is_active,
+      approval_status: user.approval_status,
+      created_at: user.created_at
+    };
+
+    res.json({
+      success: true,
+      user: userData
+    });
+
+  } catch (error) {
+    console.error('❌ Get current user error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get user data' 
+    });
+  }
+});
+
+// ==================== LOGOUT ====================
+router.post('/logout', async (req, res) => {
+  try {
+    console.log('👋 Logout request received');
+    
+    // For now, just return success
+    // Frontend handles clearing localStorage
+    // You could add token blacklisting here if needed
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Logout failed' 
     });
   }
 });
@@ -308,7 +422,7 @@ router.put('/update-profile', async (req, res) => {
   }
 });
 
-// Helper function to create role-specific entries
+// ==================== HELPER FUNCTION ====================
 async function createRoleSpecificEntry(db, userId, role, name, email) {
   try {
     const timestamp = new Date();
@@ -322,9 +436,9 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           grade_level: 'Primary 1',
           points: 0,
           level: 1,
-          current_profile: null, // ✅ NULL until placement quiz completed
-          consecutive_fails: 0,   // ✅ ADDED - Track consecutive fails
-          placement_completed: false, // ✅ ADDED - Track if placement quiz done
+          current_profile: null,
+          consecutive_fails: 0,
+          placement_completed: false,
           streak: 0,
           total_quizzes: 0,
           created_at: timestamp,
