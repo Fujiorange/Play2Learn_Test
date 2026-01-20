@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './SchoolAdmin.css';
 
+// Mock data
 const mockUsers = [
-  { _id: '1', name: "Alice Tan", email: "alice@test.com", role: "student" },
-  { _id: '2', name: "Bob Lee", email: "bob@test.com", role: "teacher" },
+  { id: 1, name: "Alice Tan", email: "alice@student.com", role: "student" },
+  { id: 2, name: "Bob Lee", email: "bob@teacher.com", role: "teacher" },
+  { id: 3, name: "Mrs. Wong", email: "parent@email.com", role: "parent" },
 ];
 
 export default function ResetPassword() {
@@ -16,6 +17,8 @@ export default function ResetPassword() {
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
+    // TODO: Replace with API call
+    // fetch('http://localhost:5000/api/school-admin/users')
     setUsers(mockUsers);
   }, []);
 
@@ -31,7 +34,13 @@ export default function ResetPassword() {
     }
 
     try {
-      // TODO: API call
+      // TODO: Replace with API call
+      // await fetch(`http://localhost:5000/api/school-admin/users/${selectedUser.id}/reset-password`, {
+      //   method: 'PUT',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ password: newPassword })
+      // });
+
       setMessage({ type: 'success', text: `Password reset for ${selectedUser.name}` });
       setSelectedUser(null);
       setNewPassword('');
@@ -41,25 +50,57 @@ export default function ResetPassword() {
     }
   };
 
+  const styles = {
+    container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
+    header: { background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 0' },
+    headerContent: { maxWidth: '1400px', margin: '0 auto', padding: '0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    logo: { display: 'flex', alignItems: 'center', gap: '12px' },
+    logoIcon: { width: '40px', height: '40px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' },
+    logoText: { fontSize: '20px', fontWeight: '700', color: '#1f2937' },
+    backButton: { padding: '8px 16px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    main: { maxWidth: '1000px', margin: '0 auto', padding: '32px' },
+    pageTitle: { fontSize: '28px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' },
+    pageSubtitle: { fontSize: '15px', color: '#6b7280', marginBottom: '32px' },
+    card: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    searchInput: { width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: '#f9fafb', fontFamily: 'inherit', marginBottom: '24px', boxSizing: 'border-box' },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
+    td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
+    resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
+    modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+    modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '500px', width: '90%' },
+    modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '24px' },
+    label: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' },
+    input: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '24px' },
+    modalButtons: { display: 'flex', gap: '12px' },
+    cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
+    successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
+    errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
+  };
+
   return (
-    <div className="sa-container">
-      <header className="sa-header">
-        <div className="sa-header-content">
-          <div className="sa-logo">
-            <div className="sa-logo-icon">P</div>
-            <span className="sa-logo-text">Play2Learn</span>
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <div style={styles.headerContent}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>Play2Learn</span>
           </div>
-          <button className="sa-button-small" onClick={() => navigate('/school-admin')}>← Back</button>
+          <button style={styles.backButton} onClick={() => navigate('/school-admin')}>
+            ← Back to Dashboard
+          </button>
         </div>
       </header>
 
-      <main className="sa-main">
-        <h1 className="sa-page-title">Reset User Password</h1>
-        <p className="sa-page-subtitle">Search for a user and reset their password.</p>
+      <main style={styles.main}>
+        <h1 style={styles.pageTitle}>Reset User Password</h1>
+        <p style={styles.pageSubtitle}>Search for a user and reset their password.</p>
 
-        <div className="sa-card">
+        <div style={styles.card}>
           {message.text && (
-            <div className={`sa-message ${message.type === 'success' ? 'sa-message-success' : 'sa-message-error'}`}>
+            <div style={{ ...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage) }}>
               {message.type === 'success' ? '✅' : '⚠️'} {message.text}
             </div>
           )}
@@ -69,45 +110,57 @@ export default function ResetPassword() {
             placeholder="Search by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="sa-search-input"
+            style={styles.searchInput}
           />
 
-          <table className="sa-table">
+          <table style={styles.table}>
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Role</th><th>Action</th></tr>
+              <tr>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Email</th>
+                <th style={styles.th}>Role</th>
+                <th style={styles.th}>Action</th>
+              </tr>
             </thead>
             <tbody>
               {filteredUsers.map((user) => (
-                <tr key={user._id}>
-                  <td><strong>{user.name}</strong></td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
-                  <td>
-                    <button className="sa-button-warning" onClick={() => setSelectedUser(user)}>Reset Password</button>
+                <tr key={user.id}>
+                  <td style={styles.td}><strong>{user.name}</strong></td>
+                  <td style={styles.td}>{user.email}</td>
+                  <td style={styles.td}>{user.role}</td>
+                  <td style={styles.td}>
+                    <button style={styles.resetButton} onClick={() => setSelectedUser(user)}>
+                      Reset Password
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {filteredUsers.length === 0 && <div className="sa-table-empty">No users found</div>}
+
+          {filteredUsers.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+              No users found
+            </div>
+          )}
         </div>
       </main>
 
       {selectedUser && (
-        <div className="sa-modal" onClick={() => setSelectedUser(null)}>
-          <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 className="sa-modal-title">Reset Password for {selectedUser.name}</h2>
-            <label className="sa-label">New Password (min. 8 characters)</label>
+        <div style={styles.modal} onClick={() => setSelectedUser(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Reset Password for {selectedUser.name}</h2>
+            <label style={styles.label}>New Password (min. 8 characters)</label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Enter new password"
-              className="sa-input"
+              style={styles.input}
             />
-            <div className="sa-modal-buttons">
-              <button className="sa-modal-button-cancel" onClick={() => setSelectedUser(null)}>Cancel</button>
-              <button className="sa-modal-button-confirm" onClick={handleReset}>Reset Password</button>
+            <div style={styles.modalButtons}>
+              <button style={styles.cancelButton} onClick={() => setSelectedUser(null)}>Cancel</button>
+              <button style={styles.saveButton} onClick={handleReset}>Reset Password</button>
             </div>
           </div>
         </div>

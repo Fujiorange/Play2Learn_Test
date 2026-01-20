@@ -1,235 +1,388 @@
-// frontend/src/components/SchoolAdmin/BulkUploadCSV.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './SchoolAdmin.css';
 
 export default function BulkUploadCSV() {
   const navigate = useNavigate();
+  
   const [file, setFile] = useState(null);
-  const [userType, setUserType] = useState(''); // students, teachers, parents
-  const [message, setMessage] = useState({ type: '', text: '' });
   const [uploading, setUploading] = useState(false);
-  const [uploadResults, setUploadResults] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleBack = () => {
+    navigate('/school-admin');
+  };
+
+  const downloadTemplate = () => {
+    const csvTemplate = `name,email,role,password,gender,contact,gradeLevel
+John Tan,john.tan@student.com,student,password123,male,+6512345678,Primary 1
+Mary Lim,mary.lim@student.com,student,password123,female,+6587654321,Primary 2
+Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,`;
+
+    const blob = new Blob([csvTemplate], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'user_upload_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    if (selectedFile && selectedFile.name.endsWith('.csv')) {
+    if (selectedFile) {
+      // Basic validation
+      if (!selectedFile.name.endsWith('.csv')) {
+        setError('Please upload a CSV file');
+        setFile(null);
+        return;
+      }
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        setError('File size must be less than 5MB');
+        setFile(null);
+        return;
+      }
       setFile(selectedFile);
-      setMessage({ type: '', text: '' });
-    } else {
-      setMessage({ type: 'error', text: 'Please select a valid CSV file' });
+      setError('');
+      setSuccess(false);
     }
   };
 
-  const handleUpload = async () => {
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    
     if (!file) {
-      setMessage({ type: 'error', text: 'Please select a file first' });
-      return;
-    }
-
-    if (!userType) {
-      setMessage({ type: 'error', text: 'Please select user type' });
+      setError('Please select a CSV file');
       return;
     }
 
     setUploading(true);
-    setMessage({ type: '', text: '' });
-    setUploadResults(null);
+    setError('');
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      // TODO: Replace with actual API call
+      // const formData = new FormData();
+      // formData.append('file', file);
+      // const response = await fetch('/api/school-admin/users/bulk-upload', {
+      //   method: 'POST',
+      //   body: formData
+      // });
+      // const result = await response.json();
 
-      const token = localStorage.getItem('token'); // Get auth token if available
-
-      const response = await fetch(`http://localhost:5000/api/mongo/school-admin/bulk-import-${userType}`, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setUploadResults(data.results);
-        setMessage({ 
-          type: 'success', 
-          text: `✅ ${data.results.created} ${userType} created! ${data.results.emailsSent} emails sent.` 
-        });
+      // TEMPORARY: Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      console.log('Uploading file:', file.name);
+      setSuccess(true);
+      
+      // Reset form after 2 seconds
+      setTimeout(() => {
         setFile(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Upload failed' });
-      }
+        setSuccess(false);
+      }, 2000);
+
     } catch (err) {
-      console.error('Upload error:', err);
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      setError('Upload failed. Please try again.');
+      console.error('Error uploading file:', err);
     } finally {
       setUploading(false);
     }
   };
 
-  const downloadTemplate = (type) => {
-    let csvContent = '';
-    
-    switch(type) {
-      case 'students':
-        csvContent = 'Name,Email,Class,GradeLevel,ParentEmail\nAhmad Ali,ahmad.ali@student.edu.sg,1A,Primary 1,ahmad.father@gmail.com\nSarah Chen,sarah.chen@student.edu.sg,1A,Primary 1,sarah.mother@gmail.com\n';
-        break;
-      case 'teachers':
-        csvContent = 'Name,Email,Subject\nJohn Tan,john.tan@school.edu.sg,Mathematics\nMary Lee,mary.lee@school.edu.sg,English\n';
-        break;
-      case 'parents':
-        csvContent = 'ParentName,ParentEmail,StudentEmail,Relationship\nAhmad Father,ahmad.father@gmail.com,ahmad.ali@student.edu.sg,Father\nSarah Mother,sarah.mother@gmail.com,sarah.chen@student.edu.sg,Mother\n';
-        break;
-      default:
-        csvContent = 'name,email,role\n';
-    }
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${type}_bulk_upload_template.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
+    },
+    header: {
+      background: 'white',
+      borderBottom: '1px solid #e5e7eb',
+      padding: '16px 0',
+    },
+    headerContent: {
+      maxWidth: '1400px',
+      margin: '0 auto',
+      padding: '0 32px',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    logo: {
+      display: 'flex',
+      alignItems: 'center',
+    },
+    logoIcon: {
+      width: '40px',
+      height: '40px',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      borderRadius: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: '18px',
+      marginRight: '12px',
+    },
+    logoText: {
+      fontSize: '20px',
+      fontWeight: '700',
+      color: '#1f2937',
+    },
+    backButton: {
+      padding: '8px 16px',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+    },
+    main: {
+      maxWidth: '800px',
+      margin: '0 auto',
+      padding: '32px',
+    },
+    pageTitle: {
+      fontSize: '28px',
+      fontWeight: '700',
+      color: '#1f2937',
+      marginBottom: '8px',
+    },
+    pageSubtitle: {
+      fontSize: '15px',
+      color: '#6b7280',
+      marginBottom: '32px',
+    },
+    card: {
+      background: 'white',
+      borderRadius: '12px',
+      padding: '32px',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    },
+    infoBox: {
+      background: '#f0f9ff',
+      border: '2px solid #bfdbfe',
+      borderRadius: '8px',
+      padding: '16px',
+      marginBottom: '24px',
+      fontSize: '14px',
+      color: '#1e40af',
+    },
+    infoTitle: {
+      fontWeight: '700',
+      marginBottom: '8px',
+    },
+    infoList: {
+      margin: '8px 0 0 20px',
+      paddingLeft: '0',
+    },
+    formGroup: {
+      marginBottom: '24px',
+    },
+    label: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: '#374151',
+      marginBottom: '8px',
+      display: 'block',
+    },
+    fileInput: {
+      width: '100%',
+      padding: '12px 16px',
+      border: '2px solid #e5e7eb',
+      borderRadius: '8px',
+      fontSize: '15px',
+      background: '#f9fafb',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    },
+    fileInfo: {
+      marginTop: '12px',
+      padding: '12px 16px',
+      background: '#f0fdf4',
+      border: '2px solid #bbf7d0',
+      borderRadius: '8px',
+      color: '#16a34a',
+      fontSize: '14px',
+      fontWeight: '500',
+    },
+    buttonGroup: {
+      display: 'flex',
+      gap: '12px',
+      marginTop: '24px',
+    },
+    uploadButton: {
+      flex: 1,
+      padding: '14px',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '16px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      fontFamily: 'inherit',
+    },
+    cancelButton: {
+      flex: 1,
+      padding: '14px',
+      background: '#f3f4f6',
+      color: '#374151',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '16px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      fontFamily: 'inherit',
+    },
+    templateButton: {
+      width: '100%',
+      padding: '12px',
+      background: '#f3f4f6',
+      color: '#374151',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      marginBottom: '24px',
+    },
+    successMessage: {
+      marginTop: '20px',
+      padding: '12px 16px',
+      background: '#f0fdf4',
+      border: '2px solid #bbf7d0',
+      borderRadius: '8px',
+      color: '#16a34a',
+      fontSize: '14px',
+      fontWeight: '500',
+    },
+    errorMessage: {
+      marginTop: '20px',
+      padding: '12px 16px',
+      background: '#fef2f2',
+      border: '2px solid #fecaca',
+      borderRadius: '8px',
+      color: '#dc2626',
+      fontSize: '14px',
+      fontWeight: '500',
+    },
   };
 
   return (
-    <div className="sa-container">
-      <header className="sa-header">
-        <div className="sa-header-content">
-          <div className="sa-logo">
-            <div className="sa-logo-icon">P</div>
-            <span className="sa-logo-text">Play2Learn</span>
+    <div style={styles.container}>
+      {/* Header */}
+      <header style={styles.header}>
+        <div style={styles.headerContent}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>Play2Learn</span>
           </div>
-          <button className="sa-button-small" onClick={() => navigate('/school-admin')}>
+          <button
+            style={styles.backButton}
+            onClick={handleBack}
+            onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+            onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+          >
             ← Back to Dashboard
           </button>
         </div>
       </header>
 
-      <main className="sa-main">
-        <h1 className="sa-page-title">Bulk Upload Users (CSV)</h1>
-        <p className="sa-page-subtitle">Upload multiple users at once. Welcome emails will be sent automatically.</p>
+      {/* Main Content */}
+      <main style={styles.main}>
+        <h1 style={styles.pageTitle}>Bulk Upload Users (CSV)</h1>
+        <p style={styles.pageSubtitle}>
+          Upload multiple users at once using a CSV file.
+        </p>
 
-        <div className="sa-card">
-          {message.text && (
-            <div className={`sa-message ${message.type === 'success' ? 'sa-message-success' : 'sa-message-error'}`}>
-              {message.text}
-            </div>
-          )}
-
-          {/* User Type Selection */}
-          <div className="sa-form-group">
-            <label className="sa-label">Select User Type *</label>
-            <select 
-              value={userType} 
-              onChange={(e) => setUserType(e.target.value)} 
-              className="sa-select"
-            >
-              <option value="">Choose user type...</option>
-              <option value="students">Students</option>
-              <option value="teachers">Teachers</option>
-              <option value="parents">Parents</option>
-            </select>
+        <div style={styles.card}>
+          <div style={styles.infoBox}>
+            <div style={styles.infoTitle}>📋 CSV Format Requirements:</div>
+            <ul style={styles.infoList}>
+              <li><strong>Required columns:</strong> name, email, role, password</li>
+              <li><strong>Optional columns:</strong> gender, contact, gradeLevel</li>
+              <li>Role must be: student, teacher, or parent</li>
+              <li>Password must be at least 8 characters</li>
+              <li>Maximum file size: 5MB</li>
+            </ul>
           </div>
 
-          {/* Download Template */}
-          {userType && (
-            <div className="sa-mb-4">
-              <button 
-                className="sa-button-secondary" 
-                onClick={() => downloadTemplate(userType)}
-              >
-                📥 Download {userType.charAt(0).toUpperCase() + userType.slice(1)} CSV Template
-              </button>
-            </div>
-          )}
+          <button
+            style={styles.templateButton}
+            onClick={downloadTemplate}
+            onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
+            onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
+          >
+            📥 Download CSV Template
+          </button>
 
-          {/* File Upload */}
-          <div className="sa-form-group">
-            <label className="sa-label">Select CSV File *</label>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              className="sa-file-input"
-            />
-            {file && (
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#6b7280' }}>
-                Selected: <strong>{file.name}</strong>
-              </p>
-            )}
-          </div>
-
-          {/* Upload Button */}
-          <div className="sa-mt-4">
-            <button 
-              className="sa-button-primary" 
-              onClick={handleUpload}
-              disabled={uploading || !file || !userType}
-              style={{ opacity: uploading || !file || !userType ? 0.5 : 1 }}
-            >
-              {uploading ? '📤 Uploading & Sending Emails...' : '📤 Upload & Send Welcome Emails'}
-            </button>
-          </div>
-
-          {/* Upload Results */}
-          {uploadResults && (
-            <div className="sa-mt-4" style={{ 
-              padding: '16px', 
-              background: '#f0fdf4', 
-              border: '2px solid #bbf7d0',
-              borderRadius: '8px', 
-              fontSize: '14px', 
-              color: '#16a34a' 
-            }}>
-              <strong>📊 Upload Summary:</strong>
-              <ul style={{ margin: '8px 0 0 20px', paddingLeft: 0 }}>
-                <li>✅ Accounts Created: {uploadResults.created}</li>
-                <li>📧 Emails Sent: {uploadResults.emailsSent}</li>
-                {uploadResults.emailsFailed > 0 && (
-                  <li style={{ color: '#dc2626' }}>⚠️ Emails Failed: {uploadResults.emailsFailed}</li>
-                )}
-                {uploadResults.failed > 0 && (
-                  <li style={{ color: '#dc2626' }}>❌ Accounts Failed: {uploadResults.failed}</li>
-                )}
-              </ul>
-
-              {uploadResults.errors && uploadResults.errors.length > 0 && (
-                <details style={{ marginTop: '12px' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600 }}>View Errors ({uploadResults.errors.length})</summary>
-                  <ul style={{ marginTop: '8px' }}>
-                    {uploadResults.errors.map((err, idx) => (
-                      <li key={idx} style={{ color: '#dc2626', fontSize: '13px' }}>
-                        {err.email}: {err.error}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
+          <form onSubmit={handleUpload}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Select CSV File</label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                style={styles.fileInput}
+                disabled={uploading}
+              />
+              {file && (
+                <div style={styles.fileInfo}>
+                  ✅ {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                </div>
               )}
             </div>
-          )}
 
-          {/* CSV Format Help */}
-          {userType === 'students' && (
-            <div className="sa-mt-4" style={{ 
-              padding: '16px', 
-              background: '#eff6ff', 
-              borderRadius: '8px', 
-              fontSize: '14px', 
-              color: '#1e40af' 
-            }}>
-              <strong>📌 Students CSV Format:</strong>
-              <p style={{ margin: '8px 0 0 0' }}>
-                <code>Name, Email, Class, GradeLevel, ParentEmail (optional)</code><br/>
-                Example: Ahmad Ali, ahmad@student.edu.sg, 1A, Primary 1, parent@gmail.com
-              </p>
-              <p style={{ margin: '12px 0 0 0', fontSize: '13px' }}>
-                💡 <strong>Tip:</strong> If ParentEmail is provided, credentials will be sent to parents automatically!
-              </p>
+            {/* Buttons */}
+            <div style={styles.buttonGroup}>
+              <button
+                type="button"
+                style={styles.cancelButton}
+                onClick={handleBack}
+                disabled={uploading}
+                onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
+                onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{
+                  ...styles.uploadButton,
+                  opacity: uploading || !file ? 0.7 : 1,
+                  cursor: uploading || !file ? 'not-allowed' : 'pointer',
+                }}
+                disabled={uploading || !file}
+                onMouseEnter={(e) => !uploading && file && (e.target.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+              >
+                {uploading ? 'Uploading...' : 'Upload Users'}
+              </button>
             </div>
-          )}
+
+            {/* Success Message */}
+            {success && (
+              <div style={styles.successMessage}>
+                ✅ Users uploaded successfully!
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div style={styles.errorMessage}>
+                ⚠️ {error}
+              </div>
+            )}
+          </form>
         </div>
       </main>
     </div>
