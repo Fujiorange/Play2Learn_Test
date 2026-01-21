@@ -7,6 +7,9 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+const path = require('path');
+
+
 
 // ==================== CORS CONFIGURATION ====================
 const corsOptions = {
@@ -82,7 +85,6 @@ if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   }
 }
-
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -109,6 +111,15 @@ function authenticateToken(req, res, next) {
   });
 }
 
+if (process.env.NODE_ENV === 'production') {
+  // Serve static frontend files
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Serve index.html for all unknown routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
 // ==================== REQUEST LOGGING ====================
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString().split('T')[1]} - ${req.method} ${req.path}`);
