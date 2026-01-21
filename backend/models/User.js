@@ -1,4 +1,4 @@
-// backend/models/User.js
+// backend/models/User.js - UPDATED with all required fields
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
@@ -25,6 +25,22 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  
+  // ✅ NEW FIELDS - Contact, Gender, Date of Birth
+  contact: {
+    type: String,
+    default: null
+  },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other', 'prefer-not-to-say', null],
+    default: null
+  },
+  date_of_birth: {
+    type: Date,
+    default: null
+  },
+  
   // Student-specific fields
   class: {
     type: String,
@@ -34,16 +50,23 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  username: {
+    type: String,
+    default: null
+  },
+  
   // Teacher-specific fields
   subject: {
     type: String,
     default: null
   },
+  
   // Parent-specific fields
   linkedStudents: [{
     studentId: mongoose.Schema.Types.ObjectId,
     relationship: String
   }],
+  
   // Account status
   emailVerified: {
     type: Boolean,
@@ -57,10 +80,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  
   // Metadata
   createdBy: {
     type: String,
     default: null
+  },
+  isTrialUser: {
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,
