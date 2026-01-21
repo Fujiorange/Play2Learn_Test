@@ -45,29 +45,43 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/play2l
 
 console.log('🚀 Starting Play2Learn Server...');
 console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
-console.log('🔗 MongoDB:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
+console.log('🔗 MongoDB URI Type:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 10000,
-  socketTimeoutMS: 45000,
-})
-.then(() => {
-  console.log('✅ MongoDB Connected Successfully!');
-  console.log('📊 Database:', mongoose.connection.name);
-  console.log('🏢 Host:', mongoose.connection.host);
-})
-.catch(err => {
-  console.error('❌ MongoDB Connection Failed:', err.message);
-  
-  if (process.env.NODE_ENV === 'production') {
-    console.log('🚫 Exiting - Database required in production');
-    process.exit(1);
-  } else {
-    console.log('⚠️  Continuing without database for development...');
+// Remove deprecated options - use modern Mongoose 7+ syntax
+async function connectToDatabase() {
+  try {
+    console.log('🔗 Attempting to connect to MongoDB...');
+    
+    // Modern Mongoose connection (no options needed for v7+)
+    await mongoose.connect(MONGODB_URI);
+    
+    console.log('✅ MongoDB Connected Successfully!');
+    console.log('📊 Database:', mongoose.connection.name);
+    console.log('🏢 Host:', mongoose.connection.host);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ MongoDB Connection Failed:', error.message);
+    
+    // Show helpful error info
+    console.log('\n💡 TROUBLESHOOTING TIPS:');
+    console.log('1. Check MONGODB_URI in Render dashboard');
+    console.log('2. Make sure IP is whitelisted in MongoDB Atlas');
+    console.log('3. Verify database username/password');
+    console.log('4. Check if cluster is running (not paused)');
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.log('🚫 Exiting - Database required in production');
+      process.exit(1);
+    } else {
+      console.log('⚠️  Continuing without database for development...');
+      return false;
+    }
   }
-});
+}
+
+// Connect to database
+connectToDatabase();
 
 // ==================== JWT CONFIGURATION ====================
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-please-change';
