@@ -8,6 +8,31 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 
+// ==================== WX ====================
+// Added mongoose and JWT for School Admin dashboard routes
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+
+// Authentication middleware for School Admin routes
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: 'Invalid token' });
+  }
+};
+// ==================== WX ====================
+
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
@@ -450,15 +475,17 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
   };
 
   try {
+    // Parse CSV
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
+          console.log('📝 CSV Row:', row);
           parents.push({
-            parentName: row.ParentName || row.parent_name || row.Name || row.name,
-            parentEmail: row.ParentEmail || row.parent_email || row.Email || row.email,
-            studentEmail: row.StudentEmail || row.student_email,
-            relationship: row.Relationship || row.relationship,
+            parentName: row.ParentName || row.parentName || row['Parent Name'] || row.parent_name || '',
+            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
+            studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || row.student_email || '',
+            relationship: row.Relationship || row.relationship || 'Parent',
             // ✅ NEW FIELDS
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
             gender: row.Gender || row.gender || '',
@@ -474,37 +501,23 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
 
     console.log('\n🔄 Processing parents...\n');
 
+    // Process each parent
     for (const parentData of parents) {
       try {
         console.log(`👤 Processing: ${parentData.parentName} (${parentData.parentEmail})`);
         
+        // Validate
         if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
           console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
-            email: parentData.parentEmail, 
+            email: parentData.parentEmail || 'unknown', 
             error: 'Missing required fields' 
           });
           continue;
         }
 
-        // Find linked student
-        const student = await User.findOne({ 
-          email: parentData.studentEmail, 
-          role: 'Student' 
-        });
-
-        if (!student) {
-          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
-          results.failed++;
-          results.errors.push({ 
-            email: parentData.parentEmail, 
-            error: `Student not found: ${parentData.studentEmail}` 
-          });
-          continue;
-        }
-
-        // Check if parent exists
+        // Check if parent already exists
         const existingParent = await User.findOne({ email: parentData.parentEmail });
         if (existingParent) {
           console.log(`⚠️  Skipping - Parent email already exists`);
@@ -516,13 +529,25 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
           continue;
         }
 
+        // Find student to link
+        const student = await User.findOne({ email: parentData.studentEmail });
+        if (!student) {
+          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
+          results.failed++;
+          results.errors.push({ 
+            email: parentData.parentEmail, 
+            error: `Student not found: ${parentData.studentEmail}` 
+          });
+          continue;
+        }
+
         // Generate password
         const tempPassword = generateTempPassword('Parent');
         console.log(`🔑 Generated password: ${tempPassword}`);
         
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // ✅ Parse date of birth
+        // ✅ Parse date of birth properly
         let parsedDateOfBirth = null;
         if (parentData.dateOfBirth) {
           try {
