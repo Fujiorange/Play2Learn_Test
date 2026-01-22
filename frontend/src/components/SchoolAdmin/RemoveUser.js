@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
-
-// Mock user data - Primary 1 Mathematics only
-const mockUsers = [
-  { id: 1, name: "Alice Tan", email: "alice@student.com", role: "student", gradeLevel: "Primary 1", subject: "Mathematics" },
-  { id: 2, name: "Bob Lee", email: "bob@student.com", role: "student", gradeLevel: "Primary 1", subject: "Mathematics" },
-  { id: 3, name: "Ms. Diana Lim", email: "diana@teacher.com", role: "teacher", gradeLevel: "Primary 1", subject: "Mathematics" },
-  { id: 4, name: "Mr. Ethan Tan", email: "ethan@teacher.com", role: "teacher", gradeLevel: "Primary 1", subject: "Mathematics" },
-  { id: 5, name: "Mrs. Wong", email: "parent.wong@email.com", role: "parent", gradeLevel: "Primary 1", subject: "Mathematics" },
-];
+import schoolAdminService from '../../services/schoolAdminService';
 
 export default function RemoveUser() {
   const navigate = useNavigate();
@@ -18,6 +10,7 @@ export default function RemoveUser() {
   const [filterRole, setFilterRole] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -35,21 +28,27 @@ export default function RemoveUser() {
   }, [navigate]);
 
   const loadUsers = async () => {
+    setLoading(true);
     try {
-      // TODO: Uncomment when backend is ready
-      // const token = authService.getToken();
-      // const response = await fetch('http://localhost:5000/api/mongo/school-admin/users?gradeLevel=Primary 1&subject=Mathematics', {
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`
-      //   }
-      // });
-      // const data = await response.json();
-      // setUsers(data.users || []);
+      // REAL API CALL - Fetches from database!
+      const result = await schoolAdminService.getUsers({
+        gradeLevel: 'Primary 1',
+        subject: 'Mathematics'
+      });
 
-      // MOCK DATA - Primary 1 Mathematics only
-      setUsers(mockUsers);
+      if (result.success) {
+        // Filter out school-admin users (they shouldn't be deletable)
+        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin');
+        setUsers(filteredUsers);
+      } else {
+        console.error('Failed to load users:', result.error);
+        setMessage({ type: 'error', text: result.error || 'Failed to load users' });
+      }
     } catch (error) {
       console.error('Error loading users:', error);
+      setMessage({ type: 'error', text: 'Failed to load users' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,31 +63,17 @@ export default function RemoveUser() {
     if (!deleteConfirm) return;
 
     try {
-      // TODO: Uncomment when backend is ready
-      // const token = authService.getToken();
-      // const response = await fetch(`http://localhost:5000/api/mongo/school-admin/users/${deleteConfirm.id}`, {
-      //   method: 'DELETE',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`
-      //   }
-      // });
-      // const result = await response.json();
-      // 
-      // if (result.success) {
-      //   setUsers(users.filter(u => u.id !== deleteConfirm.id));
-      //   setMessage({ type: 'success', text: `User "${deleteConfirm.name}" removed successfully` });
-      // } else {
-      //   setMessage({ type: 'error', text: result.error || 'Failed to delete user' });
-      // }
+      // REAL API CALL - Deletes from database!
+      const result = await schoolAdminService.deleteUser(deleteConfirm.id);
 
-      // MOCK SUCCESS - Remove when API is connected
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setUsers(users.filter(u => u.id !== deleteConfirm.id));
-      setMessage({ type: 'success', text: `User "${deleteConfirm.name}" removed successfully` });
-      setDeleteConfirm(null);
-
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      if (result.success) {
+        setUsers(users.filter(u => u.id !== deleteConfirm.id));
+        setMessage({ type: 'success', text: `User "${deleteConfirm.name}" removed successfully` });
+        setDeleteConfirm(null);
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to delete user' });
+      }
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to delete user' });
     }
@@ -124,6 +109,7 @@ export default function RemoveUser() {
     message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
+    loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
   };
 
   return (
@@ -173,35 +159,41 @@ export default function RemoveUser() {
             </div>
           </div>
 
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Name</th>
-                <th style={styles.th}>Email</th>
-                <th style={styles.th}>Role</th>
-                <th style={styles.th}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.id}>
-                  <td style={styles.td}>{user.name}</td>
-                  <td style={styles.td}>{user.email}</td>
-                  <td style={styles.td}>{user.role}</td>
-                  <td style={styles.td}>
-                    <button style={styles.deleteButton} onClick={() => setDeleteConfirm(user)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {loading ? (
+            <div style={styles.loadingText}>Loading users...</div>
+          ) : (
+            <>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Name</th>
+                    <th style={styles.th}>Email</th>
+                    <th style={styles.th}>Role</th>
+                    <th style={styles.th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td style={styles.td}>{user.name}</td>
+                      <td style={styles.td}>{user.email}</td>
+                      <td style={styles.td}>{user.role}</td>
+                      <td style={styles.td}>
+                        <button style={styles.deleteButton} onClick={() => setDeleteConfirm(user)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-          {filteredUsers.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
-              No users found
-            </div>
+              {filteredUsers.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                  No users found
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

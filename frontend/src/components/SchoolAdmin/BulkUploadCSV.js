@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import schoolAdminService from '../../services/schoolAdminService';
 
 export default function BulkUploadCSV() {
   const navigate = useNavigate();
   
   const [file, setFile] = useState(null);
+  const [userType, setUserType] = useState('student');
   const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   
   useEffect(() => {
@@ -28,17 +30,27 @@ export default function BulkUploadCSV() {
   };
 
   const downloadTemplate = () => {
-    // PRIMARY 1 MATHEMATICS ONLY template
-    const csvTemplate = `name,email,role,password,gender,contact,gradeLevel,subject
-John Tan,john.tan@student.com,student,password123,male,+6512345678,Primary 1,Mathematics
-Mary Lim,mary.lim@student.com,student,password123,female,+6587654321,Primary 1,Mathematics
-Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 1,Mathematics`;
+    let csvTemplate = '';
+    
+    if (userType === 'student') {
+      csvTemplate = `Name,Email,Class,GradeLevel,ParentEmail,ContactNumber,Gender,DateOfBirth
+John Tan,john.tan@student.com,1A,Primary 1,parent.tan@email.com,+6591234567,male,15/03/2019
+Mary Lim,mary.lim@student.com,1B,Primary 1,parent.lim@email.com,+6598765432,female,22/07/2019`;
+    } else if (userType === 'teacher') {
+      csvTemplate = `Name,Email,Subject,ContactNumber,Gender,DateOfBirth
+Mr. David Lee,david.lee@teacher.com,Mathematics,+6591234567,male,15/03/1985
+Ms. Sarah Wong,sarah.wong@teacher.com,Mathematics,+6598765432,female,22/07/1990`;
+    } else if (userType === 'parent') {
+      csvTemplate = `ParentName,ParentEmail,StudentEmail,Relationship,ContactNumber,Gender
+Mr. Tan Wei Ming,parent.tan@email.com,john.tan@student.com,Father,+6591234567,male
+Mrs. Lim Mei Ling,parent.lim@email.com,mary.lim@student.com,Mother,+6598765432,female`;
+    }
 
     const blob = new Blob([csvTemplate], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'user_upload_template_p1_math.csv';
+    a.download = `${userType}_upload_template_p1_math.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -60,7 +72,7 @@ Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 
       }
       setFile(selectedFile);
       setError('');
-      setSuccess(false);
+      setResult(null);
     }
   };
 
@@ -74,43 +86,28 @@ Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 
 
     setUploading(true);
     setError('');
+    setResult(null);
 
     try {
-      // TODO: Uncomment when backend is ready
-      // const formData = new FormData();
-      // formData.append('file', file);
-      // const token = authService.getToken();
-      // 
-      // const response = await fetch('http://localhost:5000/api/mongo/school-admin/bulk-import-students', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`
-      //   },
-      //   body: formData
-      // });
-      // 
-      // const result = await response.json();
-      // 
-      // if (result.success) {
-      //   setSuccess(true);
-      //   setTimeout(() => {
-      //     setFile(null);
-      //     setSuccess(false);
-      //   }, 2000);
-      // } else {
-      //   setError(result.error || 'Upload failed');
-      // }
+      // REAL API CALL - Uploads to database!
+      const response = await schoolAdminService.bulkUploadUsers(file, userType);
 
-      // MOCK SUCCESS - Remove when API is connected
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      console.log('Uploading file:', file.name);
-      setSuccess(true);
-      
-      setTimeout(() => {
+      if (response.success) {
+        setResult({
+          success: true,
+          message: response.message,
+          created: response.results?.created || 0,
+          failed: response.results?.failed || 0,
+          emailsSent: response.results?.emailsSent || 0,
+          errors: response.results?.errors || []
+        });
         setFile(null);
-        setSuccess(false);
-      }, 2000);
+        // Reset file input
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) fileInput.value = '';
+      } else {
+        setError(response.error || 'Upload failed');
+      }
 
     } catch (err) {
       setError('Upload failed. Please try again.');
@@ -137,14 +134,61 @@ Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 
     infoList: { margin: '8px 0 0 20px', paddingLeft: '0' },
     formGroup: { marginBottom: '24px' },
     label: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' },
-    fileInput: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit' },
+    select: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' },
+    fileInput: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' },
     fileInfo: { marginTop: '12px', padding: '12px 16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a', fontSize: '14px', fontWeight: '500' },
     buttonGroup: { display: 'flex', gap: '12px', marginTop: '24px' },
     uploadButton: { flex: 1, padding: '14px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', fontFamily: 'inherit' },
     cancelButton: { flex: 1, padding: '14px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', fontFamily: 'inherit' },
     templateButton: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', marginBottom: '24px' },
-    successMessage: { marginTop: '20px', padding: '12px 16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a', fontSize: '14px', fontWeight: '500' },
-    errorMessage: { marginTop: '20px', padding: '12px 16px', background: '#fef2f2', border: '2px solid #fecaca', borderRadius: '8px', color: '#dc2626', fontSize: '14px', fontWeight: '500' },
+    successBox: { marginTop: '20px', padding: '16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a' },
+    successTitle: { fontSize: '16px', fontWeight: '700', marginBottom: '12px' },
+    successStats: { fontSize: '14px', marginBottom: '4px' },
+    errorBox: { marginTop: '20px', padding: '16px', background: '#fef2f2', border: '2px solid #fecaca', borderRadius: '8px', color: '#dc2626' },
+    errorTitle: { fontSize: '16px', fontWeight: '700', marginBottom: '8px' },
+    errorList: { fontSize: '13px', marginTop: '8px', maxHeight: '150px', overflowY: 'auto' },
+    errorItem: { padding: '4px 0', borderBottom: '1px solid #fecaca' },
+  };
+
+  const getInfoContent = () => {
+    if (userType === 'student') {
+      return (
+        <>
+          <div style={styles.infoTitle}>📋 Student CSV Format Requirements:</div>
+          <ul style={styles.infoList}>
+            <li><strong>Required:</strong> Name, Email</li>
+            <li><strong>Optional:</strong> Class, GradeLevel, ParentEmail, ContactNumber, Gender, DateOfBirth</li>
+            <li>GradeLevel defaults to "Primary 1"</li>
+            <li>If ParentEmail provided, credentials will be sent to parent</li>
+            <li>Date format: DD/MM/YYYY or YYYY-MM-DD</li>
+          </ul>
+        </>
+      );
+    } else if (userType === 'teacher') {
+      return (
+        <>
+          <div style={styles.infoTitle}>📋 Teacher CSV Format Requirements:</div>
+          <ul style={styles.infoList}>
+            <li><strong>Required:</strong> Name, Email</li>
+            <li><strong>Optional:</strong> Subject, ContactNumber, Gender, DateOfBirth</li>
+            <li>Subject defaults to "Mathematics"</li>
+            <li>Welcome email will be sent to teacher</li>
+          </ul>
+        </>
+      );
+    } else {
+      return (
+        <>
+          <div style={styles.infoTitle}>📋 Parent CSV Format Requirements:</div>
+          <ul style={styles.infoList}>
+            <li><strong>Required:</strong> ParentName, ParentEmail, StudentEmail</li>
+            <li><strong>Optional:</strong> Relationship, ContactNumber, Gender</li>
+            <li>Student must exist in database first</li>
+            <li>Relationship: Father, Mother, Guardian, etc.</li>
+          </ul>
+        </>
+      );
+    }
   };
 
   return (
@@ -173,17 +217,27 @@ Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 
         </p>
 
         <div style={styles.card}>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>User Type</label>
+            <select
+              value={userType}
+              onChange={(e) => {
+                setUserType(e.target.value);
+                setFile(null);
+                setResult(null);
+                setError('');
+              }}
+              style={styles.select}
+              disabled={uploading}
+            >
+              <option value="student">Students</option>
+              <option value="teacher">Teachers</option>
+              <option value="parent">Parents</option>
+            </select>
+          </div>
+
           <div style={styles.infoBox}>
-            <div style={styles.infoTitle}>📋 CSV Format Requirements:</div>
-            <ul style={styles.infoList}>
-              <li><strong>Required columns:</strong> name, email, role, password</li>
-              <li><strong>Optional columns:</strong> gender, contact</li>
-              <li><strong>Grade Level:</strong> Must be "Primary 1"</li>
-              <li><strong>Subject:</strong> Must be "Mathematics"</li>
-              <li>Role must be: student, teacher, or parent</li>
-              <li>Password must be at least 8 characters</li>
-              <li>Maximum file size: 5MB</li>
-            </ul>
+            {getInfoContent()}
           </div>
 
           <button
@@ -192,7 +246,7 @@ Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 
             onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
             onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
           >
-            📥 Download CSV Template (Primary 1 Mathematics)
+            📥 Download {userType.charAt(0).toUpperCase() + userType.slice(1)} CSV Template
           </button>
 
           <form onSubmit={handleUpload}>
@@ -234,19 +288,37 @@ Mr. David Lee,david.lee@teacher.com,teacher,teacher123,male,+6591234567,Primary 
                 onMouseEnter={(e) => !uploading && file && (e.target.style.transform = 'translateY(-2px)')}
                 onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
               >
-                {uploading ? 'Uploading...' : 'Upload Users'}
+                {uploading ? 'Uploading...' : `Upload ${userType.charAt(0).toUpperCase() + userType.slice(1)}s`}
               </button>
             </div>
 
-            {success && (
-              <div style={styles.successMessage}>
-                ✅ Users uploaded successfully!
+            {result && result.success && (
+              <div style={styles.successBox}>
+                <div style={styles.successTitle}>✅ Upload Complete!</div>
+                <div style={styles.successStats}>📊 Created: {result.created} users</div>
+                {result.failed > 0 && (
+                  <div style={styles.successStats}>⚠️ Failed: {result.failed} users</div>
+                )}
+                {result.emailsSent > 0 && (
+                  <div style={styles.successStats}>📧 Emails Sent: {result.emailsSent}</div>
+                )}
+                {result.errors && result.errors.length > 0 && (
+                  <div style={styles.errorList}>
+                    <strong>Errors:</strong>
+                    {result.errors.map((err, idx) => (
+                      <div key={idx} style={styles.errorItem}>
+                        {err.email}: {err.error}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {error && (
-              <div style={styles.errorMessage}>
-                ⚠️ {error}
+              <div style={styles.errorBox}>
+                <div style={styles.errorTitle}>⚠️ Upload Failed</div>
+                <div>{error}</div>
               </div>
             )}
           </form>

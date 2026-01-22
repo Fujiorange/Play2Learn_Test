@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import schoolAdminService from '../../services/schoolAdminService';
 
 export default function SchoolAdminDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -25,22 +27,26 @@ export default function SchoolAdminDashboard() {
   }, [navigate]);
 
   const loadDashboardData = async () => {
+    setLoading(true);
     try {
-      // TODO: Uncomment when backend is ready
-      // const response = await fetch('http://localhost:5000/api/mongo/school-admin/dashboard-stats', {
-      //   headers: {
-      //     'Authorization': `Bearer ${authService.getToken()}`
-      //   }
-      // });
-      // const data = await response.json();
-      // setDashboardData(data);
+      // REAL API CALL - Fetches from database!
+      const result = await schoolAdminService.getDashboardStats();
 
-      // MOCK DATA - Primary 1 Mathematics only
-      setDashboardData({
-        total_students: 45,
-        total_classes: 3,
-        total_teachers: 8,
-      });
+      if (result.success) {
+        setDashboardData({
+          total_students: result.total_students || 0,
+          total_classes: result.total_classes || 0,
+          total_teachers: result.total_teachers || 0,
+          total_parents: result.total_parents || 0,
+        });
+      } else {
+        console.error('Failed to load dashboard stats:', result.error);
+        setDashboardData({
+          total_students: 0,
+          total_classes: 0,
+          total_teachers: 0,
+        });
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       setDashboardData({
@@ -48,6 +54,8 @@ export default function SchoolAdminDashboard() {
         total_classes: 0,
         total_teachers: 0,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -128,17 +136,17 @@ export default function SchoolAdminDashboard() {
           <div style={styles.statCard}>
             <div style={styles.statIcon}>🎓</div>
             <p style={styles.statLabel}>Total Students</p>
-            <p style={styles.statValue}>{dashboardData?.total_students || 0}</p>
+            <p style={styles.statValue}>{loading ? '...' : dashboardData?.total_students || 0}</p>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>📚</div>
             <p style={styles.statLabel}>Total Classes</p>
-            <p style={styles.statValue}>{dashboardData?.total_classes || 0}</p>
+            <p style={styles.statValue}>{loading ? '...' : dashboardData?.total_classes || 0}</p>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>👨‍🏫</div>
             <p style={styles.statLabel}>Total Teachers</p>
-            <p style={styles.statValue}>{dashboardData?.total_teachers || 0}</p>
+            <p style={styles.statValue}>{loading ? '...' : dashboardData?.total_teachers || 0}</p>
           </div>
         </div>
 
@@ -146,7 +154,7 @@ export default function SchoolAdminDashboard() {
           {/* Account Management */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>📝</span>
+              <span style={styles.sectionIcon}>🔐</span>
               <h2 style={styles.sectionTitle}>Account Management</h2>
             </div>
             <ul style={styles.menuList}>

@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
-
-// Mock data - Primary 1 Mathematics users
-const mockUsers = [
-  { id: 1, name: "Alice Tan", email: "alice@student.com", role: "student" },
-  { id: 2, name: "Bob Lee", email: "bob@teacher.com", role: "teacher" },
-  { id: 3, name: "Mrs. Wong", email: "parent@email.com", role: "parent" },
-];
+import schoolAdminService from '../../services/schoolAdminService';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -16,6 +10,7 @@ export default function ResetPassword() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -33,21 +28,27 @@ export default function ResetPassword() {
   }, [navigate]);
 
   const loadUsers = async () => {
+    setLoading(true);
     try {
-      // TODO: Uncomment when backend is ready
-      // const token = authService.getToken();
-      // const response = await fetch('http://localhost:5000/api/mongo/school-admin/users?gradeLevel=Primary 1&subject=Mathematics', {
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`
-      //   }
-      // });
-      // const data = await response.json();
-      // setUsers(data.users || []);
+      // REAL API CALL - Fetches from database!
+      const result = await schoolAdminService.getUsers({
+        gradeLevel: 'Primary 1',
+        subject: 'Mathematics'
+      });
 
-      // MOCK DATA - Primary 1 Mathematics users
-      setUsers(mockUsers);
+      if (result.success) {
+        // Filter out school-admin users
+        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin');
+        setUsers(filteredUsers);
+      } else {
+        console.error('Failed to load users:', result.error);
+        setMessage({ type: 'error', text: result.error || 'Failed to load users' });
+      }
     } catch (error) {
       console.error('Error loading users:', error);
+      setMessage({ type: 'error', text: 'Failed to load users' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -63,31 +64,17 @@ export default function ResetPassword() {
     }
 
     try {
-      // TODO: Uncomment when backend is ready
-      // const token = authService.getToken();
-      // const response = await fetch(`http://localhost:5000/api/mongo/school-admin/users/${selectedUser.id}/password`, {
-      //   method: 'PUT',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${token}`
-      //   },
-      //   body: JSON.stringify({ password: newPassword })
-      // });
-      // const result = await response.json();
-      // 
-      // if (result.success) {
-      //   setMessage({ type: 'success', text: `Password reset for ${selectedUser.name}` });
-      //   setSelectedUser(null);
-      //   setNewPassword('');
-      // } else {
-      //   setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
-      // }
+      // REAL API CALL - Updates database!
+      const result = await schoolAdminService.resetUserPassword(selectedUser.id, newPassword);
 
-      // MOCK SUCCESS - Remove when API is connected
-      setMessage({ type: 'success', text: `Password reset for ${selectedUser.name}` });
-      setSelectedUser(null);
-      setNewPassword('');
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      if (result.success) {
+        setMessage({ type: 'success', text: `Password reset for ${selectedUser.name}` });
+        setSelectedUser(null);
+        setNewPassword('');
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
+      }
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to reset password' });
     }
@@ -121,6 +108,7 @@ export default function ResetPassword() {
     message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
+    loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
   };
 
   return (
@@ -156,35 +144,41 @@ export default function ResetPassword() {
             style={styles.searchInput}
           />
 
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Name</th>
-                <th style={styles.th}>Email</th>
-                <th style={styles.th}>Role</th>
-                <th style={styles.th}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.id}>
-                  <td style={styles.td}><strong>{user.name}</strong></td>
-                  <td style={styles.td}>{user.email}</td>
-                  <td style={styles.td}>{user.role}</td>
-                  <td style={styles.td}>
-                    <button style={styles.resetButton} onClick={() => setSelectedUser(user)}>
-                      Reset Password
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {loading ? (
+            <div style={styles.loadingText}>Loading users...</div>
+          ) : (
+            <>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Name</th>
+                    <th style={styles.th}>Email</th>
+                    <th style={styles.th}>Role</th>
+                    <th style={styles.th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td style={styles.td}><strong>{user.name}</strong></td>
+                      <td style={styles.td}>{user.email}</td>
+                      <td style={styles.td}>{user.role}</td>
+                      <td style={styles.td}>
+                        <button style={styles.resetButton} onClick={() => setSelectedUser(user)}>
+                          Reset Password
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-          {filteredUsers.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
-              No users found
-            </div>
+              {filteredUsers.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                  No users found
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
