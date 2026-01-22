@@ -218,7 +218,7 @@ const studentService = {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_URL}/mongo/student/quiz-results`, {
+      const response = await fetch(`${API_URL}/mongo/student/math-quiz-results`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

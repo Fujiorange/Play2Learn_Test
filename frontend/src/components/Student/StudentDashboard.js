@@ -35,14 +35,15 @@ export default function StudentDashboard() {
         console.log('📊 Dashboard data loaded:', dashData);
 
         if (dashData.success) {
+          const dashboardInfo = dashData.data || {};
           setDashboardData({
-            points: dashData.totalPoints || 0,
-            level: dashData.currentLevel || 1,
-            levelProgress: ((dashData.totalPoints % 500) / 500) * 100,
-            achievements: 0, // Not yet implemented
-            rank: dashData.classRank || '#-',
-            completedQuizzes: dashData.completedQuizzes || 0,
-            grade_level: 'Primary 1'
+            points: dashboardInfo.points || 0,
+            level: dashboardInfo.level || 1,
+            levelProgress: ((dashboardInfo.points % 500) / 500) * 100,
+            achievements: dashboardInfo.achievements?.length || 0,
+            rank: '#-',
+            completedQuizzes: dashboardInfo.quizzesTaken || 0,
+            grade_level: dashboardInfo.gradeLevel || 'Primary 1'
           });
           console.log('✅ Dashboard data set successfully');
         } else {
