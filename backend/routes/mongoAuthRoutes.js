@@ -79,6 +79,8 @@ router.post('/register', async (req, res) => {
     const result = await usersCollection.insertOne(newUser);
     const userId = result.insertedId;
 
+    console.log('✅ User created:', userId, 'Role:', role);
+
     // Create role-specific entry
     await createRoleSpecificEntry(db, userId, role, name, email);
 
@@ -458,18 +460,21 @@ router.put('/update-profile', async (req, res) => {
   }
 });
 
-// ==================== HELPER FUNCTION ====================
+// ==================== HELPER FUNCTION (UPDATED) ====================
 async function createRoleSpecificEntry(db, userId, role, name, email) {
   try {
     const timestamp = new Date();
     
     switch (role.toLowerCase()) {  // Make case-insensitive
       case 'student':
-        await db.collection('students').insertOne({
+        const studentDoc = {
           user_id: userId,
           name,
           email,
           grade_level: 'Primary 1',
+          class: null,
+          school_id: null,
+          parent_id: null,
           points: 0,
           level: 1,
           current_profile: null,
@@ -477,9 +482,17 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           placement_completed: false,
           streak: 0,
           total_quizzes: 0,
+          average_score: 0,
+          badges: [],
+          achievements: [],
+          last_active: timestamp,
+          is_active: true,
           created_at: timestamp,
           updated_at: timestamp
-        });
+        };
+        
+        const result = await db.collection('students').insertOne(studentDoc);
+        console.log('✅ Student profile created:', result.insertedId);
         break;
       
       case 'teacher':
@@ -487,8 +500,15 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           user_id: userId,
           name,
           email,
-          created_at: timestamp
+          subject: 'Mathematics',
+          school_id: null,
+          classes: [],
+          students: [],
+          is_active: true,
+          created_at: timestamp,
+          updated_at: timestamp
         });
+        console.log('✅ Teacher profile created');
         break;
       
       case 'parent':
@@ -496,8 +516,13 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           user_id: userId,
           name,
           email,
-          created_at: timestamp
+          phone_number: null,
+          children: [],
+          is_active: true,
+          created_at: timestamp,
+          updated_at: timestamp
         });
+        console.log('✅ Parent profile created');
         break;
       
       case 'school-admin':
@@ -505,8 +530,12 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           user_id: userId,
           name,
           email,
-          created_at: timestamp
+          school_id: null,
+          is_active: true,
+          created_at: timestamp,
+          updated_at: timestamp
         });
+        console.log('✅ School Admin profile created');
         break;
       
       case 'platform-admin':
@@ -515,8 +544,10 @@ async function createRoleSpecificEntry(db, userId, role, name, email) {
           name,
           email,
           admin_level: 'moderator',
-          created_at: timestamp
+          created_at: timestamp,
+          updated_at: timestamp
         });
+        console.log('✅ Platform Admin profile created');
         break;
     }
   } catch (error) {

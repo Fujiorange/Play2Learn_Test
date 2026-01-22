@@ -1,4 +1,5 @@
-// backend/routes/schoolAdminRoutes.js - FIXED CSV PARSING
+// backend/routes/schoolAdminRoutes.js - MERGED VERSION
+// Includes Wei Xiang's Dashboard Routes + Student Profile Creation Fix
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -46,7 +47,7 @@ function generateTempPassword(userType) {
   return `${prefix}${year}${random}${special}`;
 }
 
-// ========== STUDENTS BULK IMPORT (UPDATED) ==========
+// ========== STUDENTS BULK IMPORT (FIXED - Creates Student Profile) ==========
 router.post('/bulk-import-students', upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import students request received');
   console.log('Request Body:', req.body);
@@ -67,21 +68,19 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
   };
 
   try {
-    // ✅ FIXED: Parse CSV with proper headers
+    // ✅ Parse CSV with proper headers
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
           console.log('📝 Raw CSV row:', row);
           
-          // ✅ Handle all possible CSV header variations
           students.push({
             name: row.Name || row.name || '',
             email: row.Email || row.email || '',
             class: row.Class || row.class || '',
             gradeLevel: row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || '',
             parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
-            // ✅ NEW FIELDS
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
             gender: row.Gender || row.gender || '',
             dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
@@ -97,15 +96,11 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
         });
     });
 
-    console.log('📊 Import complete:', {
-      created: results.created,
-      failed: results.failed,
-      emailsSent: results.emailsSent,
-      emailsFailed: results.emailsFailed,
-      errors: results.errors
-    });
-
     console.log('\n🔄 Processing students...\n');
+
+    // Get MongoDB database connection
+    const db = mongoose.connection.db;
+    const studentsCollection = db.collection('students');
 
     // Process each student
     for (const studentData of students) {
@@ -142,29 +137,24 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const username = studentData.email.split('@')[0];
 
-        // ✅ Parse date of birth properly (convert to Date object)
+        // Parse date of birth properly
         let parsedDateOfBirth = null;
         if (studentData.dateOfBirth) {
           try {
-            // Handle formats: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY
             const dateStr = studentData.dateOfBirth.trim();
             
             if (dateStr.includes('-')) {
-              // YYYY-MM-DD format
               parsedDateOfBirth = new Date(dateStr);
             } else if (dateStr.includes('/')) {
-              // DD/MM/YYYY or MM/DD/YYYY format
               const parts = dateStr.split('/');
               if (parts.length === 3) {
-                // Assume DD/MM/YYYY for Singapore
                 const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1; // Month is 0-indexed
+                const month = parseInt(parts[1]) - 1;
                 const year = parseInt(parts[2]);
                 parsedDateOfBirth = new Date(year, month, day);
               }
             }
             
-            // Validate date
             if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
               console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}, skipping date`);
               parsedDateOfBirth = null;
@@ -175,10 +165,10 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
           }
         }
 
-        // ✅ Normalize gender value
+        // Normalize gender value
         const normalizedGender = studentData.gender ? studentData.gender.toLowerCase() : null;
 
-        // Create student with all fields
+        // ✅ Step 1: Create user account in users collection
         const student = await User.create({
           name: studentData.name,
           email: studentData.email,
@@ -187,7 +177,6 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
           role: 'Student',
           class: studentData.class || null,
           gradeLevel: studentData.gradeLevel || 'Primary 1',
-          // ✅ NEW FIELDS
           contact: studentData.contact || null,
           gender: normalizedGender,
           date_of_birth: parsedDateOfBirth,
@@ -197,12 +186,34 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
           isTrialUser: false
         });
 
-        console.log(`✅ Student created in database with:
+        console.log(`✅ User account created with:
    - Name: ${student.name}
    - Email: ${student.email}
    - Contact: ${student.contact || 'N/A'}
    - Gender: ${student.gender || 'N/A'}
    - Date of Birth: ${student.date_of_birth ? student.date_of_birth.toISOString().split('T')[0] : 'N/A'}`);
+
+        // ✅ Step 2: Create student profile in students collection (CRITICAL FIX!)
+        const timestamp = new Date();
+        
+        const studentProfile = {
+          user_id: student._id,
+          name: student.name,
+          email: student.email,
+          grade_level: student.gradeLevel || 'Primary 1',
+          points: 0,
+          level: 1,
+          current_profile: null,  // Will be set after placement quiz
+          consecutive_fails: 0,
+          placement_completed: false,
+          streak: 0,
+          total_quizzes: 0,
+          created_at: timestamp,
+          updated_at: timestamp
+        };
+
+        await studentsCollection.insertOne(studentProfile);
+        console.log(`✅ Student profile created in students collection`);
         
         results.created++;
 
@@ -304,7 +315,6 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
             name: row.Name || row.name,
             email: row.Email || row.email,
             subject: row.Subject || row.subject,
-            // ✅ NEW FIELDS
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
             gender: row.Gender || row.gender || '',
             dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
@@ -318,6 +328,10 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
     });
 
     console.log('\n🔄 Processing teachers...\n');
+
+    // Get MongoDB database connection
+    const db = mongoose.connection.db;
+    const teachersCollection = db.collection('teachers');
 
     // Process each teacher
     for (const teacherData of teachers) {
@@ -353,7 +367,7 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
         
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // ✅ Parse date of birth properly
+        // Parse date of birth properly
         let parsedDateOfBirth = null;
         if (teacherData.dateOfBirth) {
           try {
@@ -377,14 +391,13 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
           }
         }
 
-        // Create teacher
+        // Create teacher user account
         const teacher = await User.create({
           name: teacherData.name,
           email: teacherData.email,
           password: hashedPassword,
           role: 'Teacher',
           subject: teacherData.subject,
-          // ✅ NEW FIELDS
           contact: teacherData.contact || null,
           gender: teacherData.gender ? teacherData.gender.toLowerCase() : null,
           date_of_birth: parsedDateOfBirth,
@@ -394,7 +407,18 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
           isTrialUser: false
         });
 
-        console.log(`✅ Teacher created in database`);
+        console.log(`✅ Teacher user account created`);
+
+        // ✅ Create teacher profile in teachers collection
+        const timestamp = new Date();
+        await teachersCollection.insertOne({
+          user_id: teacher._id,
+          name: teacher.name,
+          email: teacher.email,
+          created_at: timestamp
+        });
+
+        console.log(`✅ Teacher profile created in teachers collection`);
         results.created++;
 
         // Send welcome email
@@ -486,7 +510,6 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
             parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
             studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || row.student_email || '',
             relationship: row.Relationship || row.relationship || 'Parent',
-            // ✅ NEW FIELDS
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
             gender: row.Gender || row.gender || '',
             dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
@@ -500,6 +523,10 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
     });
 
     console.log('\n🔄 Processing parents...\n');
+
+    // Get MongoDB database connection
+    const db = mongoose.connection.db;
+    const parentsCollection = db.collection('parents');
 
     // Process each parent
     for (const parentData of parents) {
@@ -547,7 +574,7 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
         
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // ✅ Parse date of birth properly
+        // Parse date of birth properly
         let parsedDateOfBirth = null;
         if (parentData.dateOfBirth) {
           try {
@@ -571,7 +598,7 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
           }
         }
 
-        // Create parent
+        // Create parent user account
         const parent = await User.create({
           name: parentData.parentName,
           email: parentData.parentEmail,
@@ -581,7 +608,6 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
             studentId: student._id,
             relationship: parentData.relationship
           }],
-          // ✅ NEW FIELDS
           contact: parentData.contact || null,
           gender: parentData.gender ? parentData.gender.toLowerCase() : null,
           date_of_birth: parsedDateOfBirth,
@@ -591,7 +617,18 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
           isTrialUser: false
         });
 
-        console.log(`✅ Parent created and linked to ${student.name}`);
+        console.log(`✅ Parent user account created`);
+
+        // ✅ Create parent profile in parents collection
+        const timestamp = new Date();
+        await parentsCollection.insertOne({
+          user_id: parent._id,
+          name: parent.name,
+          email: parent.email,
+          created_at: timestamp
+        });
+
+        console.log(`✅ Parent profile created and linked to ${student.name}`);
         results.created++;
 
         // Send welcome email
