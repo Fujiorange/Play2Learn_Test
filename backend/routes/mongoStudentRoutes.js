@@ -515,11 +515,11 @@ router.post('/placement-quiz/generate', async (req, res) => {
       });
     }
 
-    // Generate 15 random math questions (mixed operations)
+    // Generate 20 random math questions with ALL 4 operations for comprehensive placement assessment
     const questions = [];
-    const operations = ['addition', 'subtraction'];
+    const operations = ['addition', 'subtraction', 'multiplication', 'division'];
     
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       const operation = operations[Math.floor(Math.random() * operations.length)];
       let num1, num2, answer;
       
@@ -533,7 +533,7 @@ router.post('/placement-quiz/generate', async (req, res) => {
           question_text: `${num1} + ${num2} = ?`,
           correct_answer: answer
         });
-      } else {
+      } else if (operation === 'subtraction') {
         num1 = Math.floor(Math.random() * 50) + 20;
         num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
         answer = num1 - num2;
@@ -541,6 +541,26 @@ router.post('/placement-quiz/generate', async (req, res) => {
           question_number: i + 1,
           operation: operation,
           question_text: `${num1} - ${num2} = ?`,
+          correct_answer: answer
+        });
+      } else if (operation === 'multiplication') {
+        num1 = Math.floor(Math.random() * 12) + 1;
+        num2 = Math.floor(Math.random() * 12) + 1;
+        answer = num1 * num2;
+        questions.push({
+          question_number: i + 1,
+          operation: operation,
+          question_text: `${num1} × ${num2} = ?`,
+          correct_answer: answer
+        });
+      } else { // division
+        num2 = Math.floor(Math.random() * 12) + 1;
+        answer = Math.floor(Math.random() * 12) + 1;
+        num1 = num2 * answer; // Ensure clean division
+        questions.push({
+          question_number: i + 1,
+          operation: operation,
+          question_text: `${num1} ÷ ${num2} = ?`,
           correct_answer: answer
         });
       }
@@ -561,7 +581,7 @@ router.post('/placement-quiz/generate', async (req, res) => {
     res.json({
       success: true,
       quiz_id: quizId.toString(),
-      total_questions: 15,
+      total_questions: 20,
       questions: questions.map(q => ({
         question_number: q.question_number,
         operation: q.operation,
