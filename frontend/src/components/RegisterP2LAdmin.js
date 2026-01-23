@@ -42,7 +42,7 @@ export default function RegisterP2LAdmin() {
   };
 
   const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+    e.preventDefault();
     setError('');
     setSuccess(false);
 
@@ -108,7 +108,7 @@ export default function RegisterP2LAdmin() {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !loading) {
       e.preventDefault();
-      handleSubmit();
+      handleSubmit(e);
     }
   };
 
