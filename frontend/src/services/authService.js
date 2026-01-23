@@ -30,7 +30,8 @@ class AuthService {
           organizationName: userData.organizationName,
           organizationType: userData.organizationType,
           businessRegistrationNumber: userData.businessRegistrationNumber,
-          role: userData.role
+          role: userData.role,
+          adminSecret: userData.adminSecret
         }),
       });
 
