@@ -41,7 +41,8 @@ export default function RegisterP2LAdmin() {
     return age;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
     setError('');
     setSuccess(false);
 
@@ -54,7 +55,7 @@ export default function RegisterP2LAdmin() {
     // Age validation
     const age = calculateAge(formData.dateOfBirth);
     if (age < 18 || age > 100) {
-      setError('P2L Admin must be at least 18 years old');
+      setError('Please enter a valid date of birth (must be between 18 and 100 years old)');
       return;
     }
 
@@ -106,6 +107,7 @@ export default function RegisterP2LAdmin() {
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !loading) {
+      e.preventDefault();
       handleSubmit();
     }
   };
@@ -342,7 +344,7 @@ export default function RegisterP2LAdmin() {
             Create a P2L Admin account with elevated privileges.
           </p>
 
-          <div>
+          <form onSubmit={handleSubmit}>
             <div style={styles.formGroup}>
               <label style={styles.label}>
                 Full Name<span style={styles.required}>*</span>
@@ -535,7 +537,7 @@ export default function RegisterP2LAdmin() {
             </div>
 
             <button
-              onClick={handleSubmit}
+              type="submit"
               onMouseEnter={() => setButtonHovered(true)}
               onMouseLeave={() => setButtonHovered(false)}
               disabled={loading}
@@ -572,7 +574,7 @@ export default function RegisterP2LAdmin() {
                 Log in
               </Link>
             </p>
-          </div>
+          </form>
         </div>
 
         <div style={styles.infoSection}>
