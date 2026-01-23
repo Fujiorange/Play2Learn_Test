@@ -1,3 +1,4 @@
+// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
@@ -87,19 +88,22 @@ function App() {
       <div className="App">
         <Routes>
           {/* ========== LANDING PAGE ========== */}
-          <Route path="/" element={
-            <>
-              <Header />
-              <Hero />
-              <Features />
-              <About />
-              <Roadmap />
-              <Testimonials />
-              <Pricing />
-              <Contact />
-              <Footer />
-            </>
-          } />
+          <Route
+            path="/"
+            element={
+              <>
+                <Header />
+                <Hero />
+                <Features />
+                <About />
+                <Roadmap />
+                <Testimonials />
+                <Pricing />
+                <Contact />
+                <Footer />
+              </>
+            }
+          />
 
           {/* ========== AUTHENTICATION ========== */}
           <Route path="/login" element={<LoginPage />} />
@@ -135,18 +139,24 @@ function App() {
           <Route path="/student/leaderboard" element={<ViewLeaderboard />} />
           <Route path="/student/skills" element={<DisplaySkillMatrix />} />
           <Route path="/student/subjects" element={<ViewDetailedSubjectInfo />} />
-          
+
           {/* ========== QUIZ ROUTES (NEW) ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} /> {/* ✅ NEW */}
           <Route path="/student/quiz/take" element={<TakeQuiz />} /> {/* ✅ NEW */}
           <Route path="/student/quiz/result" element={<QuizResult />} /> {/* ✅ NEW */}
-          
+
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
           <Route path="/student/testimonial" element={<StudentWriteTestimonial />} />
+
+          {/* ✅ Student Support (existing) */}
           <Route path="/student/support/create" element={<StudentCreateSupportTicket />} />
           <Route path="/student/support/track" element={<StudentTrackSupportTicket />} />
+
+          {/* ✅ Student Support (aliases for your current URLs) */}
+          <Route path="/student/support" element={<StudentCreateSupportTicket />} />
+          <Route path="/student/support/tickets" element={<StudentTrackSupportTicket />} />
 
           {/* ========== PARENT ROUTES ========== */}
           <Route path="/parent" element={<ParentDashboard />} />
@@ -161,7 +171,7 @@ function App() {
           <Route path="/parent/testimonial" element={<ParentWriteTestimonial />} />
           <Route path="/parent/support/create" element={<ParentCreateSupportTicket />} />
           <Route path="/parent/support/track" element={<ParentTrackSupportTicket />} />
-        
+
           {/* ========== SCHOOL ADMIN ROUTES ========== */}
           <Route path="/school-admin" element={<SchoolAdminDashboard />} />
           <Route path="/school-admin/users/manual-add" element={<ManualAddUser />} />
@@ -171,8 +181,6 @@ function App() {
           <Route path="/school-admin/users/permissions" element={<ProvidePermission />} />
           <Route path="/school-admin/users/reset-password" element={<ResetPassword />} />
           <Route path="/school-admin/users/disable" element={<DisableUser />} />
-
-          
         </Routes>
       </div>
     </Router>
