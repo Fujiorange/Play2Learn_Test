@@ -59,7 +59,7 @@ export default function RegisterP2LAdmin() {
     // Age validation
     const age = calculateAge(formData.dateOfBirth);
     if (age < 18 || age > 100) {
-      setError('P2L Admin must be at least 18 years old');
+      setError('Please enter a valid date of birth (age must be between 18-100)');
       return;
     }
 
