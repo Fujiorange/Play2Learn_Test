@@ -1,4 +1,3 @@
-// WriteTestimonial.js - UPDATED with real backend connection
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -24,7 +23,7 @@ export default function WriteTestimonial() {
         return;
       }
       const user = authService.getCurrentUser();
-      setFormData(prev => ({ ...prev, displayName: user.name }));
+      setFormData((prev) => ({ ...prev, displayName: user.name }));
       setLoading(false);
     };
     loadData();
@@ -36,27 +35,26 @@ export default function WriteTestimonial() {
     setMessage({ type: '', text: '' });
 
     try {
-      // REAL API CALL - Save testimonial to database
       const result = await studentService.createTestimonial(formData);
 
       if (result.success) {
-        setMessage({ 
-          type: 'success', 
-          text: 'Thank you! Your testimonial has been submitted successfully.' 
+        setMessage({
+          type: 'success',
+          text: 'Thank you! Your testimonial has been submitted successfully.',
         });
-        
+
         setTimeout(() => navigate('/student'), 2000);
       } else {
-        setMessage({ 
-          type: 'error', 
-          text: result.error || 'Failed to submit testimonial' 
+        setMessage({
+          type: 'error',
+          text: result.error || 'Failed to submit testimonial',
         });
       }
     } catch (error) {
       console.error('Submit testimonial error:', error);
-      setMessage({ 
-        type: 'error', 
-        text: 'Failed to submit testimonial. Please try again.' 
+      setMessage({
+        type: 'error',
+        text: 'Failed to submit testimonial. Please try again.',
       });
     } finally {
       setSubmitting(false);
@@ -94,37 +92,37 @@ export default function WriteTestimonial() {
           <h1 style={styles.title}>⭐ Write a Review</h1>
           <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
         </div>
-        
+
         {message.text && (
-          <div style={{...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)}}>
+          <div style={{ ...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage) }}>
             {message.type === 'success' ? '✅' : '⚠️'} {message.text}
           </div>
         )}
-        
+
         <form style={styles.form} onSubmit={handleSubmit}>
           <div style={styles.formGroup}>
             <label style={styles.label}>Title *</label>
-            <input 
-              type="text" 
-              value={formData.title} 
-              onChange={(e) => setFormData({...formData, title: e.target.value})} 
-              required 
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              required
               disabled={submitting}
-              placeholder="e.g., Great learning experience!" 
-              style={styles.input} 
+              placeholder="e.g., Great learning experience!"
+              style={styles.input}
             />
           </div>
-          
+
           <div style={styles.formGroup}>
             <label style={styles.label}>Rating *</label>
             <div style={styles.ratingContainer}>
-              {[1,2,3,4,5].map(star => (
-                <span 
-                  key={star} 
-                  style={styles.star} 
-                  onClick={() => !submitting && setFormData({...formData, rating: star})}
+              {[1, 2, 3, 4, 5].map((star) => (
+                <span
+                  key={star}
+                  style={styles.star}
+                  onClick={() => !submitting && setFormData({ ...formData, rating: star })}
                   onMouseEnter={(e) => !submitting && (e.target.style.transform = 'scale(1.2)')}
-                  onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                  onMouseLeave={(e) => (e.target.style.transform = 'scale(1)')}
                 >
                   {star <= formData.rating ? '⭐' : '☆'}
                 </span>
@@ -134,48 +132,44 @@ export default function WriteTestimonial() {
               </span>
             </div>
           </div>
-          
+
           <div style={styles.formGroup}>
             <label style={styles.label}>Your Review *</label>
-            <textarea 
-              value={formData.testimonial} 
-              onChange={(e) => setFormData({...formData, testimonial: e.target.value})} 
-              required 
+            <textarea
+              value={formData.testimonial}
+              onChange={(e) => setFormData({ ...formData, testimonial: e.target.value })}
+              required
               disabled={submitting}
-              placeholder="Share your experience with Play2Learn..." 
-              style={styles.textarea} 
+              placeholder="Share your experience with Play2Learn..."
+              style={styles.textarea}
             />
           </div>
-          
+
           <div style={styles.formGroup}>
             <label style={styles.label}>Display Name *</label>
-            <input 
-              type="text" 
-              value={formData.displayName} 
-              onChange={(e) => setFormData({...formData, displayName: e.target.value})} 
-              required 
+            <input
+              type="text"
+              value={formData.displayName}
+              onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+              required
               disabled={submitting}
-              style={styles.input} 
+              style={styles.input}
             />
           </div>
-          
+
           <div style={styles.checkbox}>
-            <input 
-              type="checkbox" 
-              checked={formData.allowPublic} 
-              onChange={(e) => setFormData({...formData, allowPublic: e.target.checked})} 
+            <input
+              type="checkbox"
+              checked={formData.allowPublic}
+              onChange={(e) => setFormData({ ...formData, allowPublic: e.target.checked })}
               disabled={submitting}
             />
             <label style={{ cursor: 'pointer' }}>
               Allow this testimonial to be displayed publicly on our website
             </label>
           </div>
-          
-          <button 
-            type="submit" 
-            disabled={submitting} 
-            style={{...styles.submitButton, opacity: submitting ? 0.7 : 1}}
-          >
+
+          <button type="submit" disabled={submitting} style={{ ...styles.submitButton, opacity: submitting ? 0.7 : 1 }}>
             {submitting ? '📤 Submitting to Database...' : '📤 Submit Review'}
           </button>
         </form>
