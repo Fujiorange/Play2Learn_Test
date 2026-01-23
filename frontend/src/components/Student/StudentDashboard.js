@@ -35,15 +35,29 @@ export default function StudentDashboard() {
         console.log('📊 Dashboard data loaded:', dashData);
 
         if (dashData.success) {
-          const dashboardInfo = dashData.data || {};
+          // Accept both shapes:
+          // - Preferred backend: dashData.dashboard (totalPoints, completedQuizzes, currentProfile)
+          // - Compat layer: dashData.data (points, quizzesTaken, level)
+          const dashboardInfo = dashData.dashboard || dashData.data || {};
+
+          const points = dashboardInfo.totalPoints ?? dashboardInfo.points ?? 0;
+
+          const completedQuizzes =
+            dashboardInfo.completedQuizzes ?? dashboardInfo.quizzesTaken ?? 0;
+
+          const level =
+            dashboardInfo.level ?? dashboardInfo.currentProfile ?? 1;
+
+          const gradeLevel = dashboardInfo.gradeLevel ?? 'Primary 1';
+
           setDashboardData({
-            points: dashboardInfo.points || 0,
-            level: dashboardInfo.level || 1,
-            levelProgress: ((dashboardInfo.points % 500) / 500) * 100,
+            points,
+            level,
+            levelProgress: ((points % 500) / 500) * 100,
             achievements: dashboardInfo.achievements?.length || 0,
             rank: '#-',
-            completedQuizzes: dashboardInfo.quizzesTaken || 0,
-            grade_level: dashboardInfo.gradeLevel || 'Primary 1'
+            completedQuizzes,
+            grade_level: gradeLevel,
           });
           console.log('✅ Dashboard data set successfully');
         } else {
@@ -56,12 +70,11 @@ export default function StudentDashboard() {
             achievements: 0,
             rank: '#-',
             completedQuizzes: 0,
-            grade_level: 'Primary 1'
+            grade_level: 'Primary 1',
           });
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
-        // Set default values on error
+        console.error('Error loading dashboard:', error);
         setDashboardData({
           points: 0,
           level: 1,
@@ -69,7 +82,7 @@ export default function StudentDashboard() {
           achievements: 0,
           rank: '#-',
           completedQuizzes: 0,
-          grade_level: 'Primary 1'
+          grade_level: 'Primary 1',
         });
       } finally {
         setLoading(false);
@@ -79,618 +92,361 @@ export default function StudentDashboard() {
     loadUserData();
   }, [navigate]);
 
-  const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
-  };
-
-  if (loading || !user) {
+  if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-      }}>
-        <div style={{
-          fontSize: '24px',
-          color: '#6b7280',
-          fontWeight: '600',
-        }}>
-          Loading...
-        </div>
+      <div style={styles.loadingContainer}>
+        <div style={styles.loadingSpinner}></div>
+        <p style={styles.loadingText}>Loading your dashboard...</p>
       </div>
     );
   }
 
-  const styles = {
-    container: {
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-    },
-    header: {
-      background: 'white',
-      borderBottom: '1px solid #e5e7eb',
-      padding: '16px 0',
-    },
-    headerContent: {
-      maxWidth: '1400px',
-      margin: '0 auto',
-      padding: '0 32px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    logo: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-    },
-    logoIcon: {
-      width: '40px',
-      height: '40px',
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      borderRadius: '10px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white',
-      fontWeight: 'bold',
-      fontSize: '18px',
-    },
-    logoText: {
-      fontSize: '20px',
-      fontWeight: '700',
-      color: '#1f2937',
-    },
-    headerRight: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '20px',
-    },
-    userInfo: {
-      textAlign: 'right',
-    },
-    userName: {
-      fontSize: '14px',
-      fontWeight: '600',
-      color: '#1f2937',
-      margin: 0,
-    },
-    userRole: {
-      fontSize: '12px',
-      color: '#6b7280',
-      margin: '2px 0 0 0',
-    },
-    logoutBtn: {
-      padding: '8px 20px',
-      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    main: {
-      maxWidth: '1400px',
-      margin: '0 auto',
-      padding: '32px',
-    },
-    welcomeSection: {
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      borderRadius: '16px',
-      padding: '32px',
-      color: 'white',
-      marginBottom: '32px',
-      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-    },
-    welcomeTitle: {
-      fontSize: '28px',
-      fontWeight: '700',
-      margin: '0 0 8px 0',
-    },
-    welcomeSubtitle: {
-      fontSize: '16px',
-      opacity: 0.9,
-      margin: 0,
-    },
-    statsGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-      gap: '20px',
-      marginBottom: '32px',
-    },
-    statCard: {
-      background: 'white',
-      borderRadius: '12px',
-      padding: '20px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      transition: 'all 0.3s',
-      cursor: 'pointer',
-    },
-    statCardHover: {
-      transform: 'translateY(-4px)',
-      boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
-    },
-    statIcon: {
-      fontSize: '32px',
-      marginBottom: '8px',
-    },
-    statLabel: {
-      fontSize: '13px',
-      color: '#6b7280',
-      margin: '0 0 4px 0',
-      fontWeight: '500',
-    },
-    statValue: {
-      fontSize: '24px',
-      fontWeight: '700',
-      color: '#1f2937',
-      margin: 0,
-    },
-    sectionsGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-      gap: '24px',
-    },
-    section: {
-      background: 'white',
-      borderRadius: '12px',
-      padding: '24px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-    },
-    sectionHeader: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      marginBottom: '20px',
-      paddingBottom: '16px',
-      borderBottom: '2px solid #e5e7eb',
-    },
-    sectionIcon: {
-      fontSize: '24px',
-    },
-    sectionTitle: {
-      fontSize: '18px',
-      fontWeight: '700',
-      color: '#1f2937',
-      margin: 0,
-    },
-    menuList: {
-      listStyle: 'none',
-      padding: 0,
-      margin: 0,
-    },
-    menuItem: {
-      padding: '12px 16px',
-      marginBottom: '8px',
-      background: '#f9fafb',
-      borderRadius: '8px',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      fontSize: '14px',
-      fontWeight: '500',
-      color: '#374151',
-      border: '2px solid transparent',
-    },
-    menuItemHover: {
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      color: 'white',
-      transform: 'translateX(4px)',
-      borderColor: '#10b981',
-    },
-    arrow: {
-      fontSize: '16px',
-      opacity: 0.6,
-    },
-    progressBar: {
-      width: '100%',
-      height: '8px',
-      background: '#e5e7eb',
-      borderRadius: '4px',
-      overflow: 'hidden',
-      marginTop: '8px',
-    },
-    progressFill: {
-      height: '100%',
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      transition: 'width 0.3s',
-    },
-  };
+  if (!user || !dashboardData) {
+    return (
+      <div style={styles.errorContainer}>
+        <h2>Unable to load dashboard</h2>
+        <p>Please try refreshing the page.</p>
+        <button style={styles.button} onClick={() => window.location.reload()}>
+          Refresh
+        </button>
+      </div>
+    );
+  }
 
-  const handleMenuClick = (section, item) => {
-    console.log(`Navigating to: ${section} - ${item}`);
-    
-    // Navigation logic based on section and item
-    switch(section) {
-      case 'profile':
-        if (item === 'view') {
-          navigate('/student/profile');
-        } else if (item === 'update') {
-          navigate('/student/profile/edit');
-        } else if (item === 'picture') {
-          navigate('/student/profile/picture');
-        }
-        break;
-      
-      case 'progress':
-        if (item === 'results') {
-          navigate('/student/results');
-        } else if (item === 'track') {
-          navigate('/student/progress');
-        } else if (item === 'leaderboard') {
-          navigate('/student/leaderboard');
-        } else if (item === 'matrix') {
-          navigate('/student/skills');
-        } else if (item === 'subjects') {
-          navigate('/student/subjects');
-        }
-        break;
-      
-      case 'quiz':
-        if (item === 'attempt-quiz') {
-          navigate('/student/quiz/attempt');
-        } else if (item === 'attempt-assignment') {
-          navigate('/student/assignment/attempt');
-        } else if (item === 'history') {
-          navigate('/student/results/history');
-        }
-        break;
-      
-      case 'communication':
-        if (item === 'testimonial') {
-          navigate('/student/testimonial');
-        }
-        break;
-      
-      case 'support':
-        if (item === 'create') {
-          navigate('/student/support/create');
-        } else if (item === 'track') {
-          navigate('/student/support/track');
-        }
-        break;
-      
-      default:
-        console.log('Unknown section or item');
-    }
-  };
+  const menuItems = [
+    {
+      id: 'quiz',
+      title: 'Attempt Quiz',
+      description: 'Take a quiz to earn points & level up',
+      icon: '🎯',
+      action: () => navigate('/student/quiz/attempt'),
+    },
+    {
+      id: 'skills',
+      title: 'Skill Matrix',
+      description: 'See your unlocked math skills',
+      icon: '📊',
+      action: () => navigate('/student/skills'),
+    },
+    {
+      id: 'progress',
+      title: 'Track Progress',
+      description: 'View your learning progress and stats',
+      icon: '📈',
+      action: () => navigate('/student/progress'),
+    },
+    {
+      id: 'leaderboard',
+      title: 'Leaderboard',
+      description: 'See how you rank against classmates',
+      icon: '🏆',
+      action: () => navigate('/student/leaderboard'),
+    },
+    {
+      id: 'profile',
+      title: 'My Profile',
+      description: 'View and update your profile',
+      icon: '👤',
+      action: () => navigate('/student/profile'),
+    },
+    {
+      id: 'results',
+      title: 'View Results',
+      description: 'Review your quiz results and history',
+      icon: '📝',
+      action: () => navigate('/student/results'),
+    },
+    {
+      id: 'testimonial',
+      title: 'Write Testimonial',
+      description: 'Share feedback about your experience',
+      icon: '💬',
+      action: () => navigate('/student/testimonial'),
+    },
+    {
+      id: 'support',
+      title: 'Create Support Ticket',
+      description: 'Need help? Contact support',
+      icon: '🛠️',
+      action: () => navigate('/student/support'),
+    },
+    {
+      id: 'trackTicket',
+      title: 'Track Support Ticket',
+      description: 'View your submitted support requests',
+      icon: '📩',
+      action: () => navigate('/student/support/tickets'),
+    },
+  ];
+
+  const statCards = [
+    {
+      id: 'points',
+      title: 'Total Points',
+      value: dashboardData.points,
+      icon: '⭐',
+    },
+    {
+      id: 'level',
+      title: 'Current Level',
+      value: dashboardData.level,
+      icon: '🎯',
+    },
+    {
+      id: 'achievements',
+      title: 'Achievements',
+      value: dashboardData.achievements,
+      icon: '🏅',
+    },
+    {
+      id: 'rank',
+      title: 'Class Rank',
+      value: dashboardData.rank,
+      icon: '🏆',
+    },
+    {
+      id: 'quizzes',
+      title: 'Completed Quizzes',
+      value: dashboardData.completedQuizzes,
+      icon: '📝',
+    },
+  ];
 
   return (
     <div style={styles.container}>
-      {/* Header */}
       <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.logo}>
-            <div style={styles.logoIcon}>P</div>
-            <span style={styles.logoText}>Play2Learn</span>
+        <div style={styles.logoArea}>
+          <div style={styles.logo}>P</div>
+          <h1 style={styles.logoText}>Play2Learn</h1>
+        </div>
+        <div style={styles.userArea}>
+          <div style={styles.userInfo}>
+            <span style={styles.userName}>{user.name || 'Student'}</span>
+            <span style={styles.userRole}>{user.role || 'Student'}</span>
           </div>
-          <div style={styles.headerRight}>
-            <div style={styles.userInfo}>
-              <p style={styles.userName}>{user.name}</p>
-              <p style={styles.userRole}>Student</p>
-            </div>
-            <button
-              style={styles.logoutBtn}
-              onClick={handleLogout}
-              onMouseEnter={(e) => e.target.style.opacity = '0.9'}
-              onMouseLeave={(e) => e.target.style.opacity = '1'}
-            >
-              Logout
-            </button>
-          </div>
+          <button
+            style={styles.logoutButton}
+            onClick={() => {
+              authService.logout();
+              navigate('/login');
+            }}
+          >
+            Logout
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
       <main style={styles.main}>
-        {/* Welcome Section */}
-        <div style={styles.welcomeSection}>
-          <h1 style={styles.welcomeTitle}>Welcome back, {user.name}! 🎮</h1>
-          <p style={styles.welcomeSubtitle}>
-            {dashboardData?.grade_level && dashboardData.grade_level !== 'Not Set' 
-              ? dashboardData.grade_level 
-              : 'Ready to continue your learning adventure?'}
-          </p>
-          <div style={styles.progressBar}>
-            <div style={{...styles.progressFill, width: `${dashboardData?.levelProgress || 0}%`}}></div>
+        <div style={styles.welcomeCard}>
+          <h2 style={styles.welcomeTitle}>
+            Welcome back, {user.name?.split(' ')[0] || 'Student'}! 🎮
+          </h2>
+          <p style={styles.gradeLevel}>{dashboardData.grade_level}</p>
+          <div style={styles.progressContainer}>
+            <div style={styles.progressText}>
+              Level {dashboardData.level} - {dashboardData.levelProgress.toFixed(0)}
+              % to Level {dashboardData.level + 1}
+            </div>
+            <div style={styles.progressBar}>
+              <div
+                style={{
+                  ...styles.progressFill,
+                  width: `${dashboardData.levelProgress}%`,
+                }}
+              ></div>
+            </div>
           </div>
-          <p style={{ fontSize: '14px', marginTop: '8px', opacity: 0.9 }}>
-            Level {dashboardData?.level || 1} - {dashboardData?.levelProgress || 0}% to Level {(dashboardData?.level || 1) + 1}
-          </p>
         </div>
 
-        {/* Stats Grid */}
         <div style={styles.statsGrid}>
-          <div
-            style={{
-              ...styles.statCard,
-              ...(hoveredStat === 'points' ? styles.statCardHover : {}),
-            }}
-            onMouseEnter={() => setHoveredStat('points')}
-            onMouseLeave={() => setHoveredStat(null)}
-          >
-            <div style={styles.statIcon}>⭐</div>
-            <p style={styles.statLabel}>Total Points</p>
-            <p style={styles.statValue}>{(dashboardData?.points || 0).toLocaleString()}</p>
-          </div>
-          <div
-            style={{
-              ...styles.statCard,
-              ...(hoveredStat === 'level' ? styles.statCardHover : {}),
-            }}
-            onMouseEnter={() => setHoveredStat('level')}
-            onMouseLeave={() => setHoveredStat(null)}
-          >
-            <div style={styles.statIcon}>🎯</div>
-            <p style={styles.statLabel}>Current Level</p>
-            <p style={styles.statValue}>{dashboardData?.level || 1}</p>
-          </div>
-          <div
-            style={{
-              ...styles.statCard,
-              ...(hoveredStat === 'achievements' ? styles.statCardHover : {}),
-            }}
-            onMouseEnter={() => setHoveredStat('achievements')}
-            onMouseLeave={() => setHoveredStat(null)}
-          >
-            <div style={styles.statIcon}>🏆</div>
-            <p style={styles.statLabel}>Achievements</p>
-            <p style={styles.statValue}>{dashboardData?.achievements || 0}</p>
-          </div>
-          <div
-            style={{
-              ...styles.statCard,
-              ...(hoveredStat === 'rank' ? styles.statCardHover : {}),
-            }}
-            onMouseEnter={() => setHoveredStat('rank')}
-            onMouseLeave={() => setHoveredStat(null)}
-          >
-            <div style={styles.statIcon}>📊</div>
-            <p style={styles.statLabel}>Class Rank</p>
-            <p style={styles.statValue}>#{dashboardData?.rank || '-'}</p>
-          </div>
-          <div
-            style={{
-              ...styles.statCard,
-              ...(hoveredStat === 'quizzes' ? styles.statCardHover : {}),
-            }}
-            onMouseEnter={() => setHoveredStat('quizzes')}
-            onMouseLeave={() => setHoveredStat(null)}
-          >
-            <div style={styles.statIcon}>📝</div>
-            <p style={styles.statLabel}>Completed Quizzes</p>
-            <p style={styles.statValue}>{dashboardData?.completedQuizzes || 0}</p>
-          </div>
+          {statCards.map((stat) => (
+            <div
+              key={stat.id}
+              style={{
+                ...styles.statCard,
+                ...(hoveredStat === stat.id ? styles.cardHover : {}),
+              }}
+              onMouseEnter={() => setHoveredStat(stat.id)}
+              onMouseLeave={() => setHoveredStat(null)}
+            >
+              <div style={styles.statIcon}>{stat.icon}</div>
+              <div style={styles.statTitle}>{stat.title}</div>
+              <div style={styles.statValue}>{stat.value}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Sections Grid */}
-        <div style={styles.sectionsGrid}>
-          {/* Profile Management */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>👤</span>
-              <h2 style={styles.sectionTitle}>Profile Management</h2>
+        <div style={styles.menuGrid}>
+          {menuItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                ...styles.menuItem,
+                ...(hoveredItem === item.id ? styles.cardHover : {}),
+              }}
+              onMouseEnter={() => setHoveredItem(item.id)}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={item.action}
+            >
+              <div style={styles.menuIcon}>{item.icon}</div>
+              <div style={styles.menuContent}>
+                <h3 style={styles.menuTitle}>{item.title}</h3>
+                <p style={styles.menuDescription}>{item.description}</p>
+              </div>
+              <div style={styles.arrow}>→</div>
             </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'profile-view' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('profile-view')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('profile', 'view')}
-              >
-                <span>View Profile Page</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'profile-update' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('profile-update')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('profile', 'update')}
-              >
-                <span>Update Profile Details</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'profile-picture' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('profile-picture')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('profile', 'picture')}
-              >
-                <span>Update Profile Picture</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Learning Progress */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>📚</span>
-              <h2 style={styles.sectionTitle}>Learning Progress</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'view-results' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('view-results')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('progress', 'results')}
-              >
-                <span>View Results</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'track-progress' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('track-progress')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('progress', 'track')}
-              >
-                <span>Track Progress</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'leaderboard' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('leaderboard')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('progress', 'leaderboard')}
-              >
-                <span>View Leaderboard & Achievements</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'skill-matrix' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('skill-matrix')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('progress', 'matrix')}
-              >
-                <span>Display Skill Matrix</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'subject-info' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('subject-info')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('progress', 'subjects')}
-              >
-                <span>View Detailed Subject Info</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Quizzes & Assignments */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>📝</span>
-              <h2 style={styles.sectionTitle}>Quizzes & Assignments</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'attempt-quiz' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('attempt-quiz')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('quiz', 'attempt-quiz')}
-              >
-                <span>Attempt Quiz</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'attempt-assignment' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('attempt-assignment')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('quiz', 'attempt-assignment')}
-              >
-                <span>Attempt Assignment</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'result-history' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('result-history')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('quiz', 'history')}
-              >
-                <span>View Result History</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Communication */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>💬</span>
-              <h2 style={styles.sectionTitle}>Communication</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'testimonial' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('testimonial')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('communication', 'testimonial')}
-              >
-                <span>Write Review/Testimonial</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Support */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>🎫</span>
-              <h2 style={styles.sectionTitle}>Support & Assistance</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'create-ticket' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('create-ticket')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('support', 'create')}
-              >
-                <span>Create Support Ticket</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'track-ticket' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('track-ticket')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('support', 'track')}
-              >
-                <span>Track Support Ticket</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
+          ))}
         </div>
       </main>
     </div>
   );
 }
+
+const styles = {
+  container: {
+    minHeight: '100vh',
+    backgroundColor: '#f3f4f6',
+    fontFamily: 'Arial, sans-serif',
+  },
+  header: {
+    backgroundColor: '#fff',
+    padding: '15px 30px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+  },
+  logoArea: { display: 'flex', alignItems: 'center', gap: '10px' },
+  logo: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '10px',
+    backgroundColor: '#10b981',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 'bold',
+    fontSize: '18px',
+  },
+  logoText: { margin: 0, fontSize: '20px', color: '#111827' },
+  userArea: { display: 'flex', alignItems: 'center', gap: '15px' },
+  userInfo: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end' },
+  userName: { fontWeight: 'bold', color: '#111827' },
+  userRole: { fontSize: '12px', color: '#6b7280' },
+  logoutButton: {
+    backgroundColor: '#ef4444',
+    color: '#fff',
+    border: 'none',
+    padding: '8px 14px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  main: { padding: '30px', maxWidth: '1200px', margin: '0 auto' },
+  welcomeCard: {
+    backgroundColor: '#10b981',
+    color: '#fff',
+    borderRadius: '16px',
+    padding: '25px',
+    marginBottom: '25px',
+    boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+  },
+  welcomeTitle: { margin: 0, fontSize: '28px', fontWeight: 'bold' },
+  gradeLevel: { marginTop: '8px', marginBottom: '10px', opacity: 0.95 },
+  progressContainer: { marginTop: '10px' },
+  progressText: { fontSize: '14px', marginBottom: '8px' },
+  progressBar: {
+    height: '10px',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderRadius: '999px',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#fff',
+    borderRadius: '999px',
+    transition: 'width 0.3s ease',
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '15px',
+    marginBottom: '25px',
+  },
+  statCard: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    padding: '18px',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+    textAlign: 'center',
+    cursor: 'default',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+  },
+  statIcon: { fontSize: '26px', marginBottom: '8px' },
+  statTitle: { color: '#6b7280', fontSize: '13px' },
+  statValue: { fontSize: '26px', fontWeight: 'bold', marginTop: '6px' },
+  menuGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: '16px',
+  },
+  menuItem: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    padding: '18px',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    cursor: 'pointer',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+  },
+  menuIcon: { fontSize: '26px', marginRight: '12px' },
+  menuContent: { flex: 1 },
+  menuTitle: { margin: 0, color: '#111827' },
+  menuDescription: { margin: '6px 0 0', color: '#6b7280', fontSize: '13px' },
+  arrow: { fontSize: '18px', color: '#9ca3af' },
+  cardHover: {
+    transform: 'translateY(-2px)',
+    boxShadow: '0 8px 18px rgba(0,0,0,0.10)',
+  },
+  loadingContainer: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+  loadingSpinner: {
+    width: '45px',
+    height: '45px',
+    borderRadius: '50%',
+    border: '4px solid #e5e7eb',
+    borderTop: '4px solid #10b981',
+    animation: 'spin 1s linear infinite',
+  },
+  loadingText: { marginTop: '15px', color: '#6b7280' },
+  errorContainer: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    color: '#111827',
+    padding: '20px',
+    textAlign: 'center',
+  },
+  button: {
+    marginTop: '14px',
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: 'none',
+    backgroundColor: '#10b981',
+    color: '#fff',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+};
