@@ -181,6 +181,10 @@ router.get('/dashboard', async (req, res) => {
 
     // Get math skills
     const skills = await MathSkill.find({ student_id: studentId });
+    
+    // Sort skills in correct order: Addition, Subtraction, Multiplication, Division
+    const skillOrder = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
+    skills.sort((a, b) => skillOrder.indexOf(a.skill_name) - skillOrder.indexOf(b.skill_name));
 
     res.json({
       success: true,
@@ -352,6 +356,14 @@ router.get('/math-skills', async (req, res) => {
 
     // Get skills
     const skills = await MathSkill.find({ student_id: studentId });
+    
+    // Define the correct order
+    const skillOrder = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
+    
+    // Sort skills based on the defined order
+    skills.sort((a, b) => {
+      return skillOrder.indexOf(a.skill_name) - skillOrder.indexOf(b.skill_name);
+    });
 
     console.log(`📊 Loaded ${skills.length} skills for student ${studentId}`);
     skills.forEach(skill => {
@@ -961,16 +973,26 @@ function generateQuestion(range, operations) {
 }
 
 // ==================== LEADERBOARD ====================
+// ==================== LEADERBOARD ====================
 router.get('/leaderboard', async (req, res) => {
   try {
     const studentId = req.user.userId;
+
+    console.log('🏆 Loading leaderboard...');
 
     const profiles = await MathProfile.find({})
       .populate('student_id', 'name email')
       .sort({ total_points: -1 })
       .limit(50);
 
-    const leaderboard = profiles.map((profile, index) => ({
+    console.log(`   Found ${profiles.length} math profiles`);
+
+    // ✅ FIXED: Filter out profiles where populate failed (orphaned records)
+    const validProfiles = profiles.filter(profile => profile.student_id && profile.student_id.name);
+    
+    console.log(`   Valid profiles: ${validProfiles.length}`);
+
+    const leaderboard = validProfiles.map((profile, index) => ({
       rank: index + 1,
       name: profile.student_id.name,
       points: profile.total_points,
@@ -979,6 +1001,8 @@ router.get('/leaderboard', async (req, res) => {
       isCurrentUser: profile.student_id._id.toString() === studentId
     }));
 
+    console.log(`✅ Returning ${leaderboard.length} leaderboard entries`);
+
     res.json({
       success: true,
       leaderboard: leaderboard
@@ -986,6 +1010,7 @@ router.get('/leaderboard', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Leaderboard error:', error);
+    console.error('   Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to load leaderboard'
@@ -1010,8 +1035,11 @@ router.get('/results', async (req, res) => {
     const placementQuizzes = allQuizzes.filter(q => q.quiz_type === 'placement');
     const regularQuizzes = allQuizzes.filter(q => q.quiz_type === 'regular');
 
-    // Format results
-    const results = allQuizzes.map(quiz => ({
+    console.log(`   - Placement quizzes: ${placementQuizzes.length}`);
+    console.log(`   - Regular quizzes: ${regularQuizzes.length}`);
+
+    // ✅ FIXED: Only return REGULAR quizzes (exclude placement)
+    const results = regularQuizzes.map(quiz => ({
       id: quiz._id,
       type: quiz.quiz_type,
       profile: quiz.profile_level,
@@ -1031,22 +1059,22 @@ router.get('/results', async (req, res) => {
       timestamp: quiz.completed_at
     }));
 
-    // Calculate statistics
+    // Calculate statistics from REGULAR quizzes only
     const stats = {
-      totalQuizzes: allQuizzes.length,
-      regularQuizzes: regularQuizzes.length,
-      placementQuizzes: placementQuizzes.length,
+      totalQuizzes: regularQuizzes.length,
       averageScore: regularQuizzes.length > 0 
         ? Math.round(regularQuizzes.reduce((sum, q) => sum + q.percentage, 0) / regularQuizzes.length)
         : 0,
       totalPoints: regularQuizzes.reduce((sum, q) => sum + (q.points_earned || 0), 0),
-      highestScore: allQuizzes.length > 0 
-        ? Math.max(...allQuizzes.map(q => q.percentage))
+      highestScore: regularQuizzes.length > 0 
+        ? Math.max(...regularQuizzes.map(q => q.percentage))
         : 0,
       lowestScore: regularQuizzes.length > 0 
         ? Math.min(...regularQuizzes.map(q => q.percentage))
         : 0
     };
+
+    console.log(`✅ Returning ${results.length} regular quiz results`);
 
     res.json({
       success: true,
@@ -1056,6 +1084,79 @@ router.get('/results', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Results error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load quiz results'
+    });
+  }
+});
+
+// ==================== MATH QUIZ RESULTS (Frontend-compatible endpoint) ====================
+router.get('/math-quiz-results', async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+
+    console.log('📊 Loading math quiz results for student:', studentId);
+
+    // Get all quizzes for this student
+    const allQuizzes = await Quiz.find({ student_id: studentId })
+      .sort({ completed_at: -1 });
+
+    console.log(`   Found ${allQuizzes.length} total quizzes`);
+
+    // Separate placement and regular quizzes
+    const placementQuizzes = allQuizzes.filter(q => q.quiz_type === 'placement');
+    const regularQuizzes = allQuizzes.filter(q => q.quiz_type === 'regular');
+
+    console.log(`   - Placement quizzes: ${placementQuizzes.length}`);
+    console.log(`   - Regular quizzes: ${regularQuizzes.length}`);
+
+    // ✅ FIXED: Only return REGULAR quizzes (exclude placement)
+    const results = regularQuizzes.map(quiz => ({
+      id: quiz._id,
+      type: quiz.quiz_type,
+      profile: quiz.profile_level,
+      score: quiz.score,
+      total: quiz.total_questions,
+      percentage: quiz.percentage,
+      points: quiz.points_earned || 0,
+      date: quiz.completed_at.toLocaleDateString('en-SG', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      time: quiz.completed_at.toLocaleTimeString('en-SG', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
+      timestamp: quiz.completed_at
+    }));
+
+    // Calculate statistics from REGULAR quizzes only
+    const stats = {
+      totalQuizzes: regularQuizzes.length,
+      averageScore: regularQuizzes.length > 0 
+        ? Math.round(regularQuizzes.reduce((sum, q) => sum + q.percentage, 0) / regularQuizzes.length)
+        : 0,
+      totalPoints: regularQuizzes.reduce((sum, q) => sum + (q.points_earned || 0), 0),
+      highestScore: regularQuizzes.length > 0 
+        ? Math.max(...regularQuizzes.map(q => q.percentage))
+        : 0,
+      lowestScore: regularQuizzes.length > 0 
+        ? Math.min(...regularQuizzes.map(q => q.percentage))
+        : 0
+    };
+
+    console.log(`✅ Returning ${results.length} regular quiz results`);
+
+    res.json({
+      success: true,
+      results: results,
+      stats: stats
+    });
+
+  } catch (error) {
+    console.error('❌ Math quiz results error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to load quiz results'

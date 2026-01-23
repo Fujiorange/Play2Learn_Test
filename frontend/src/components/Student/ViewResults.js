@@ -1,4 +1,4 @@
-// ViewResults.js - Math Quiz Results Only
+// ViewResults.js - Math Quiz Results Only - FIXED
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -39,8 +39,7 @@ export default function ViewResults() {
     loadResults();
   }, [navigate]);
 
-  const getScoreColor = (score, max) => {
-    const percentage = (score / max) * 100;
+  const getScoreColor = (percentage) => {
     if (percentage >= 80) return '#10b981';
     if (percentage >= 60) return '#f59e0b';
     return '#ef4444';
@@ -68,6 +67,7 @@ export default function ViewResults() {
     scoreSection: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid #e5e7eb' },
     scoreFraction: { fontSize: '24px', fontWeight: '700' },
     scorePercentage: { fontSize: '20px', fontWeight: '700' },
+    questionsLabel: { fontSize: '13px', color: '#6b7280' },
     emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
@@ -104,8 +104,9 @@ export default function ViewResults() {
         {results.length > 0 ? (
           <div style={styles.resultsGrid}>
             {results.map(result => {
-              const percentage = Math.round((result.score / result.maxScore) * 100);
-              const scoreColor = getScoreColor(result.score, result.maxScore);
+              // ✅ FIXED: Use the percentage that backend already calculated
+              const percentage = result.percentage;
+              const scoreColor = getScoreColor(percentage);
               
               return (
                 <div 
@@ -125,13 +126,15 @@ export default function ViewResults() {
                   <div style={styles.resultDate}>📅 {result.date}</div>
                   <div style={styles.scoreSection}>
                     <div>
+                      {/* ✅ FIXED: Use result.total instead of result.maxScore */}
                       <div style={{...styles.scoreFraction, color: scoreColor}}>
-                        {result.score}/{result.maxScore}
+                        {result.score}/{result.total}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                        {result.questions} questions
+                      <div style={styles.questionsLabel}>
+                        questions
                       </div>
                     </div>
+                    {/* ✅ FIXED: Use result.percentage directly */}
                     <div style={{...styles.scorePercentage, color: scoreColor}}>
                       {percentage}%
                     </div>
