@@ -53,7 +53,7 @@ export default function RegisterAdminPage() {
       errors.push('at least one number');
     }
     
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
       errors.push('at least one special character');
     }
     
