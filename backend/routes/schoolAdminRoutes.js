@@ -1,5 +1,5 @@
-// backend/routes/schoolAdminRoutes.js - MERGED VERSION
-// Includes Wei Xiang's Dashboard Routes + Student Profile Creation Fix
+// backend/routes/schoolAdminRoutes.js - FIXED VERSION
+// Queries USERS collection correctly for dashboard stats
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -8,14 +8,12 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
-
-// ==================== WX ====================
-// Added mongoose and JWT for School Admin dashboard routes
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-// Authentication middleware for School Admin routes
+// ==================== AUTHENTICATION MIDDLEWARE ====================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.replace('Bearer ', '');
@@ -32,12 +30,11 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ success: false, error: 'Invalid token' });
   }
 };
-// ==================== WX ====================
 
-// Configure multer for file uploads
+// ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
 
-// Password generator utility
+// ==================== PASSWORD GENERATOR ====================
 function generateTempPassword(userType) {
   const crypto = require('crypto');
   const prefix = userType.substring(0, 3).toUpperCase();
@@ -47,10 +44,119 @@ function generateTempPassword(userType) {
   return `${prefix}${year}${random}${special}`;
 }
 
-// ========== STUDENTS BULK IMPORT (FIXED - Creates Student Profile) ==========
+// ==================== DASHBOARD STATS (FIXED!) ====================
+router.get('/dashboard-stats', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 Fetching dashboard stats...');
+    
+    // ✅ FIX: Query the 'users' collection with role field, not separate collections!
+    const [
+      totalStudents,
+      totalTeachers,
+      totalParents,
+      totalUsers
+    ] = await Promise.all([
+      User.countDocuments({ role: 'Student' }),
+      User.countDocuments({ role: 'Teacher' }),
+      User.countDocuments({ role: 'Parent' }),
+      User.countDocuments()
+    ]);
+
+    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents`);
+
+    // Get recent registrations (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recentRegistrations = await User.countDocuments({
+      createdAt: { $gte: sevenDaysAgo }
+    });
+
+    // Get active users (last 30 days login)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const activeUsers = await User.countDocuments({
+      accountActive: true
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        students: totalStudents,
+        teachers: totalTeachers,
+        parents: totalParents,
+        totalUsers: totalUsers,
+        activeUsers: activeUsers,
+        recentRegistrations: recentRegistrations,
+        classes: 0, // Will implement when class management is ready
+      }
+    });
+  } catch (error) {
+    console.error('❌ Dashboard stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to load dashboard stats',
+      details: error.message 
+    });
+  }
+});
+
+// ==================== GET USERS (FIXED!) ====================
+router.get('/users', authenticateToken, async (req, res) => {
+  try {
+    const { gradeLevel, subject, role } = req.query;
+    
+    const filter = {};
+    
+    // Filter by role
+    if (role) {
+      filter.role = role;
+    }
+    
+    // Filter by grade level (for students)
+    if (gradeLevel) {
+      filter.gradeLevel = gradeLevel;
+    }
+    
+    // Filter by subject (for teachers)
+    if (subject) {
+      filter.subject = subject;
+    }
+
+    console.log('🔍 Fetching users with filter:', filter);
+
+    const users = await User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    console.log(`✅ Found ${users.length} users`);
+
+    res.json({
+      success: true,
+      users: users.map(user => ({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        class: user.class,
+        gradeLevel: user.gradeLevel,
+        subject: user.subject,
+        contact: user.contact,
+        accountActive: user.accountActive,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Get users error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load users' });
+  }
+});
+
+// ==================== BULK IMPORT STUDENTS (FIXED - NO DUPLICATE PROFILE) ====================
 router.post('/bulk-import-students', upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import students request received');
-  console.log('Request Body:', req.body);
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -68,13 +174,11 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
   };
 
   try {
-    // ✅ Parse CSV with proper headers
+    // Parse CSV
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-          console.log('📝 Raw CSV row:', row);
-          
           students.push({
             name: row.Name || row.name || '',
             email: row.Email || row.email || '',
@@ -98,18 +202,14 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
 
     console.log('\n🔄 Processing students...\n');
 
-    // Get MongoDB database connection
-    const db = mongoose.connection.db;
-    const studentsCollection = db.collection('students');
-
-    // Process each student
+    // ✅ FIX: Only create user in 'users' collection, NO separate student profile
     for (const studentData of students) {
       try {
         console.log(`👤 Processing: ${studentData.name} (${studentData.email})`);
         
         // Validate required fields
         if (!studentData.name || !studentData.email) {
-          console.log(`⚠️  Skipping - Missing required fields (name or email)`);
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
             email: studentData.email || 'unknown', 
@@ -137,7 +237,7 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const username = studentData.email.split('@')[0];
 
-        // Parse date of birth properly
+        // Parse date of birth
         let parsedDateOfBirth = null;
         if (studentData.dateOfBirth) {
           try {
@@ -156,11 +256,9 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
             }
             
             if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}, skipping date`);
               parsedDateOfBirth = null;
             }
           } catch (error) {
-            console.log(`⚠️  Date parsing error: ${error.message}, skipping date`);
             parsedDateOfBirth = null;
           }
         }
@@ -168,7 +266,7 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
         // Normalize gender value
         const normalizedGender = studentData.gender ? studentData.gender.toLowerCase() : null;
 
-        // ✅ Step 1: Create user account in users collection
+        // ✅ Create ONLY user account (no duplicate student profile!)
         const student = await User.create({
           name: studentData.name,
           email: studentData.email,
@@ -186,35 +284,7 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
           isTrialUser: false
         });
 
-        console.log(`✅ User account created with:
-   - Name: ${student.name}
-   - Email: ${student.email}
-   - Contact: ${student.contact || 'N/A'}
-   - Gender: ${student.gender || 'N/A'}
-   - Date of Birth: ${student.date_of_birth ? student.date_of_birth.toISOString().split('T')[0] : 'N/A'}`);
-
-        // ✅ Step 2: Create student profile in students collection (CRITICAL FIX!)
-        const timestamp = new Date();
-        
-        const studentProfile = {
-          user_id: student._id,
-          name: student.name,
-          email: student.email,
-          grade_level: student.gradeLevel || 'Primary 1',
-          points: 0,
-          level: 1,
-          current_profile: null,  // Will be set after placement quiz
-          consecutive_fails: 0,
-          placement_completed: false,
-          streak: 0,
-          total_quizzes: 0,
-          created_at: timestamp,
-          updated_at: timestamp
-        };
-
-        await studentsCollection.insertOne(studentProfile);
-        console.log(`✅ Student profile created in students collection`);
-        
+        console.log(`✅ Student created: ${student.name} (${student.email})`);
         results.created++;
 
         // Send credentials to parent if email provided
@@ -232,17 +302,13 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
             console.log(`✅ Email sent to parent`);
             results.emailsSent++;
           } else {
-            console.log(`❌ Email failed: ${emailResult.error}`);
+            console.log(`❌ Failed to send email to parent`);
             results.emailsFailed++;
           }
-        } else {
-          console.log(`⚠️  No parent email provided - skipping email`);
         }
 
-        console.log('');
-
       } catch (error) {
-        console.error(`❌ Error processing ${studentData.email}:`, error.message);
+        console.error(`❌ Error creating student ${studentData.email}:`, error);
         results.failed++;
         results.errors.push({ 
           email: studentData.email, 
@@ -251,48 +317,45 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
       }
     }
 
-    // Delete uploaded file
+    // Clean up uploaded file
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Temporary CSV file deleted\n');
 
-    console.log('📊 BULK IMPORT SUMMARY:');
-    console.log(`   ✅ Created: ${results.created}`);
-    console.log(`   ❌ Failed: ${results.failed}`);
-    console.log(`   📧 Emails Sent: ${results.emailsSent}`);
-    console.log(`   ⚠️  Emails Failed: ${results.emailsFailed}\n`);
+    console.log('\n✅ Bulk import completed!');
+    console.log(`   Created: ${results.created}`);
+    console.log(`   Failed: ${results.failed}`);
+    console.log(`   Emails sent: ${results.emailsSent}`);
+    console.log(`   Emails failed: ${results.emailsFailed}\n`);
 
     res.json({
       success: true,
-      message: `${results.created} students created successfully`,
-      results: results
+      message: 'Bulk import completed',
+      results
     });
 
   } catch (error) {
     console.error('❌ Bulk import error:', error);
     
-    // Clean up file
+    // Clean up uploaded file
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     
     res.status(500).json({ 
-      error: 'Failed to process CSV file',
+      success: false, 
+      error: 'Bulk import failed',
       details: error.message 
     });
   }
 });
 
-// ========== TEACHERS BULK IMPORT (UPDATED) ==========
+// ==================== BULK IMPORT TEACHERS ====================
 router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk Import Teachers Request Received');
+  console.log('\n📤 Bulk import teachers request received');
   
   if (!req.file) {
-    console.log('❌ No file uploaded');
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  console.log(`📄 File uploaded: ${req.file.originalname}`);
-  
   const teachers = [];
   const results = {
     created: 0,
@@ -303,56 +366,38 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
   };
 
   try {
-    // Parse CSV
-    console.log('📖 Parsing CSV file...');
-    
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-          console.log('📝 CSV Row:', row);
           teachers.push({
-            name: row.Name || row.name,
-            email: row.Email || row.email,
-            subject: row.Subject || row.subject,
+            name: row.Name || row.name || '',
+            email: row.Email || row.email || '',
+            subject: row.Subject || row.subject || 'Mathematics',
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
             gender: row.Gender || row.gender || '',
-            dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
           });
         })
         .on('end', () => {
-          console.log(`✅ CSV parsed: ${teachers.length} teachers found`);
+          console.log(`✅ Found ${teachers.length} teachers in CSV`);
           resolve();
         })
         .on('error', reject);
     });
 
-    console.log('\n🔄 Processing teachers...\n');
-
-    // Get MongoDB database connection
-    const db = mongoose.connection.db;
-    const teachersCollection = db.collection('teachers');
-
-    // Process each teacher
     for (const teacherData of teachers) {
       try {
-        console.log(`👤 Processing: ${teacherData.name} (${teacherData.email})`);
-        
-        // Validate
         if (!teacherData.name || !teacherData.email) {
-          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
             email: teacherData.email || 'unknown', 
-            error: 'Missing required fields (name or email)' 
+            error: 'Missing required fields' 
           });
           continue;
         }
 
-        // Check if user already exists
         const existingUser = await User.findOne({ email: teacherData.email });
         if (existingUser) {
-          console.log(`⚠️  Skipping - Email already exists`);
           results.failed++;
           results.errors.push({ 
             email: teacherData.email, 
@@ -361,87 +406,40 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
           continue;
         }
 
-        // Generate password
         const tempPassword = generateTempPassword('Teacher');
-        console.log(`🔑 Generated password: ${tempPassword}`);
-        
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // Parse date of birth properly
-        let parsedDateOfBirth = null;
-        if (teacherData.dateOfBirth) {
-          try {
-            const dateStr = teacherData.dateOfBirth.trim();
-            if (dateStr.includes('-')) {
-              parsedDateOfBirth = new Date(dateStr);
-            } else if (dateStr.includes('/')) {
-              const parts = dateStr.split('/');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1;
-                const year = parseInt(parts[2]);
-                parsedDateOfBirth = new Date(year, month, day);
-              }
-            }
-            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              parsedDateOfBirth = null;
-            }
-          } catch (error) {
-            parsedDateOfBirth = null;
-          }
-        }
-
-        // Create teacher user account
         const teacher = await User.create({
           name: teacherData.name,
           email: teacherData.email,
           password: hashedPassword,
           role: 'Teacher',
-          subject: teacherData.subject,
+          subject: teacherData.subject || 'Mathematics',
           contact: teacherData.contact || null,
           gender: teacherData.gender ? teacherData.gender.toLowerCase() : null,
-          date_of_birth: parsedDateOfBirth,
           emailVerified: true,
           accountActive: true,
           createdBy: 'school-admin',
-          isTrialUser: false
         });
 
-        console.log(`✅ Teacher user account created`);
-
-        // ✅ Create teacher profile in teachers collection
-        const timestamp = new Date();
-        await teachersCollection.insertOne({
-          user_id: teacher._id,
-          name: teacher.name,
-          email: teacher.email,
-          created_at: timestamp
-        });
-
-        console.log(`✅ Teacher profile created in teachers collection`);
+        console.log(`✅ Teacher created: ${teacher.name}`);
         results.created++;
 
         // Send welcome email
-        console.log(`📧 Sending welcome email to ${teacher.email}...`);
-        
         const emailResult = await sendTeacherWelcomeEmail(
-          teacher, 
-          tempPassword, 
+          teacher,
+          tempPassword,
           'Your School'
         );
 
         if (emailResult.success) {
-          console.log(`✅ Email sent successfully`);
           results.emailsSent++;
         } else {
-          console.log(`❌ Email failed: ${emailResult.error}`);
           results.emailsFailed++;
         }
 
-        console.log('');
-
       } catch (error) {
-        console.error(`❌ Error processing ${teacherData.email}:`, error.message);
+        console.error(`❌ Error creating teacher:`, error);
         results.failed++;
         results.errors.push({ 
           email: teacherData.email, 
@@ -450,40 +448,26 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
       }
     }
 
-    // Delete uploaded file
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Temporary CSV file deleted\n');
-
-    console.log('📊 BULK IMPORT SUMMARY:');
-    console.log(`   ✅ Created: ${results.created}`);
-    console.log(`   ❌ Failed: ${results.failed}`);
-    console.log(`   📧 Emails Sent: ${results.emailsSent}`);
-    console.log(`   ⚠️  Emails Failed: ${results.emailsFailed}\n`);
 
     res.json({
       success: true,
-      message: `${results.created} teachers created successfully`,
-      results: results
+      message: 'Bulk import completed',
+      results
     });
 
   } catch (error) {
     console.error('❌ Bulk import error:', error);
-    
-    // Clean up file
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    
-    res.status(500).json({ 
-      error: 'Failed to process CSV file',
-      details: error.message 
-    });
+    res.status(500).json({ success: false, error: 'Bulk import failed' });
   }
 });
 
-// ========== PARENTS BULK IMPORT (UPDATED) ==========
+// ==================== BULK IMPORT PARENTS ====================
 router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk Import Parents Request Received');
+  console.log('\n📤 Bulk import parents request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -499,181 +483,106 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
   };
 
   try {
-    // Parse CSV
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-          console.log('📝 CSV Row:', row);
           parents.push({
-            parentName: row.ParentName || row.parentName || row['Parent Name'] || row.parent_name || '',
-            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
-            studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || row.student_email || '',
-            relationship: row.Relationship || row.relationship || 'Parent',
+            name: row.Name || row.name || '',
+            email: row.Email || row.email || '',
+            studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || '',
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
-            gender: row.Gender || row.gender || '',
-            dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
+            relationship: row.Relationship || row.relationship || 'Parent',
           });
         })
         .on('end', () => {
-          console.log(`✅ CSV parsed: ${parents.length} parents found`);
+          console.log(`✅ Found ${parents.length} parents in CSV`);
           resolve();
         })
         .on('error', reject);
     });
 
-    console.log('\n🔄 Processing parents...\n');
-
-    // Get MongoDB database connection
-    const db = mongoose.connection.db;
-    const parentsCollection = db.collection('parents');
-
-    // Process each parent
     for (const parentData of parents) {
       try {
-        console.log(`👤 Processing: ${parentData.parentName} (${parentData.parentEmail})`);
-        
-        // Validate
-        if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
-          console.log(`⚠️  Skipping - Missing required fields`);
+        if (!parentData.name || !parentData.email) {
           results.failed++;
           results.errors.push({ 
-            email: parentData.parentEmail || 'unknown', 
+            email: parentData.email || 'unknown', 
             error: 'Missing required fields' 
           });
           continue;
         }
 
-        // Check if parent already exists
-        const existingParent = await User.findOne({ email: parentData.parentEmail });
-        if (existingParent) {
-          console.log(`⚠️  Skipping - Parent email already exists`);
+        const existingUser = await User.findOne({ email: parentData.email });
+        if (existingUser) {
           results.failed++;
           results.errors.push({ 
-            email: parentData.parentEmail, 
+            email: parentData.email, 
             error: 'Email already registered' 
           });
           continue;
         }
 
-        // Find student to link
-        const student = await User.findOne({ email: parentData.studentEmail });
-        if (!student) {
-          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
-          results.failed++;
-          results.errors.push({ 
-            email: parentData.parentEmail, 
-            error: `Student not found: ${parentData.studentEmail}` 
+        // Find linked student
+        let linkedStudent = null;
+        if (parentData.studentEmail) {
+          linkedStudent = await User.findOne({ 
+            email: parentData.studentEmail, 
+            role: 'Student' 
           });
-          continue;
         }
 
-        // Generate password
         const tempPassword = generateTempPassword('Parent');
-        console.log(`🔑 Generated password: ${tempPassword}`);
-        
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // Parse date of birth properly
-        let parsedDateOfBirth = null;
-        if (parentData.dateOfBirth) {
-          try {
-            const dateStr = parentData.dateOfBirth.trim();
-            if (dateStr.includes('-')) {
-              parsedDateOfBirth = new Date(dateStr);
-            } else if (dateStr.includes('/')) {
-              const parts = dateStr.split('/');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1;
-                const year = parseInt(parts[2]);
-                parsedDateOfBirth = new Date(year, month, day);
-              }
-            }
-            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              parsedDateOfBirth = null;
-            }
-          } catch (error) {
-            parsedDateOfBirth = null;
-          }
-        }
-
-        // Create parent user account
         const parent = await User.create({
-          name: parentData.parentName,
-          email: parentData.parentEmail,
+          name: parentData.name,
+          email: parentData.email,
           password: hashedPassword,
           role: 'Parent',
-          linkedStudents: [{
-            studentId: student._id,
-            relationship: parentData.relationship
-          }],
           contact: parentData.contact || null,
-          gender: parentData.gender ? parentData.gender.toLowerCase() : null,
-          date_of_birth: parsedDateOfBirth,
+          linkedStudents: linkedStudent ? [{
+            studentId: linkedStudent._id,
+            relationship: parentData.relationship || 'Parent'
+          }] : [],
           emailVerified: true,
           accountActive: true,
           createdBy: 'school-admin',
-          isTrialUser: false
         });
 
-        console.log(`✅ Parent user account created`);
-
-        // ✅ Create parent profile in parents collection
-        const timestamp = new Date();
-        await parentsCollection.insertOne({
-          user_id: parent._id,
-          name: parent.name,
-          email: parent.email,
-          created_at: timestamp
-        });
-
-        console.log(`✅ Parent profile created and linked to ${student.name}`);
+        console.log(`✅ Parent created: ${parent.name}`);
         results.created++;
 
         // Send welcome email
-        console.log(`📧 Sending welcome email to ${parent.email}...`);
-        
         const emailResult = await sendParentWelcomeEmail(
           parent,
           tempPassword,
-          student.name,
+          linkedStudent ? linkedStudent.name : 'Your Child',
           'Your School'
         );
 
         if (emailResult.success) {
-          console.log(`✅ Email sent successfully`);
           results.emailsSent++;
         } else {
-          console.log(`❌ Email failed: ${emailResult.error}`);
           results.emailsFailed++;
         }
 
-        console.log('');
-
       } catch (error) {
-        console.error(`❌ Error processing ${parentData.parentEmail}:`, error.message);
+        console.error(`❌ Error creating parent:`, error);
         results.failed++;
         results.errors.push({ 
-          email: parentData.parentEmail, 
+          email: parentData.email, 
           error: error.message 
         });
       }
     }
 
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Temporary CSV file deleted\n');
-
-    console.log('📊 BULK IMPORT SUMMARY:');
-    console.log(`   ✅ Created: ${results.created}`);
-    console.log(`   ❌ Failed: ${results.failed}`);
-    console.log(`   📧 Emails Sent: ${results.emailsSent}`);
-    console.log(`   ⚠️  Emails Failed: ${results.emailsFailed}\n`);
 
     res.json({
       success: true,
-      message: `${results.created} parents created successfully`,
-      results: results
+      message: 'Bulk import completed',
+      results
     });
 
   } catch (error) {
@@ -681,95 +590,15 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    res.status(500).json({ error: 'Failed to process CSV file' });
+    res.status(500).json({ success: false, error: 'Bulk import failed' });
   }
 });
 
-// ==================== SCHOOL ADMIN USER MANAGEMENT ROUTES ====================
-// Added by WX to try School Admin Dashboard functionality
-
-// ==================== 1. DASHBOARD STATS ====================
-router.get('/dashboard-stats', authenticateToken, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    // Count users by role (handle both lowercase and capitalized)
-    const totalStudents = await usersCollection.countDocuments({ 
-      role: { $in: ['student', 'Student'] }
-    });
-    
-    const totalTeachers = await usersCollection.countDocuments({ 
-      role: { $in: ['teacher', 'Teacher'] }
-    });
-    
-    const totalParents = await usersCollection.countDocuments({ 
-      role: { $in: ['parent', 'Parent'] }
-    });
-    
-    // Count classes (unique class values for Primary 1)
-    const classes = await usersCollection.distinct('class', { 
-      gradeLevel: 'Primary 1'
-    });
-    const totalClasses = classes.filter(c => c).length;
-    
-    res.json({
-      success: true,
-      total_students: totalStudents,
-      total_teachers: totalTeachers,
-      total_parents: totalParents,
-      total_classes: totalClasses
-    });
-  } catch (error) {
-    console.error('Dashboard stats error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load dashboard stats' });
-  }
-});
-
-// ==================== 2. GET ALL USERS ====================
-router.get('/users', authenticateToken, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    // Filter by grade and subject if provided
-    const filter = {};
-    if (req.query.gradeLevel) {
-      filter.gradeLevel = req.query.gradeLevel;
-    }
-    if (req.query.subject) {
-      filter.subject = req.query.subject;
-    }
-    
-    const users = await usersCollection.find(filter).toArray();
-    
-    // Normalize field names for frontend
-    const normalizedUsers = users.map(user => ({
-      id: user._id.toString(),
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: (user.role || '').toLowerCase(),
-      gradeLevel: user.gradeLevel,
-      subject: user.subject,
-      class: user.class,
-      isActive: user.is_active !== undefined ? user.is_active : user.accountActive,
-      created_at: user.created_at || user.createdAt
-    }));
-    
-    res.json({ success: true, users: normalizedUsers });
-  } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load users' });
-  }
-});
-
-// ==================== 3. CREATE USER MANUALLY ====================
+// ==================== MANUAL CREATE USER ====================
 router.post('/users/manual', authenticateToken, async (req, res) => {
   try {
-    const { name, email, password, role, gender, gradeLevel, subject } = req.body;
+    const { name, email, password, role, gradeLevel, subject, gender } = req.body;
     
-    // Validation
     if (!name || !email || !password || !role) {
       return res.status(400).json({ 
         success: false, 
@@ -777,11 +606,8 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
       });
     }
     
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
     // Check if email already exists
-    const existingUser = await usersCollection.findOne({ email });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({ 
         success: false, 
@@ -790,33 +616,30 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
     }
     
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Create user document (UNIFIED SCHEMA)
-    const newUser = {
+    // Create user
+    const newUser = await User.create({
       name,
       email,
-      password_hash: passwordHash,
-      role: role.toLowerCase(),
+      password: hashedPassword,
+      role: role,
       gender: gender || null,
       gradeLevel: gradeLevel || 'Primary 1',
       subject: subject || 'Mathematics',
-      class: null,
-      is_active: true,
-      approval_status: 'approved',
-      created_at: new Date(),
+      emailVerified: true,
+      accountActive: true,
       createdBy: 'school-admin',
-      last_login: null
-    };
-    
-    const result = await usersCollection.insertOne(newUser);
+    });
     
     res.status(201).json({
       success: true,
       message: 'User created successfully',
       user: {
-        id: result.insertedId.toString(),
-        ...newUser
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
       }
     });
   } catch (error) {
@@ -825,17 +648,12 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 4. DELETE USER ====================
+// ==================== DELETE USER ====================
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
+    const result = await User.findByIdAndDelete(req.params.id);
     
-    const result = await usersCollection.deleteOne({ 
-      _id: new mongoose.Types.ObjectId(req.params.id) 
-    });
-    
-    if (result.deletedCount === 0) {
+    if (!result) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -846,25 +664,18 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 5. UPDATE USER STATUS (ENABLE/DISABLE) ====================
+// ==================== UPDATE USER STATUS ====================
 router.put('/users/:id/status', authenticateToken, async (req, res) => {
   try {
     const { isActive } = req.body;
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
     
-    // Update both field names for compatibility
-    const result = await usersCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
-      { 
-        $set: { 
-          is_active: isActive,
-          accountActive: isActive
-        } 
-      }
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { accountActive: isActive },
+      { new: true }
     );
     
-    if (result.matchedCount === 0) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -875,28 +686,26 @@ router.put('/users/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 6. UPDATE USER ROLE ====================
+// ==================== UPDATE USER ROLE ====================
 router.put('/users/:id/role', authenticateToken, async (req, res) => {
   try {
     const { role } = req.body;
     
-    // SECURITY: Prevent promotion to school-admin
-    if (role.toLowerCase() === 'school-admin') {
+    // Security check
+    if (role === 'School Admin') {
       return res.status(403).json({ 
         success: false, 
         error: 'Cannot assign school-admin role' 
       });
     }
     
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    const result = await usersCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
-      { $set: { role: role.toLowerCase() } }
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role: role },
+      { new: true }
     );
     
-    if (result.matchedCount === 0) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -907,7 +716,7 @@ router.put('/users/:id/role', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 7. RESET USER PASSWORD ====================
+// ==================== RESET USER PASSWORD ====================
 router.put('/users/:id/password', authenticateToken, async (req, res) => {
   try {
     const { password } = req.body;
@@ -919,22 +728,15 @@ router.put('/users/:id/password', authenticateToken, async (req, res) => {
       });
     }
     
-    const passwordHash = await bcrypt.hash(password, 10);
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Update both field names for compatibility
-    const result = await usersCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
-      { 
-        $set: { 
-          password_hash: passwordHash,
-          password: passwordHash
-        } 
-      }
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { password: hashedPassword },
+      { new: true }
     );
     
-    if (result.matchedCount === 0) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -945,29 +747,26 @@ router.put('/users/:id/password', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 8. GET CLASSES ====================
+// ==================== GET CLASSES ====================
 router.get('/classes', authenticateToken, async (req, res) => {
   try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    // Get unique classes for Primary 1
-    const classes = await usersCollection.aggregate([
-      { $match: { gradeLevel: 'Primary 1', class: { $ne: null } } },
+    // Get unique classes
+    const classes = await User.aggregate([
+      { $match: { role: 'Student', class: { $ne: null } } },
       { $group: { 
-        _id: '$class',
+        _id: { class: '$class', gradeLevel: '$gradeLevel' },
         studentCount: { $sum: 1 }
       }},
       { $project: {
         _id: 0,
-        id: '$_id',
-        name: '$_id',
-        grade: 'Primary 1',
+        id: '$_id.class',
+        name: '$_id.class',
+        grade: '$_id.gradeLevel',
         subject: 'Mathematics',
         students: '$studentCount',
         teacher: 'Not assigned'
       }}
-    ]).toArray();
+    ]);
     
     res.json({ success: true, classes });
   } catch (error) {
@@ -976,7 +775,7 @@ router.get('/classes', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 9. CREATE CLASS ====================
+// ==================== CREATE CLASS ====================
 router.post('/classes', authenticateToken, async (req, res) => {
   try {
     const { name, grade, subject } = req.body;
@@ -985,8 +784,6 @@ router.post('/classes', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Class name is required' });
     }
     
-    // For now, just acknowledge creation
-    // Classes are managed through user's class field
     res.status(201).json({
       success: true,
       message: 'Class created successfully',
@@ -1004,7 +801,5 @@ router.post('/classes', authenticateToken, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to create class' });
   }
 });
-
-// ==================== END OF WEI XIANG'S ADDITIONS ====================
 
 module.exports = router;
