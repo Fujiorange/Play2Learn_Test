@@ -1,4 +1,3 @@
-// ViewResults.js - Math Quiz Results Only
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -18,7 +17,6 @@ export default function ViewResults() {
       }
 
       try {
-        // REAL API CALL - Get math quiz results from database
         const result = await studentService.getMathQuizResults();
 
         if (result.success) {
@@ -27,8 +25,8 @@ export default function ViewResults() {
           setError('Failed to load results');
           setResults([]);
         }
-      } catch (error) {
-        console.error('Load results error:', error);
+      } catch (err) {
+        console.error('Load results error:', err);
         setError('Failed to load results');
         setResults([]);
       } finally {
@@ -39,8 +37,7 @@ export default function ViewResults() {
     loadResults();
   }, [navigate]);
 
-  const getScoreColor = (score, max) => {
-    const percentage = (score / max) * 100;
+  const getScoreColor = (percentage) => {
     if (percentage >= 80) return '#10b981';
     if (percentage >= 60) return '#f59e0b';
     return '#ef4444';
@@ -68,6 +65,7 @@ export default function ViewResults() {
     scoreSection: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid #e5e7eb' },
     scoreFraction: { fontSize: '24px', fontWeight: '700' },
     scorePercentage: { fontSize: '20px', fontWeight: '700' },
+    questionsLabel: { fontSize: '13px', color: '#6b7280' },
     emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
@@ -81,66 +79,67 @@ export default function ViewResults() {
         <div style={styles.header}>
           <div style={styles.headerTop}>
             <h1 style={styles.title}>📊 My Math Quiz Results</h1>
-            <button 
-              style={styles.backButton} 
+            <button
+              style={styles.backButton}
               onClick={() => navigate('/student')}
-              onMouseEnter={(e) => e.target.style.background = '#4b5563'}
-              onMouseLeave={(e) => e.target.style.background = '#6b7280'}
+              onMouseEnter={(e) => (e.target.style.background = '#4b5563')}
+              onMouseLeave={(e) => (e.target.style.background = '#6b7280')}
             >
               ← Back to Dashboard
             </button>
           </div>
-          <p style={styles.subtitle}>
-            View all your math quiz attempts and scores
-          </p>
-          
-          {error && (
-            <div style={styles.errorMessage}>
-              ⚠️ {error}
-            </div>
-          )}
+          <p style={styles.subtitle}>View all your math quiz attempts and scores</p>
+
+          {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
         </div>
 
         {results.length > 0 ? (
           <div style={styles.resultsGrid}>
-            {results.map(result => {
-              const percentage = Math.round((result.score / result.maxScore) * 100);
-              const scoreColor = getScoreColor(result.score, result.maxScore);
-              
+            {results.map((result) => {
+              const percentage = result.percentage;
+              const scoreColor = getScoreColor(percentage);
+
               return (
-                <div 
-                  key={result.id} 
-                  style={styles.resultCard} 
-                  onClick={() => navigate(`/student/results/${result.id}`)} 
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'} 
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                <div
+                  key={result.id}
+                  style={styles.resultCard}
+                  onClick={() => navigate(`/student/results/${result.id}`)}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-4px)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
                 >
-                  <div style={{
-                    ...styles.profileBadge,
-                    background: `linear-gradient(135deg, ${getProfileColor(result.profile)} 0%, ${getProfileColor(result.profile)}dd 100%)`
-                  }}>
+                  <div
+                    style={{
+                      ...styles.profileBadge,
+                      background: `linear-gradient(135deg, ${getProfileColor(result.profile)} 0%, ${getProfileColor(result.profile)}dd 100%)`,
+                    }}
+                  >
                     Profile {result.profile}
                   </div>
-                  <div style={styles.resultTitle}>Primary 1 Math Quiz</div>
+
+                  {/* ✅ dynamic title */}
+                  <div style={styles.resultTitle}>Profile {result.profile} Math Quiz</div>
+
                   <div style={styles.resultDate}>📅 {result.date}</div>
+
                   <div style={styles.scoreSection}>
                     <div>
-                      <div style={{...styles.scoreFraction, color: scoreColor}}>
-                        {result.score}/{result.maxScore}
+                      <div style={{ ...styles.scoreFraction, color: scoreColor }}>
+                        {result.score}/{result.total}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                        {result.questions} questions
-                      </div>
+                      <div style={styles.questionsLabel}>questions</div>
                     </div>
-                    <div style={{...styles.scorePercentage, color: scoreColor}}>
+
+                    <div style={{ ...styles.scorePercentage, color: scoreColor }}>
                       {percentage}%
                     </div>
                   </div>
+
                   {percentage >= 70 && (
                     <div style={{ marginTop: '12px', padding: '8px', background: '#d1fae5', borderRadius: '6px', fontSize: '13px', color: '#065f46', fontWeight: '600', textAlign: 'center' }}>
                       ✅ Passed!
                     </div>
                   )}
+
                   {percentage < 50 && (
                     <div style={{ marginTop: '12px', padding: '8px', background: '#fee2e2', borderRadius: '6px', fontSize: '13px', color: '#991b1b', fontWeight: '600', textAlign: 'center' }}>
                       💪 Keep practicing!
@@ -166,7 +165,7 @@ export default function ViewResults() {
                 borderRadius: '8px',
                 fontSize: '15px',
                 fontWeight: '600',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               🎯 Take Quiz Now

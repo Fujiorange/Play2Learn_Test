@@ -1,4 +1,4 @@
-// backend/server.js - Play2Learn Backend
+// backend/server.js - Play2Learn Backend - FIXED
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
@@ -125,6 +125,16 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString().split('T')[1]} - ${req.method} ${req.path}`);
   next();
 });
+
+// ==================== MODEL IMPORTS (MUST BE BEFORE ROUTES!) ====================
+// ✅ CRITICAL FIX: Load User model BEFORE loading routes
+try {
+  const User = require('./models/User');
+  console.log('✅ User model loaded');
+} catch (error) {
+  console.error('❌ Error loading User model:', error.message);
+  console.error('💡 Make sure ./models/User.js exists');
+}
 
 // ==================== ROUTE IMPORTS ====================
 try {

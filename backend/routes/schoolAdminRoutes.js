@@ -1,4 +1,6 @@
-// backend/routes/schoolAdminRoutes.js - FIXED CSV PARSING
+// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH PARENT CSV IMPORT
+// ✅ Queries USERS collection correctly for dashboard stats
+// ✅ Parent CSV import with linkedStudents integration
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -7,14 +9,12 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
-
-// ==================== WX ====================
-// Added mongoose and JWT for School Admin dashboard routes
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-// Authentication middleware for School Admin routes
+// ==================== AUTHENTICATION MIDDLEWARE ====================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.replace('Bearer ', '');
@@ -31,12 +31,11 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ success: false, error: 'Invalid token' });
   }
 };
-// ==================== WX ====================
 
-// Configure multer for file uploads
+// ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
 
-// Password generator utility
+// ==================== PASSWORD GENERATOR ====================
 function generateTempPassword(userType) {
   const crypto = require('crypto');
   const prefix = userType.substring(0, 3).toUpperCase();
@@ -46,10 +45,119 @@ function generateTempPassword(userType) {
   return `${prefix}${year}${random}${special}`;
 }
 
-// ========== STUDENTS BULK IMPORT (UPDATED) ==========
+// ==================== DASHBOARD STATS (FIXED!) ====================
+router.get('/dashboard-stats', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 Fetching dashboard stats...');
+    
+    // ✅ FIX: Query the 'users' collection with role field, not separate collections!
+    const [
+      totalStudents,
+      totalTeachers,
+      totalParents,
+      totalUsers
+    ] = await Promise.all([
+      User.countDocuments({ role: 'Student' }),
+      User.countDocuments({ role: 'Teacher' }),
+      User.countDocuments({ role: 'Parent' }),
+      User.countDocuments()
+    ]);
+
+    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents`);
+
+    // Get recent registrations (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recentRegistrations = await User.countDocuments({
+      createdAt: { $gte: sevenDaysAgo }
+    });
+
+    // Get active users (last 30 days login)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const activeUsers = await User.countDocuments({
+      accountActive: true
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        students: totalStudents,
+        teachers: totalTeachers,
+        parents: totalParents,
+        totalUsers: totalUsers,
+        activeUsers: activeUsers,
+        recentRegistrations: recentRegistrations,
+        classes: 0, // Will implement when class management is ready
+      }
+    });
+  } catch (error) {
+    console.error('❌ Dashboard stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to load dashboard stats',
+      details: error.message 
+    });
+  }
+});
+
+// ==================== GET USERS (FIXED!) ====================
+router.get('/users', authenticateToken, async (req, res) => {
+  try {
+    const { gradeLevel, subject, role } = req.query;
+    
+    const filter = {};
+    
+    // Filter by role
+    if (role) {
+      filter.role = role;
+    }
+    
+    // Filter by grade level (for students)
+    if (gradeLevel) {
+      filter.gradeLevel = gradeLevel;
+    }
+    
+    // Filter by subject (for teachers)
+    if (subject) {
+      filter.subject = subject;
+    }
+
+    console.log('🔍 Fetching users with filter:', filter);
+
+    const users = await User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    console.log(`✅ Found ${users.length} users`);
+
+    res.json({
+      success: true,
+      users: users.map(user => ({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        class: user.class,
+        gradeLevel: user.gradeLevel,
+        subject: user.subject,
+        contact: user.contact,
+        accountActive: user.accountActive,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Get users error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load users' });
+  }
+});
+
+// ==================== BULK IMPORT STUDENTS (FIXED - NO DUPLICATE PROFILE) ====================
 router.post('/bulk-import-students', upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import students request received');
-  console.log('Request Body:', req.body);
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -67,21 +175,17 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
   };
 
   try {
-    // ✅ FIXED: Parse CSV with proper headers
+    // Parse CSV
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-          console.log('📝 Raw CSV row:', row);
-          
-          // ✅ Handle all possible CSV header variations
           students.push({
             name: row.Name || row.name || '',
             email: row.Email || row.email || '',
             class: row.Class || row.class || '',
             gradeLevel: row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || '',
             parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
-            // ✅ NEW FIELDS
             contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
             gender: row.Gender || row.gender || '',
             dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
@@ -97,24 +201,16 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
         });
     });
 
-    console.log('📊 Import complete:', {
-      created: results.created,
-      failed: results.failed,
-      emailsSent: results.emailsSent,
-      emailsFailed: results.emailsFailed,
-      errors: results.errors
-    });
-
     console.log('\n🔄 Processing students...\n');
 
-    // Process each student
+    // ✅ FIX: Only create user in 'users' collection, NO separate student profile
     for (const studentData of students) {
       try {
         console.log(`👤 Processing: ${studentData.name} (${studentData.email})`);
         
         // Validate required fields
         if (!studentData.name || !studentData.email) {
-          console.log(`⚠️  Skipping - Missing required fields (name or email)`);
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
             email: studentData.email || 'unknown', 
@@ -142,96 +238,76 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const username = studentData.email.split('@')[0];
 
-        // ✅ Parse date of birth properly (convert to Date object)
+        // Parse date of birth
         let parsedDateOfBirth = null;
         if (studentData.dateOfBirth) {
           try {
-            // Handle formats: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY
             const dateStr = studentData.dateOfBirth.trim();
             
             if (dateStr.includes('-')) {
-              // YYYY-MM-DD format
               parsedDateOfBirth = new Date(dateStr);
             } else if (dateStr.includes('/')) {
-              // DD/MM/YYYY or MM/DD/YYYY format
               const parts = dateStr.split('/');
               if (parts.length === 3) {
-                // Assume DD/MM/YYYY for Singapore
                 const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1; // Month is 0-indexed
+                const month = parseInt(parts[1]) - 1;
                 const year = parseInt(parts[2]);
                 parsedDateOfBirth = new Date(year, month, day);
               }
             }
             
-            // Validate date
             if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}, skipping date`);
               parsedDateOfBirth = null;
             }
           } catch (error) {
-            console.log(`⚠️  Date parsing error: ${error.message}, skipping date`);
+            console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}`);
             parsedDateOfBirth = null;
           }
         }
 
-        // ✅ Normalize gender value
-        const normalizedGender = studentData.gender ? studentData.gender.toLowerCase() : null;
-
-        // Create student with all fields
-        const student = await User.create({
-          name: studentData.name,
-          email: studentData.email,
+        // ✅ Create ONLY user document in 'users' collection
+        const newUser = await User.create({
+          name: studentData.name.trim(),
+          email: studentData.email.toLowerCase().trim(),
           username: username,
           password: hashedPassword,
           role: 'Student',
-          class: studentData.class || null,
-          gradeLevel: studentData.gradeLevel || 'Primary 1',
-          // ✅ NEW FIELDS
-          contact: studentData.contact || null,
-          gender: normalizedGender,
-          date_of_birth: parsedDateOfBirth,
+          class: studentData.class?.trim() || null,
+          gradeLevel: studentData.gradeLevel?.trim() || 'Primary 1',
+          parentEmail: studentData.parentEmail?.toLowerCase().trim() || null,
+          contact: studentData.contact?.trim() || null,
+          gender: studentData.gender?.trim() || null,
+          dateOfBirth: parsedDateOfBirth,
           emailVerified: true,
           accountActive: true,
           createdBy: 'school-admin',
-          isTrialUser: false
+          createdAt: new Date()
         });
 
-        console.log(`✅ Student created in database with:
-   - Name: ${student.name}
-   - Email: ${student.email}
-   - Contact: ${student.contact || 'N/A'}
-   - Gender: ${student.gender || 'N/A'}
-   - Date of Birth: ${student.date_of_birth ? student.date_of_birth.toISOString().split('T')[0] : 'N/A'}`);
-        
+        console.log(`✅ Student created in users collection: ${newUser.email}`);
         results.created++;
 
-        // Send credentials to parent if email provided
+        // Send credentials email to parent if parentEmail exists
         if (studentData.parentEmail) {
-          console.log(`📧 Sending credentials to parent: ${studentData.parentEmail}...`);
-          
-          const emailResult = await sendStudentCredentialsToParent(
-            student,
-            tempPassword,
-            studentData.parentEmail,
-            'Your School'
-          );
-
-          if (emailResult.success) {
-            console.log(`✅ Email sent to parent`);
+          try {
+            await sendStudentCredentialsToParent(
+              studentData.parentEmail,
+              studentData.name,
+              studentData.email,
+              tempPassword
+            );
+            console.log(`📧 Sent credentials to parent: ${studentData.parentEmail}`);
             results.emailsSent++;
-          } else {
-            console.log(`❌ Email failed: ${emailResult.error}`);
+          } catch (emailError) {
+            console.error(`❌ Failed to send email to parent:`, emailError.message);
             results.emailsFailed++;
           }
         } else {
-          console.log(`⚠️  No parent email provided - skipping email`);
+          results.emailsFailed++;
         }
 
-        console.log('');
-
       } catch (error) {
-        console.error(`❌ Error processing ${studentData.email}:`, error.message);
+        console.error(`❌ Error creating student:`, error);
         results.failed++;
         results.errors.push({ 
           email: studentData.email, 
@@ -240,48 +316,37 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
       }
     }
 
-    // Delete uploaded file
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Temporary CSV file deleted\n');
 
-    console.log('📊 BULK IMPORT SUMMARY:');
-    console.log(`   ✅ Created: ${results.created}`);
-    console.log(`   ❌ Failed: ${results.failed}`);
-    console.log(`   📧 Emails Sent: ${results.emailsSent}`);
-    console.log(`   ⚠️  Emails Failed: ${results.emailsFailed}\n`);
+    console.log('\n✅ Bulk import completed!');
+    console.log(`   Created: ${results.created}`);
+    console.log(`   Failed: ${results.failed}`);
+    console.log(`   Emails sent: ${results.emailsSent}`);
+    console.log(`   Emails failed: ${results.emailsFailed}\n`);
 
     res.json({
       success: true,
-      message: `${results.created} students created successfully`,
-      results: results
+      message: 'Bulk import completed',
+      results
     });
 
   } catch (error) {
     console.error('❌ Bulk import error:', error);
-    
-    // Clean up file
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    
-    res.status(500).json({ 
-      error: 'Failed to process CSV file',
-      details: error.message 
-    });
+    res.status(500).json({ success: false, error: 'Bulk import failed' });
   }
 });
 
-// ========== TEACHERS BULK IMPORT (UPDATED) ==========
+// ==================== BULK IMPORT TEACHERS ====================
 router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk Import Teachers Request Received');
+  console.log('\n📤 Bulk import teachers request received');
   
   if (!req.file) {
-    console.log('❌ No file uploaded');
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  console.log(`📄 File uploaded: ${req.file.originalname}`);
-  
   const teachers = [];
   const results = {
     created: 0,
@@ -292,53 +357,38 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
   };
 
   try {
-    // Parse CSV
-    console.log('📖 Parsing CSV file...');
-    
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-          console.log('📝 CSV Row:', row);
           teachers.push({
-            name: row.Name || row.name,
-            email: row.Email || row.email,
-            subject: row.Subject || row.subject,
-            // ✅ NEW FIELDS
-            contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
-            gender: row.Gender || row.gender || '',
-            dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
+            name: row.Name || row.name || '',
+            email: row.Email || row.email || '',
+            subject: row.Subject || row.subject || 'Mathematics',
+            contact: row.ContactNumber || row.contactNumber || row.contact || '',
+            gender: row.Gender || row.gender || ''
           });
         })
         .on('end', () => {
-          console.log(`✅ CSV parsed: ${teachers.length} teachers found`);
+          console.log(`✅ Found ${teachers.length} teachers in CSV`);
           resolve();
         })
         .on('error', reject);
     });
 
-    console.log('\n🔄 Processing teachers...\n');
-
-    // Process each teacher
     for (const teacherData of teachers) {
       try {
-        console.log(`👤 Processing: ${teacherData.name} (${teacherData.email})`);
-        
-        // Validate
         if (!teacherData.name || !teacherData.email) {
-          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
             email: teacherData.email || 'unknown', 
-            error: 'Missing required fields (name or email)' 
+            error: 'Missing required fields' 
           });
           continue;
         }
 
-        // Check if user already exists
         const existingUser = await User.findOne({ email: teacherData.email });
         if (existingUser) {
-          console.log(`⚠️  Skipping - Email already exists`);
           results.failed++;
           results.errors.push({ 
             email: teacherData.email, 
@@ -347,77 +397,39 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
           continue;
         }
 
-        // Generate password
         const tempPassword = generateTempPassword('Teacher');
-        console.log(`🔑 Generated password: ${tempPassword}`);
-        
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // ✅ Parse date of birth properly
-        let parsedDateOfBirth = null;
-        if (teacherData.dateOfBirth) {
-          try {
-            const dateStr = teacherData.dateOfBirth.trim();
-            if (dateStr.includes('-')) {
-              parsedDateOfBirth = new Date(dateStr);
-            } else if (dateStr.includes('/')) {
-              const parts = dateStr.split('/');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1;
-                const year = parseInt(parts[2]);
-                parsedDateOfBirth = new Date(year, month, day);
-              }
-            }
-            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              parsedDateOfBirth = null;
-            }
-          } catch (error) {
-            parsedDateOfBirth = null;
-          }
-        }
-
-        // Create teacher
-        const teacher = await User.create({
-          name: teacherData.name,
-          email: teacherData.email,
+        const newTeacher = await User.create({
+          name: teacherData.name.trim(),
+          email: teacherData.email.toLowerCase().trim(),
           password: hashedPassword,
           role: 'Teacher',
-          subject: teacherData.subject,
-          // ✅ NEW FIELDS
-          contact: teacherData.contact || null,
-          gender: teacherData.gender ? teacherData.gender.toLowerCase() : null,
-          date_of_birth: parsedDateOfBirth,
+          subject: teacherData.subject?.trim() || 'Mathematics',
+          contact: teacherData.contact?.trim() || null,
+          gender: teacherData.gender?.trim() || null,
           emailVerified: true,
           accountActive: true,
-          createdBy: 'school-admin',
-          isTrialUser: false
+          createdBy: 'school-admin'
         });
 
-        console.log(`✅ Teacher created in database`);
+        console.log(`✅ Teacher created: ${newTeacher.email}`);
         results.created++;
 
-        // Send welcome email
-        console.log(`📧 Sending welcome email to ${teacher.email}...`);
-        
-        const emailResult = await sendTeacherWelcomeEmail(
-          teacher, 
-          tempPassword, 
-          'Your School'
-        );
-
-        if (emailResult.success) {
-          console.log(`✅ Email sent successfully`);
+        try {
+          await sendTeacherWelcomeEmail(
+            newTeacher,
+            tempPassword,
+            'Your School'
+          );
           results.emailsSent++;
-        } else {
-          console.log(`❌ Email failed: ${emailResult.error}`);
+        } catch (emailError) {
+          console.error(`❌ Failed to send email:`, emailError.message);
           results.emailsFailed++;
         }
 
-        console.log('');
-
       } catch (error) {
-        console.error(`❌ Error processing ${teacherData.email}:`, error.message);
+        console.error(`❌ Error creating teacher:`, error);
         results.failed++;
         results.errors.push({ 
           email: teacherData.email, 
@@ -426,52 +438,42 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
       }
     }
 
-    // Delete uploaded file
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Temporary CSV file deleted\n');
-
-    console.log('📊 BULK IMPORT SUMMARY:');
-    console.log(`   ✅ Created: ${results.created}`);
-    console.log(`   ❌ Failed: ${results.failed}`);
-    console.log(`   📧 Emails Sent: ${results.emailsSent}`);
-    console.log(`   ⚠️  Emails Failed: ${results.emailsFailed}\n`);
 
     res.json({
       success: true,
-      message: `${results.created} teachers created successfully`,
-      results: results
+      message: 'Bulk import completed',
+      results
     });
 
   } catch (error) {
     console.error('❌ Bulk import error:', error);
-    
-    // Clean up file
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    
-    res.status(500).json({ 
-      error: 'Failed to process CSV file',
-      details: error.message 
-    });
+    res.status(500).json({ success: false, error: 'Bulk import failed' });
   }
 });
 
-// ========== PARENTS BULK IMPORT (UPDATED) ==========
+// ==================== BULK IMPORT PARENTS (COMPLETE VERSION WITH LINKEDSTUDENTS) ====================
 router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk Import Parents Request Received');
+  console.log('\n📤 Bulk import parents request received');
   
   if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
+    return res.status(400).json({ success: false, error: 'No file uploaded' });
   }
 
+  console.log('📄 Parsing CSV file...');
+  
   const parents = [];
   const results = {
     created: 0,
+    updated: 0,
     failed: 0,
     emailsSent: 0,
     emailsFailed: 0,
-    errors: []
+    errors: [],
+    details: []
   };
 
   try {
@@ -480,259 +482,276 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-          console.log('📝 CSV Row:', row);
           parents.push({
-            parentName: row.ParentName || row.parentName || row['Parent Name'] || row.parent_name || '',
-            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
-            studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || row.student_email || '',
-            relationship: row.Relationship || row.relationship || 'Parent',
-            // ✅ NEW FIELDS
-            contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
-            gender: row.Gender || row.gender || '',
-            dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
+            parentName: row.ParentName || row.parentName || row['Parent Name'] || '',
+            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || '',
+            studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || '',
+            relationship: row.Relationship || row.relationship || 'Parent'
           });
         })
         .on('end', () => {
-          console.log(`✅ CSV parsed: ${parents.length} parents found`);
+          console.log(`✅ Found ${parents.length} parent records in CSV`);
           resolve();
         })
-        .on('error', reject);
+        .on('error', (error) => {
+          console.error('❌ CSV parsing error:', error);
+          reject(error);
+        });
     });
 
     console.log('\n🔄 Processing parents...\n');
 
     // Process each parent
-    for (const parentData of parents) {
+    for (let i = 0; i < parents.length; i++) {
+      const parentData = parents[i];
+      const rowNum = i + 2; // CSV row number (header is row 1)
+
       try {
-        console.log(`👤 Processing: ${parentData.parentName} (${parentData.parentEmail})`);
-        
-        // Validate
+        console.log(`\n👤 Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
+
+        // Validate required fields
         if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
           console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
-          results.errors.push({ 
-            email: parentData.parentEmail || 'unknown', 
-            error: 'Missing required fields' 
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail || 'N/A',
+            error: 'Missing required fields (ParentName, ParentEmail, or StudentEmail)'
           });
           continue;
         }
 
-        // Check if parent already exists
-        const existingParent = await User.findOne({ email: parentData.parentEmail });
-        if (existingParent) {
-          console.log(`⚠️  Skipping - Parent email already exists`);
+        // Validate email formats
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(parentData.parentEmail)) {
+          console.log(`⚠️  Skipping - Invalid parent email format`);
           results.failed++;
-          results.errors.push({ 
-            email: parentData.parentEmail, 
-            error: 'Email already registered' 
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: 'Invalid parent email format'
           });
           continue;
         }
 
-        // Find student to link
-        const student = await User.findOne({ email: parentData.studentEmail });
+        if (!emailRegex.test(parentData.studentEmail)) {
+          console.log(`⚠️  Skipping - Invalid student email format`);
+          results.failed++;
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: 'Invalid student email format'
+          });
+          continue;
+        }
+
+        // Find the student by email
+        const student = await User.findOne({ 
+          email: parentData.studentEmail.toLowerCase().trim(),
+          role: 'Student'
+        });
+
         if (!student) {
           console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
           results.failed++;
-          results.errors.push({ 
-            email: parentData.parentEmail, 
-            error: `Student not found: ${parentData.studentEmail}` 
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: `Student not found with email: ${parentData.studentEmail}. Please import students first.`
           });
           continue;
         }
 
-        // Generate password
-        const tempPassword = generateTempPassword('Parent');
-        console.log(`🔑 Generated password: ${tempPassword}`);
-        
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        console.log(`✅ Found student: ${student.name} (${student.email})`);
 
-        // ✅ Parse date of birth properly
-        let parsedDateOfBirth = null;
-        if (parentData.dateOfBirth) {
-          try {
-            const dateStr = parentData.dateOfBirth.trim();
-            if (dateStr.includes('-')) {
-              parsedDateOfBirth = new Date(dateStr);
-            } else if (dateStr.includes('/')) {
-              const parts = dateStr.split('/');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1;
-                const year = parseInt(parts[2]);
-                parsedDateOfBirth = new Date(year, month, day);
-              }
-            }
-            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              parsedDateOfBirth = null;
-            }
-          } catch (error) {
-            parsedDateOfBirth = null;
+        // Check if parent already exists
+        const existingParent = await User.findOne({ 
+          email: parentData.parentEmail.toLowerCase().trim()
+        });
+
+        if (existingParent) {
+          // Parent exists - just add student link if not already linked
+          console.log(`ℹ️  Parent already exists: ${existingParent.email}`);
+
+          // Initialize linkedStudents array if it doesn't exist
+          if (!existingParent.linkedStudents) {
+            existingParent.linkedStudents = [];
           }
+
+          // Check if already linked to this student
+          const alreadyLinked = existingParent.linkedStudents.some(
+            link => link.studentEmail === student.email
+          );
+
+          if (alreadyLinked) {
+            console.log(`ℹ️  Parent already linked to student ${student.email}`);
+            results.details.push({
+              row: rowNum,
+              parentName: existingParent.name,
+              parentEmail: existingParent.email,
+              studentEmail: student.email,
+              status: 'already_linked',
+              message: 'Parent already linked to this student'
+            });
+          } else {
+            // Add new student link
+            existingParent.linkedStudents.push({
+              studentId: student._id,
+              studentName: student.name,
+              studentEmail: student.email,
+              relationship: parentData.relationship || 'Parent',
+              gradeLevel: student.gradeLevel,
+              class: student.class
+            });
+
+            await existingParent.save();
+
+            // Update student's parentEmail if not already set
+            if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
+              student.parentEmail = parentData.parentEmail.toLowerCase().trim();
+              await student.save();
+            }
+
+            console.log(`✅ Linked existing parent to new student`);
+            results.updated++;
+            
+            results.details.push({
+              row: rowNum,
+              parentName: existingParent.name,
+              parentEmail: existingParent.email,
+              studentEmail: student.email,
+              studentName: student.name,
+              relationship: parentData.relationship,
+              status: 'linked',
+              message: 'Existing parent linked to student'
+            });
+          }
+
+          continue;
         }
 
-        // Create parent
-        const parent = await User.create({
-          name: parentData.parentName,
-          email: parentData.parentEmail,
+        // Parent doesn't exist - create new parent account
+        const tempPassword = generateTempPassword('Parent');
+        console.log(`🔑 Generated password for new parent: ${tempPassword}`);
+
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+        // Create new parent with linkedStudents array
+        const newParent = await User.create({
+          name: parentData.parentName.trim(),
+          email: parentData.parentEmail.toLowerCase().trim(),
           password: hashedPassword,
           role: 'Parent',
-          linkedStudents: [{
-            studentId: student._id,
-            relationship: parentData.relationship
-          }],
-          // ✅ NEW FIELDS
-          contact: parentData.contact || null,
-          gender: parentData.gender ? parentData.gender.toLowerCase() : null,
-          date_of_birth: parsedDateOfBirth,
+          linkedStudents: [
+            {
+              studentId: student._id,
+              studentName: student.name,
+              studentEmail: student.email,
+              relationship: parentData.relationship || 'Parent',
+              gradeLevel: student.gradeLevel,
+              class: student.class
+            }
+          ],
           emailVerified: true,
           accountActive: true,
           createdBy: 'school-admin',
-          isTrialUser: false
+          createdAt: new Date()
         });
 
-        console.log(`✅ Parent created and linked to ${student.name}`);
+        console.log(`✅ Created new parent: ${newParent.email}`);
         results.created++;
 
-        // Send welcome email
-        console.log(`📧 Sending welcome email to ${parent.email}...`);
-        
-        const emailResult = await sendParentWelcomeEmail(
-          parent,
-          tempPassword,
-          student.name,
-          'Your School'
-        );
+        // Update student's parentEmail
+        if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
+          student.parentEmail = parentData.parentEmail.toLowerCase().trim();
+          await student.save();
+          console.log(`✅ Updated student's parentEmail field`);
+        }
 
-        if (emailResult.success) {
-          console.log(`✅ Email sent successfully`);
+        // Send welcome email to parent
+        try {
+          await sendParentWelcomeEmail(
+            newParent,
+            tempPassword,
+            student.name,
+            'Your School'
+          );
+          console.log(`📧 Sent welcome email to: ${newParent.email}`);
           results.emailsSent++;
-        } else {
-          console.log(`❌ Email failed: ${emailResult.error}`);
+        } catch (emailError) {
+          console.error(`❌ Failed to send email to parent:`, emailError.message);
           results.emailsFailed++;
         }
 
-        console.log('');
+        results.details.push({
+          row: rowNum,
+          parentName: newParent.name,
+          parentEmail: newParent.email,
+          studentEmail: student.email,
+          studentName: student.name,
+          relationship: parentData.relationship,
+          password: tempPassword,
+          status: 'created',
+          message: 'New parent account created and linked to student'
+        });
 
       } catch (error) {
-        console.error(`❌ Error processing ${parentData.parentEmail}:`, error.message);
+        console.error(`❌ Error processing row ${rowNum}:`, error);
         results.failed++;
-        results.errors.push({ 
-          email: parentData.parentEmail, 
-          error: error.message 
+        results.errors.push({
+          row: rowNum,
+          parentEmail: parentData.parentEmail || 'N/A',
+          error: error.message
         });
       }
     }
 
+    // Clean up uploaded file
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Temporary CSV file deleted\n');
 
-    console.log('📊 BULK IMPORT SUMMARY:');
-    console.log(`   ✅ Created: ${results.created}`);
-    console.log(`   ❌ Failed: ${results.failed}`);
-    console.log(`   📧 Emails Sent: ${results.emailsSent}`);
-    console.log(`   ⚠️  Emails Failed: ${results.emailsFailed}\n`);
+    console.log('\n✅ Parent bulk import completed!');
+    console.log(`   Created: ${results.created}`);
+    console.log(`   Updated (linked): ${results.updated}`);
+    console.log(`   Failed: ${results.failed}`);
+    console.log(`   Emails sent: ${results.emailsSent}`);
+    console.log(`   Emails failed: ${results.emailsFailed}\n`);
 
+    // Return summary
     res.json({
       success: true,
-      message: `${results.created} parents created successfully`,
-      results: results
+      message: `Parent import completed: ${results.created} created, ${results.updated} updated, ${results.failed} failed`,
+      summary: {
+        totalRows: parents.length,
+        created: results.created,
+        updated: results.updated,
+        failed: results.failed,
+        emailsSent: results.emailsSent,
+        emailsFailed: results.emailsFailed
+      },
+      details: results.details,
+      errors: results.errors.length > 0 ? results.errors : undefined
     });
 
   } catch (error) {
-    console.error('❌ Bulk import error:', error);
+    console.error('❌ Bulk import parents error:', error);
+    
+    // Clean up uploaded file if it exists
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    res.status(500).json({ error: 'Failed to process CSV file' });
+
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to import parents: ' + error.message 
+    });
   }
 });
 
-// ==================== SCHOOL ADMIN USER MANAGEMENT ROUTES ====================
-// Added by WX to try School Admin Dashboard functionality
-
-// ==================== 1. DASHBOARD STATS ====================
-router.get('/dashboard-stats', authenticateToken, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    // Count users by role (handle both lowercase and capitalized)
-    const totalStudents = await usersCollection.countDocuments({ 
-      role: { $in: ['student', 'Student'] }
-    });
-    
-    const totalTeachers = await usersCollection.countDocuments({ 
-      role: { $in: ['teacher', 'Teacher'] }
-    });
-    
-    const totalParents = await usersCollection.countDocuments({ 
-      role: { $in: ['parent', 'Parent'] }
-    });
-    
-    // Count classes (unique class values for Primary 1)
-    const classes = await usersCollection.distinct('class', { 
-      gradeLevel: 'Primary 1'
-    });
-    const totalClasses = classes.filter(c => c).length;
-    
-    res.json({
-      success: true,
-      total_students: totalStudents,
-      total_teachers: totalTeachers,
-      total_parents: totalParents,
-      total_classes: totalClasses
-    });
-  } catch (error) {
-    console.error('Dashboard stats error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load dashboard stats' });
-  }
-});
-
-// ==================== 2. GET ALL USERS ====================
-router.get('/users', authenticateToken, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    // Filter by grade and subject if provided
-    const filter = {};
-    if (req.query.gradeLevel) {
-      filter.gradeLevel = req.query.gradeLevel;
-    }
-    if (req.query.subject) {
-      filter.subject = req.query.subject;
-    }
-    
-    const users = await usersCollection.find(filter).toArray();
-    
-    // Normalize field names for frontend
-    const normalizedUsers = users.map(user => ({
-      id: user._id.toString(),
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: (user.role || '').toLowerCase(),
-      gradeLevel: user.gradeLevel,
-      subject: user.subject,
-      class: user.class,
-      isActive: user.is_active !== undefined ? user.is_active : user.accountActive,
-      created_at: user.created_at || user.createdAt
-    }));
-    
-    res.json({ success: true, users: normalizedUsers });
-  } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load users' });
-  }
-});
-
-// ==================== 3. CREATE USER MANUALLY ====================
+// ==================== MANUAL CREATE USER ====================
 router.post('/users/manual', authenticateToken, async (req, res) => {
   try {
-    const { name, email, password, role, gender, gradeLevel, subject } = req.body;
+    const { name, email, password, role, gradeLevel, subject, gender } = req.body;
     
-    // Validation
     if (!name || !email || !password || !role) {
       return res.status(400).json({ 
         success: false, 
@@ -740,11 +759,8 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
       });
     }
     
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
     // Check if email already exists
-    const existingUser = await usersCollection.findOne({ email });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({ 
         success: false, 
@@ -753,33 +769,30 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
     }
     
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Create user document (UNIFIED SCHEMA)
-    const newUser = {
+    // Create user
+    const newUser = await User.create({
       name,
       email,
-      password_hash: passwordHash,
-      role: role.toLowerCase(),
+      password: hashedPassword,
+      role: role,
       gender: gender || null,
       gradeLevel: gradeLevel || 'Primary 1',
       subject: subject || 'Mathematics',
-      class: null,
-      is_active: true,
-      approval_status: 'approved',
-      created_at: new Date(),
+      emailVerified: true,
+      accountActive: true,
       createdBy: 'school-admin',
-      last_login: null
-    };
-    
-    const result = await usersCollection.insertOne(newUser);
+    });
     
     res.status(201).json({
       success: true,
       message: 'User created successfully',
       user: {
-        id: result.insertedId.toString(),
-        ...newUser
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
       }
     });
   } catch (error) {
@@ -788,17 +801,12 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 4. DELETE USER ====================
+// ==================== DELETE USER ====================
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
+    const result = await User.findByIdAndDelete(req.params.id);
     
-    const result = await usersCollection.deleteOne({ 
-      _id: new mongoose.Types.ObjectId(req.params.id) 
-    });
-    
-    if (result.deletedCount === 0) {
+    if (!result) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -809,25 +817,18 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 5. UPDATE USER STATUS (ENABLE/DISABLE) ====================
+// ==================== UPDATE USER STATUS ====================
 router.put('/users/:id/status', authenticateToken, async (req, res) => {
   try {
     const { isActive } = req.body;
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
     
-    // Update both field names for compatibility
-    const result = await usersCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
-      { 
-        $set: { 
-          is_active: isActive,
-          accountActive: isActive
-        } 
-      }
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { accountActive: isActive },
+      { new: true }
     );
     
-    if (result.matchedCount === 0) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -838,28 +839,26 @@ router.put('/users/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 6. UPDATE USER ROLE ====================
+// ==================== UPDATE USER ROLE ====================
 router.put('/users/:id/role', authenticateToken, async (req, res) => {
   try {
     const { role } = req.body;
     
-    // SECURITY: Prevent promotion to school-admin
-    if (role.toLowerCase() === 'school-admin') {
+    // Security check
+    if (role === 'School Admin') {
       return res.status(403).json({ 
         success: false, 
         error: 'Cannot assign school-admin role' 
       });
     }
     
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    const result = await usersCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
-      { $set: { role: role.toLowerCase() } }
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role: role },
+      { new: true }
     );
     
-    if (result.matchedCount === 0) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -870,7 +869,7 @@ router.put('/users/:id/role', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 7. RESET USER PASSWORD ====================
+// ==================== RESET USER PASSWORD ====================
 router.put('/users/:id/password', authenticateToken, async (req, res) => {
   try {
     const { password } = req.body;
@@ -882,22 +881,15 @@ router.put('/users/:id/password', authenticateToken, async (req, res) => {
       });
     }
     
-    const passwordHash = await bcrypt.hash(password, 10);
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Update both field names for compatibility
-    const result = await usersCollection.updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
-      { 
-        $set: { 
-          password_hash: passwordHash,
-          password: passwordHash
-        } 
-      }
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { password: hashedPassword },
+      { new: true }
     );
     
-    if (result.matchedCount === 0) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
@@ -908,29 +900,26 @@ router.put('/users/:id/password', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 8. GET CLASSES ====================
+// ==================== GET CLASSES ====================
 router.get('/classes', authenticateToken, async (req, res) => {
   try {
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    
-    // Get unique classes for Primary 1
-    const classes = await usersCollection.aggregate([
-      { $match: { gradeLevel: 'Primary 1', class: { $ne: null } } },
+    // Get unique classes
+    const classes = await User.aggregate([
+      { $match: { role: 'Student', class: { $ne: null } } },
       { $group: { 
-        _id: '$class',
+        _id: { class: '$class', gradeLevel: '$gradeLevel' },
         studentCount: { $sum: 1 }
       }},
       { $project: {
         _id: 0,
-        id: '$_id',
-        name: '$_id',
-        grade: 'Primary 1',
+        id: '$_id.class',
+        name: '$_id.class',
+        grade: '$_id.gradeLevel',
         subject: 'Mathematics',
         students: '$studentCount',
         teacher: 'Not assigned'
       }}
-    ]).toArray();
+    ]);
     
     res.json({ success: true, classes });
   } catch (error) {
@@ -939,7 +928,7 @@ router.get('/classes', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== 9. CREATE CLASS ====================
+// ==================== CREATE CLASS ====================
 router.post('/classes', authenticateToken, async (req, res) => {
   try {
     const { name, grade, subject } = req.body;
@@ -948,8 +937,6 @@ router.post('/classes', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Class name is required' });
     }
     
-    // For now, just acknowledge creation
-    // Classes are managed through user's class field
     res.status(201).json({
       success: true,
       message: 'Class created successfully',
@@ -967,7 +954,5 @@ router.post('/classes', authenticateToken, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to create class' });
   }
 });
-
-// ==================== END OF WEI XIANG'S ADDITIONS ====================
 
 module.exports = router;
