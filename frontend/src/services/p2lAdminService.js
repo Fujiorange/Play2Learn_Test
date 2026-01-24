@@ -1,6 +1,8 @@
 // P2LAdmin Service - API calls for platform admin
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 // Helper to get auth token
 const getAuthToken = () => {

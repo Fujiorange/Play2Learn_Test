@@ -76,7 +76,7 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
     if (!email || !password) return res.status(400).json({ success: false, error: 'Email and password are required' });
 
     const user = await User.findOne({ email: email.toLowerCase() });
@@ -91,6 +91,8 @@ router.post('/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
+    // Role is automatically determined from the database, not from user input
+    // This improves security by preventing role spoofing attempts
     const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
     return res.json({

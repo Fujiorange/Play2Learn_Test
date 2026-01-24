@@ -16,12 +16,12 @@ class AuthService {
     }
   }
 
-  async login(email, password, role) {
+  async login(email, password) {
     try {
       const res = await fetch(`${API_URL}/mongo/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (data.success) {
