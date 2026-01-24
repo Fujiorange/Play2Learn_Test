@@ -84,6 +84,15 @@ import DisableUser from './components/SchoolAdmin/DisableUser';
 import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
 import PointsManagement from './components/SchoolAdmin/PointsManagement';
 
+// P2LAdmin Components
+import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
+import SchoolManagement from './components/P2LAdmin/SchoolManagement';
+import SchoolAdminManagement from './components/P2LAdmin/SchoolAdminManagement';
+import QuestionBank from './components/P2LAdmin/QuestionBank';
+import QuizManager from './components/P2LAdmin/QuizManager';
+import LandingPageManager from './components/P2LAdmin/LandingPageManager';
+import HealthCheck from './components/P2LAdmin/HealthCheck';
+
 function App() {
   return (
     <Router>
@@ -183,6 +192,15 @@ function App() {
           <Route path="/school-admin/users/disable" element={<DisableUser />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
+
+          {/* ========== P2LADMIN ROUTES ========== */}
+          <Route path="/p2ladmin/dashboard" element={<P2LAdminDashboard />} />
+          <Route path="/p2ladmin/schools" element={<SchoolManagement />} />
+          <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
+          <Route path="/p2ladmin/questions" element={<QuestionBank />} />
+          <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
+          <Route path="/p2ladmin/landing-page" element={<LandingPageManager />} />
+          <Route path="/p2ladmin/health" element={<HealthCheck />} />
 
         </Routes>
       </div>
