@@ -53,8 +53,12 @@ console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔗 MongoDB:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
 
 mongoose
-  .connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('✅ MongoDB Connected Successfully!'))
+  .connect(MONGODB_URI)
+  .then(() => {
+    console.log('✅ MongoDB Connected Successfully!');
+    console.log('📊 Database:', mongoose.connection.db.databaseName);
+    console.log('🏢 Host:', mongoose.connection.host);
+  })
   .catch((err) => {
     console.error('❌ MongoDB Connection Failed:', err.message);
     process.exit(1);
