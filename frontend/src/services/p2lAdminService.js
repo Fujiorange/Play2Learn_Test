@@ -57,6 +57,15 @@ export const registerP2LAdmin = async (credentials) => {
     });
 
     const data = await response.json();
+    
+    // Check HTTP status and return appropriate response
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `Request failed with status ${response.status}`
+      };
+    }
+    
     return data;
   } catch (error) {
     console.error('Registration API error:', error);

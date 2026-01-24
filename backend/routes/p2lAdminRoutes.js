@@ -93,6 +93,10 @@ router.post('/seed', async (req, res) => {
  * Validates email format and password strength
  * Hashes password securely with bcrypt
  * Sets admin field (role) to 'p2ladmin'
+ * 
+ * Security Note: This endpoint should be protected with rate limiting
+ * in production to prevent brute force attacks and spam registrations.
+ * Consider adding express-rate-limit middleware.
  */
 router.post('/register-admin', async (req, res) => {
   try {
