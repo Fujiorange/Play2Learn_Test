@@ -80,6 +80,8 @@ import ManageClasses from './components/SchoolAdmin/ManageClasses';
 import ProvidePermission from './components/SchoolAdmin/ProvidePermission';
 import ResetPassword from './components/SchoolAdmin/ResetPassword';
 import DisableUser from './components/SchoolAdmin/DisableUser';
+import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
+import PointsManagement from './components/SchoolAdmin/PointsManagement';
 
 function App() {
   return (
@@ -171,7 +173,8 @@ function App() {
           <Route path="/school-admin/users/permissions" element={<ProvidePermission />} />
           <Route path="/school-admin/users/reset-password" element={<ResetPassword />} />
           <Route path="/school-admin/users/disable" element={<DisableUser />} />
-
+          <Route path="/school-admin/badges" element={<BadgeManagement />} />
+          <Route path="/school-admin/points" element={<PointsManagement />} />
           
         </Routes>
       </div>

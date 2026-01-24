@@ -614,3 +614,446 @@
 .sa-mb-4 {
   margin-bottom: 24px;
 }
+/* ========================================
+   BADGE & POINTS MANAGEMENT STYLES
+   Add this to the bottom of SchoolAdmin.css
+   ======================================== */
+
+/* ========== BADGE MANAGEMENT ========== */
+.badge-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.badge-card {
+  transition: all 0.2s;
+}
+
+.badge-card-disabled {
+  opacity: 0.6;
+  background: #f8fafc;
+}
+
+.badge-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.badge-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.badge-info {
+  flex: 1;
+}
+
+.badge-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.badge-description {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.badge-meta {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.badge-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Badge Rarity Colors */
+.badge-rarity-common {
+  background: #9ca3af;
+  color: white;
+}
+
+.badge-rarity-rare {
+  background: #3b82f6;
+  color: white;
+}
+
+.badge-rarity-epic {
+  background: #8b5cf6;
+  color: white;
+}
+
+.badge-rarity-legendary {
+  background: #f59e0b;
+  color: white;
+}
+
+/* Icon Grid */
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 8px;
+}
+
+.icon-option {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-option:hover {
+  border-color: #10b981;
+}
+
+.icon-option-selected {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.criteria-help {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ========== POINTS MANAGEMENT ========== */
+.points-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  background: white;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
+}
+
+.points-tab {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: #6b7280;
+  font-family: inherit;
+}
+
+.points-tab:hover {
+  background: #f3f4f6;
+}
+
+.points-tab-active {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.points-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.points-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+}
+
+.points-value {
+  font-weight: 700;
+  color: #10b981;
+}
+
+.points-positive {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.points-negative {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+/* Rule Row */
+.rule-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rule-row:last-child {
+  border-bottom: none;
+}
+
+.rule-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.rule-disabled {
+  color: #9ca3af;
+}
+
+.rule-points {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+}
+
+.points-input {
+  width: 80px;
+  padding: 8px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+  font-family: inherit;
+}
+
+.points-input:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+.points-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  width: 48px;
+  height: 26px;
+  background: #e5e7eb;
+  border-radius: 13px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-switch.toggle-active {
+  background: #10b981;
+}
+
+.toggle-knob {
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.toggle-active .toggle-knob {
+  left: 24px;
+}
+
+/* Shop Grid */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.shop-card {
+  text-align: center;
+}
+
+.shop-card-disabled {
+  opacity: 0.5;
+}
+
+.shop-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.shop-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.shop-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.shop-meta {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.shop-tag {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shop-tag-cost {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.shop-tag-type {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.shop-tag-booster {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.shop-stats {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.shop-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* Booster Active Badge */
+.booster-active {
+  background: #f0fdf4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #16a34a;
+  font-weight: 600;
+}
+
+/* Adjust Points Modal */
+.student-info-box {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.student-points {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.adjustment-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.amount-button {
+  padding: 12px 20px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background: white;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.amount-button:hover {
+  border-color: #10b981;
+}
+
+.amount-button-selected {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.amount-positive {
+  color: #16a34a;
+}
+
+.amount-negative {
+  color: #dc2626;
+}
+
+.new-balance {
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.new-balance strong {
+  color: #10b981;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+  .badge-page-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .icon-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .points-tabs {
+    flex-wrap: wrap;
+  }
+
+  .points-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sa-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

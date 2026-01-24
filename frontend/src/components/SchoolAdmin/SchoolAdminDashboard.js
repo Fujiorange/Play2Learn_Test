@@ -243,6 +243,34 @@ export default function SchoolAdminDashboard() {
               </li>
             </ul>
           </div>
+
+          {/* Gamification */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionIcon}>🎮</span>
+              <h2 style={styles.sectionTitle}>Gamification</h2>
+            </div>
+            <ul style={styles.menuList}>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'badges' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('badges')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/badges')}
+              >
+                <span>🏆 Manage Badges</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'points' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('points')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/points')}
+              >
+                <span>💰 Points & Shop</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </main>
     </div>
