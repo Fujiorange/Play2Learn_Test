@@ -1,5 +1,6 @@
-// backend/routes/schoolAdminRoutes.js - FIXED VERSION
-// Queries USERS collection correctly for dashboard stats
+// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH PARENT CSV IMPORT
+// ✅ Queries USERS collection correctly for dashboard stats
+// ✅ Parent CSV import with linkedStudents integration
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -259,56 +260,54 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
               parsedDateOfBirth = null;
             }
           } catch (error) {
+            console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}`);
             parsedDateOfBirth = null;
           }
         }
 
-        // Normalize gender value
-        const normalizedGender = studentData.gender ? studentData.gender.toLowerCase() : null;
-
-        // ✅ Create ONLY user account (no duplicate student profile!)
-        const student = await User.create({
-          name: studentData.name,
-          email: studentData.email,
+        // ✅ Create ONLY user document in 'users' collection
+        const newUser = await User.create({
+          name: studentData.name.trim(),
+          email: studentData.email.toLowerCase().trim(),
           username: username,
           password: hashedPassword,
           role: 'Student',
-          class: studentData.class || null,
-          gradeLevel: studentData.gradeLevel || 'Primary 1',
-          contact: studentData.contact || null,
-          gender: normalizedGender,
-          date_of_birth: parsedDateOfBirth,
+          class: studentData.class?.trim() || null,
+          gradeLevel: studentData.gradeLevel?.trim() || 'Primary 1',
+          parentEmail: studentData.parentEmail?.toLowerCase().trim() || null,
+          contact: studentData.contact?.trim() || null,
+          gender: studentData.gender?.trim() || null,
+          dateOfBirth: parsedDateOfBirth,
           emailVerified: true,
           accountActive: true,
           createdBy: 'school-admin',
-          isTrialUser: false
+          createdAt: new Date()
         });
 
-        console.log(`✅ Student created: ${student.name} (${student.email})`);
+        console.log(`✅ Student created in users collection: ${newUser.email}`);
         results.created++;
 
-        // Send credentials to parent if email provided
+        // Send credentials email to parent if parentEmail exists
         if (studentData.parentEmail) {
-          console.log(`📧 Sending credentials to parent: ${studentData.parentEmail}...`);
-          
-          const emailResult = await sendStudentCredentialsToParent(
-            student,
-            tempPassword,
-            studentData.parentEmail,
-            'Your School'
-          );
-
-          if (emailResult.success) {
-            console.log(`✅ Email sent to parent`);
+          try {
+            await sendStudentCredentialsToParent(
+              studentData.parentEmail,
+              studentData.name,
+              studentData.email,
+              tempPassword
+            );
+            console.log(`📧 Sent credentials to parent: ${studentData.parentEmail}`);
             results.emailsSent++;
-          } else {
-            console.log(`❌ Failed to send email to parent`);
+          } catch (emailError) {
+            console.error(`❌ Failed to send email to parent:`, emailError.message);
             results.emailsFailed++;
           }
+        } else {
+          results.emailsFailed++;
         }
 
       } catch (error) {
-        console.error(`❌ Error creating student ${studentData.email}:`, error);
+        console.error(`❌ Error creating student:`, error);
         results.failed++;
         results.errors.push({ 
           email: studentData.email, 
@@ -317,7 +316,6 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
       }
     }
 
-    // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
     console.log('\n✅ Bulk import completed!');
@@ -334,17 +332,10 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
 
   } catch (error) {
     console.error('❌ Bulk import error:', error);
-    
-    // Clean up uploaded file
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    
-    res.status(500).json({ 
-      success: false, 
-      error: 'Bulk import failed',
-      details: error.message 
-    });
+    res.status(500).json({ success: false, error: 'Bulk import failed' });
   }
 });
 
@@ -374,8 +365,8 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
             name: row.Name || row.name || '',
             email: row.Email || row.email || '',
             subject: row.Subject || row.subject || 'Mathematics',
-            contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
-            gender: row.Gender || row.gender || '',
+            contact: row.ContactNumber || row.contactNumber || row.contact || '',
+            gender: row.Gender || row.gender || ''
           });
         })
         .on('end', () => {
@@ -409,32 +400,31 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
         const tempPassword = generateTempPassword('Teacher');
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        const teacher = await User.create({
-          name: teacherData.name,
-          email: teacherData.email,
+        const newTeacher = await User.create({
+          name: teacherData.name.trim(),
+          email: teacherData.email.toLowerCase().trim(),
           password: hashedPassword,
           role: 'Teacher',
-          subject: teacherData.subject || 'Mathematics',
-          contact: teacherData.contact || null,
-          gender: teacherData.gender ? teacherData.gender.toLowerCase() : null,
+          subject: teacherData.subject?.trim() || 'Mathematics',
+          contact: teacherData.contact?.trim() || null,
+          gender: teacherData.gender?.trim() || null,
           emailVerified: true,
           accountActive: true,
-          createdBy: 'school-admin',
+          createdBy: 'school-admin'
         });
 
-        console.log(`✅ Teacher created: ${teacher.name}`);
+        console.log(`✅ Teacher created: ${newTeacher.email}`);
         results.created++;
 
-        // Send welcome email
-        const emailResult = await sendTeacherWelcomeEmail(
-          teacher,
-          tempPassword,
-          'Your School'
-        );
-
-        if (emailResult.success) {
+        try {
+          await sendTeacherWelcomeEmail(
+            newTeacher,
+            tempPassword,
+            'Your School'
+          );
           results.emailsSent++;
-        } else {
+        } catch (emailError) {
+          console.error(`❌ Failed to send email:`, emailError.message);
           results.emailsFailed++;
         }
 
@@ -465,132 +455,295 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
   }
 });
 
-// ==================== BULK IMPORT PARENTS ====================
+// ==================== BULK IMPORT PARENTS (COMPLETE VERSION WITH LINKEDSTUDENTS) ====================
 router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import parents request received');
   
   if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
+    return res.status(400).json({ success: false, error: 'No file uploaded' });
   }
 
+  console.log('📄 Parsing CSV file...');
+  
   const parents = [];
   const results = {
     created: 0,
+    updated: 0,
     failed: 0,
     emailsSent: 0,
     emailsFailed: 0,
-    errors: []
+    errors: [],
+    details: []
   };
 
   try {
+    // Parse CSV
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
           parents.push({
-            name: row.Name || row.name || '',
-            email: row.Email || row.email || '',
+            parentName: row.ParentName || row.parentName || row['Parent Name'] || '',
+            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || '',
             studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || '',
-            contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
-            relationship: row.Relationship || row.relationship || 'Parent',
+            relationship: row.Relationship || row.relationship || 'Parent'
           });
         })
         .on('end', () => {
-          console.log(`✅ Found ${parents.length} parents in CSV`);
+          console.log(`✅ Found ${parents.length} parent records in CSV`);
           resolve();
         })
-        .on('error', reject);
+        .on('error', (error) => {
+          console.error('❌ CSV parsing error:', error);
+          reject(error);
+        });
     });
 
-    for (const parentData of parents) {
+    console.log('\n🔄 Processing parents...\n');
+
+    // Process each parent
+    for (let i = 0; i < parents.length; i++) {
+      const parentData = parents[i];
+      const rowNum = i + 2; // CSV row number (header is row 1)
+
       try {
-        if (!parentData.name || !parentData.email) {
+        console.log(`\n👤 Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
+
+        // Validate required fields
+        if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
-          results.errors.push({ 
-            email: parentData.email || 'unknown', 
-            error: 'Missing required fields' 
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail || 'N/A',
+            error: 'Missing required fields (ParentName, ParentEmail, or StudentEmail)'
           });
           continue;
         }
 
-        const existingUser = await User.findOne({ email: parentData.email });
-        if (existingUser) {
+        // Validate email formats
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(parentData.parentEmail)) {
+          console.log(`⚠️  Skipping - Invalid parent email format`);
           results.failed++;
-          results.errors.push({ 
-            email: parentData.email, 
-            error: 'Email already registered' 
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: 'Invalid parent email format'
           });
           continue;
         }
 
-        // Find linked student
-        let linkedStudent = null;
-        if (parentData.studentEmail) {
-          linkedStudent = await User.findOne({ 
-            email: parentData.studentEmail, 
-            role: 'Student' 
+        if (!emailRegex.test(parentData.studentEmail)) {
+          console.log(`⚠️  Skipping - Invalid student email format`);
+          results.failed++;
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: 'Invalid student email format'
           });
+          continue;
         }
 
+        // Find the student by email
+        const student = await User.findOne({ 
+          email: parentData.studentEmail.toLowerCase().trim(),
+          role: 'Student'
+        });
+
+        if (!student) {
+          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
+          results.failed++;
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: `Student not found with email: ${parentData.studentEmail}. Please import students first.`
+          });
+          continue;
+        }
+
+        console.log(`✅ Found student: ${student.name} (${student.email})`);
+
+        // Check if parent already exists
+        const existingParent = await User.findOne({ 
+          email: parentData.parentEmail.toLowerCase().trim()
+        });
+
+        if (existingParent) {
+          // Parent exists - just add student link if not already linked
+          console.log(`ℹ️  Parent already exists: ${existingParent.email}`);
+
+          // Initialize linkedStudents array if it doesn't exist
+          if (!existingParent.linkedStudents) {
+            existingParent.linkedStudents = [];
+          }
+
+          // Check if already linked to this student
+          const alreadyLinked = existingParent.linkedStudents.some(
+            link => link.studentEmail === student.email
+          );
+
+          if (alreadyLinked) {
+            console.log(`ℹ️  Parent already linked to student ${student.email}`);
+            results.details.push({
+              row: rowNum,
+              parentName: existingParent.name,
+              parentEmail: existingParent.email,
+              studentEmail: student.email,
+              status: 'already_linked',
+              message: 'Parent already linked to this student'
+            });
+          } else {
+            // Add new student link
+            existingParent.linkedStudents.push({
+              studentId: student._id,
+              studentName: student.name,
+              studentEmail: student.email,
+              relationship: parentData.relationship || 'Parent',
+              gradeLevel: student.gradeLevel,
+              class: student.class
+            });
+
+            await existingParent.save();
+
+            // Update student's parentEmail if not already set
+            if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
+              student.parentEmail = parentData.parentEmail.toLowerCase().trim();
+              await student.save();
+            }
+
+            console.log(`✅ Linked existing parent to new student`);
+            results.updated++;
+            
+            results.details.push({
+              row: rowNum,
+              parentName: existingParent.name,
+              parentEmail: existingParent.email,
+              studentEmail: student.email,
+              studentName: student.name,
+              relationship: parentData.relationship,
+              status: 'linked',
+              message: 'Existing parent linked to student'
+            });
+          }
+
+          continue;
+        }
+
+        // Parent doesn't exist - create new parent account
         const tempPassword = generateTempPassword('Parent');
+        console.log(`🔑 Generated password for new parent: ${tempPassword}`);
+
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        const parent = await User.create({
-          name: parentData.name,
-          email: parentData.email,
+        // Create new parent with linkedStudents array
+        const newParent = await User.create({
+          name: parentData.parentName.trim(),
+          email: parentData.parentEmail.toLowerCase().trim(),
           password: hashedPassword,
           role: 'Parent',
-          contact: parentData.contact || null,
-          linkedStudents: linkedStudent ? [{
-            studentId: linkedStudent._id,
-            relationship: parentData.relationship || 'Parent'
-          }] : [],
+          linkedStudents: [
+            {
+              studentId: student._id,
+              studentName: student.name,
+              studentEmail: student.email,
+              relationship: parentData.relationship || 'Parent',
+              gradeLevel: student.gradeLevel,
+              class: student.class
+            }
+          ],
           emailVerified: true,
           accountActive: true,
           createdBy: 'school-admin',
+          createdAt: new Date()
         });
 
-        console.log(`✅ Parent created: ${parent.name}`);
+        console.log(`✅ Created new parent: ${newParent.email}`);
         results.created++;
 
-        // Send welcome email
-        const emailResult = await sendParentWelcomeEmail(
-          parent,
-          tempPassword,
-          linkedStudent ? linkedStudent.name : 'Your Child',
-          'Your School'
-        );
+        // Update student's parentEmail
+        if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
+          student.parentEmail = parentData.parentEmail.toLowerCase().trim();
+          await student.save();
+          console.log(`✅ Updated student's parentEmail field`);
+        }
 
-        if (emailResult.success) {
+        // Send welcome email to parent
+        try {
+          await sendParentWelcomeEmail(
+            newParent,
+            tempPassword,
+            student.name,
+            'Your School'
+          );
+          console.log(`📧 Sent welcome email to: ${newParent.email}`);
           results.emailsSent++;
-        } else {
+        } catch (emailError) {
+          console.error(`❌ Failed to send email to parent:`, emailError.message);
           results.emailsFailed++;
         }
 
+        results.details.push({
+          row: rowNum,
+          parentName: newParent.name,
+          parentEmail: newParent.email,
+          studentEmail: student.email,
+          studentName: student.name,
+          relationship: parentData.relationship,
+          password: tempPassword,
+          status: 'created',
+          message: 'New parent account created and linked to student'
+        });
+
       } catch (error) {
-        console.error(`❌ Error creating parent:`, error);
+        console.error(`❌ Error processing row ${rowNum}:`, error);
         results.failed++;
-        results.errors.push({ 
-          email: parentData.email, 
-          error: error.message 
+        results.errors.push({
+          row: rowNum,
+          parentEmail: parentData.parentEmail || 'N/A',
+          error: error.message
         });
       }
     }
 
+    // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
+    console.log('\n✅ Parent bulk import completed!');
+    console.log(`   Created: ${results.created}`);
+    console.log(`   Updated (linked): ${results.updated}`);
+    console.log(`   Failed: ${results.failed}`);
+    console.log(`   Emails sent: ${results.emailsSent}`);
+    console.log(`   Emails failed: ${results.emailsFailed}\n`);
+
+    // Return summary
     res.json({
       success: true,
-      message: 'Bulk import completed',
-      results
+      message: `Parent import completed: ${results.created} created, ${results.updated} updated, ${results.failed} failed`,
+      summary: {
+        totalRows: parents.length,
+        created: results.created,
+        updated: results.updated,
+        failed: results.failed,
+        emailsSent: results.emailsSent,
+        emailsFailed: results.emailsFailed
+      },
+      details: results.details,
+      errors: results.errors.length > 0 ? results.errors : undefined
     });
 
   } catch (error) {
-    console.error('❌ Bulk import error:', error);
+    console.error('❌ Bulk import parents error:', error);
+    
+    // Clean up uploaded file if it exists
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    res.status(500).json({ success: false, error: 'Bulk import failed' });
+
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to import parents: ' + error.message 
+    });
   }
 });
 
