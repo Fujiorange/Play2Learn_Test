@@ -10,6 +10,28 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Helper function to normalize and route based on role
+  const navigateByRole = (role) => {
+    const normalizedRole = role.toLowerCase().replace(/[\s-]/g, '');
+    
+    const roleRoutes = {
+      'platformadmin': '/platform-admin',
+      'p2ladmin': '/platform-admin',
+      'schooladmin': '/school-admin',
+      'teacher': '/teacher',
+      'student': '/student',
+      'parent': '/parent'
+    };
+    
+    const route = roleRoutes[normalizedRole];
+    if (route) {
+      navigate(route);
+    } else {
+      console.log('⚠️ Unknown role:', role);
+      navigate('/login');
+    }
+  };
+
   const handleSubmit = async () => {
     setError('');
 
@@ -31,25 +53,7 @@ export default function LoginPage() {
         console.log('✅ Login successful!');
         console.log('👤 User role:', result.user.role);
         
-        // Redirect based on user role (case-insensitive)
-        const userRole = result.user.role.toLowerCase();
-        
-        console.log('🔀 Navigating to:', userRole);
-        
-        if (userRole === 'platform-admin' || userRole === 'platform admin' || userRole === 'p2ladmin') {
-          navigate('/platform-admin');
-        } else if (userRole === 'school-admin' || userRole === 'school admin') {
-          navigate('/school-admin');
-        } else if (userRole === 'teacher') {
-          navigate('/teacher');
-        } else if (userRole === 'student') {
-          navigate('/student');
-        } else if (userRole === 'parent') {
-          navigate('/parent');
-        } else {
-          console.log('⚠️ Unknown role:', userRole);
-          navigate('/login');
-        }
+        navigateByRole(result.user.role);
       } else {
         console.log('❌ Login failed:', result.error);
         setError(result.error || 'Login failed');
