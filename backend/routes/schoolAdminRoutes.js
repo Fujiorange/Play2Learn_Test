@@ -9,6 +9,7 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const School = require('../models/School');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
@@ -33,6 +34,31 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Middleware to verify school admin role
+const authenticateSchoolAdmin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    
+    if (!user || user.role !== 'school-admin') {
+      return res.status(403).json({ success: false, error: 'Access restricted to school admins' });
+    }
+    
+    req.user = decoded;
+    req.schoolAdmin = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: 'Invalid token' });
+  }
+};
+
 // ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
 
@@ -40,10 +66,52 @@ const upload = multer({ dest: 'uploads/' });
 function generateTempPassword(userType) {
   const crypto = require('crypto');
   const prefix = userType.substring(0, 3).toUpperCase();
-  const year = new Date().getFullYear();
-  const random = crypto.randomBytes(3).toString('hex');
-  const special = '!';
-  return `${prefix}${year}${random}${special}`;
+  const random = crypto.randomBytes(2).toString('hex'); // 4 random chars
+  const specialChars = '!@#$%^&*';
+  const special = specialChars[Math.floor(Math.random() * specialChars.length)];
+  return `${prefix}${random}${special}`;
+}
+
+// ==================== LICENSE CHECKING HELPER ====================
+async function checkLicenseAvailability(schoolId, role) {
+  const school = await School.findById(schoolId);
+  
+  if (!school) {
+    return { available: false, error: 'School not found' };
+  }
+  
+  if (!school.is_active) {
+    return { available: false, error: 'School is not active' };
+  }
+  
+  if (role === 'Teacher') {
+    const currentTeachers = school.current_teachers || 0;
+    const teacherLimit = school.plan_info.teacher_limit;
+    
+    if (currentTeachers >= teacherLimit) {
+      return { 
+        available: false, 
+        error: `Teacher limit reached (${currentTeachers}/${teacherLimit}). Please upgrade your plan.` 
+      };
+    }
+    return { available: true, school };
+  }
+  
+  if (role === 'Student') {
+    const currentStudents = school.current_students || 0;
+    const studentLimit = school.plan_info.student_limit;
+    
+    if (currentStudents >= studentLimit) {
+      return { 
+        available: false, 
+        error: `Student limit reached (${currentStudents}/${studentLimit}). Please upgrade your plan.` 
+      };
+    }
+    return { available: true, school };
+  }
+  
+  // Parent or other roles don't have limits
+  return { available: true, school };
 }
 
 // ==================== DASHBOARD STATS (FIXED!) ====================
@@ -157,11 +225,20 @@ router.get('/users', authenticateToken, async (req, res) => {
 });
 
 // ==================== BULK IMPORT STUDENTS (FIXED - NO DUPLICATE PROFILE) ====================
-router.post('/bulk-import-students', upload.single('file'), async (req, res) => {
+router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import students request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  // Get school admin's school
+  const schoolAdmin = req.schoolAdmin;
+  if (!schoolAdmin.schoolId) {
+    return res.status(400).json({
+      success: false,
+      error: 'School admin must be associated with a school'
+    });
   }
 
   console.log('📄 Parsing CSV file...');
@@ -208,6 +285,18 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
     for (const studentData of students) {
       try {
         console.log(`👤 Processing: ${studentData.name} (${studentData.email})`);
+        
+        // Check license availability before processing
+        const licenseCheck = await checkLicenseAvailability(schoolAdmin.schoolId, 'Student');
+        if (!licenseCheck.available) {
+          console.log(`⚠️  License limit reached`);
+          results.failed++;
+          results.errors.push({ 
+            email: studentData.email || 'unknown', 
+            error: licenseCheck.error
+          });
+          break; // Stop processing remaining students
+        }
         
         // Validate required fields
         if (!studentData.name || !studentData.email) {
@@ -273,6 +362,7 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
           username: username,
           password: hashedPassword,
           role: 'Student',
+          schoolId: schoolAdmin.schoolId,
           class: studentData.class?.trim() || null,
           gradeLevel: studentData.gradeLevel?.trim() || 'Primary 1',
           parentEmail: studentData.parentEmail?.toLowerCase().trim() || null,
@@ -287,15 +377,25 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
 
         console.log(`✅ Student created in users collection: ${newUser.email}`);
         results.created++;
+        
+        // Update school's student count
+        const school = await School.findById(schoolAdmin.schoolId);
+        if (school) {
+          school.current_students = (school.current_students || 0) + 1;
+          await school.save();
+        }
 
         // ✅ FIXED: Send credentials email with correct parameter order
         if (studentData.parentEmail) {
           try {
+            const schoolData = await School.findById(schoolAdmin.schoolId);
+            const schoolName = schoolData ? schoolData.organization_name : 'Your School';
+            
             await sendStudentCredentialsToParent(
               newUser,                    // 1. student object (has .name, .email, .class)
               tempPassword,               // 2. tempPassword string
               studentData.parentEmail,    // 3. parentEmail string
-              'Your School'               // 4. schoolName string
+              schoolName                  // 4. schoolName string
             );
             console.log(`📧 Sent credentials to parent: ${studentData.parentEmail}`);
             results.emailsSent++;
@@ -341,11 +441,20 @@ router.post('/bulk-import-students', upload.single('file'), async (req, res) => 
 });
 
 // ==================== BULK IMPORT TEACHERS ====================
-router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => {
+router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import teachers request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  // Get school admin's school
+  const schoolAdmin = req.schoolAdmin;
+  if (!schoolAdmin.schoolId) {
+    return res.status(400).json({
+      success: false,
+      error: 'School admin must be associated with a school'
+    });
   }
 
   const teachers = [];
@@ -379,6 +488,18 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
 
     for (const teacherData of teachers) {
       try {
+        // Check license availability before processing
+        const licenseCheck = await checkLicenseAvailability(schoolAdmin.schoolId, 'Teacher');
+        if (!licenseCheck.available) {
+          console.log(`⚠️  License limit reached`);
+          results.failed++;
+          results.errors.push({ 
+            email: teacherData.email || 'unknown', 
+            error: licenseCheck.error
+          });
+          break; // Stop processing remaining teachers
+        }
+        
         if (!teacherData.name || !teacherData.email) {
           results.failed++;
           results.errors.push({ 
@@ -406,6 +527,7 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
           email: teacherData.email.toLowerCase().trim(),
           password: hashedPassword,
           role: 'Teacher',
+          schoolId: schoolAdmin.schoolId,
           subject: teacherData.subject?.trim() || 'Mathematics',
           contact: teacherData.contact?.trim() || null,
           gender: teacherData.gender?.trim() || null,
@@ -416,12 +538,22 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
 
         console.log(`✅ Teacher created: ${newTeacher.email}`);
         results.created++;
+        
+        // Update school's teacher count
+        const school = await School.findById(schoolAdmin.schoolId);
+        if (school) {
+          school.current_teachers = (school.current_teachers || 0) + 1;
+          await school.save();
+        }
 
         try {
+          const schoolData = await School.findById(schoolAdmin.schoolId);
+          const schoolName = schoolData ? schoolData.organization_name : 'Your School';
+          
           await sendTeacherWelcomeEmail(
             newTeacher,
             tempPassword,
-            'Your School'
+            schoolName
           );
           results.emailsSent++;
         } catch (emailError) {
@@ -457,7 +589,7 @@ router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => 
 });
 
 // ==================== BULK IMPORT PARENTS (COMPLETE VERSION WITH LINKEDSTUDENTS) ====================
-router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
+router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
   console.log('\n📤 Bulk import parents request received');
   
   if (!req.file) {
@@ -749,15 +881,35 @@ router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
 });
 
 // ==================== MANUAL CREATE USER ====================
-router.post('/users/manual', authenticateToken, async (req, res) => {
+router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { name, email, password, role, gradeLevel, subject, gender } = req.body;
+    const { name, email, role, gradeLevel, subject, gender, class: className, parentEmail } = req.body;
     
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !role) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Name, email, password, and role are required' 
+        error: 'Name, email, and role are required' 
       });
+    }
+    
+    // Get school admin's school
+    const schoolAdmin = req.schoolAdmin;
+    if (!schoolAdmin.schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'School admin must be associated with a school'
+      });
+    }
+    
+    // Check license availability for teachers and students
+    if (role === 'Teacher' || role === 'Student') {
+      const licenseCheck = await checkLicenseAvailability(schoolAdmin.schoolId, role);
+      if (!licenseCheck.available) {
+        return res.status(403).json({
+          success: false,
+          error: licenseCheck.error
+        });
+      }
     }
     
     // Check if email already exists
@@ -769,8 +921,11 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
       });
     }
     
+    // Generate temporary password
+    const tempPassword = generateTempPassword(role);
+    
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
     
     // Create user
     const newUser = await User.create({
@@ -778,13 +933,43 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
       email,
       password: hashedPassword,
       role: role,
+      schoolId: schoolAdmin.schoolId,
       gender: gender || null,
-      gradeLevel: gradeLevel || 'Primary 1',
-      subject: subject || 'Mathematics',
+      gradeLevel: gradeLevel || (role === 'Student' ? 'Primary 1' : null),
+      subject: subject || (role === 'Teacher' ? 'Mathematics' : null),
+      class: className || null,
       emailVerified: true,
       accountActive: true,
       createdBy: 'school-admin',
     });
+    
+    // Update school's current teacher/student count
+    if (role === 'Teacher' || role === 'Student') {
+      const school = await School.findById(schoolAdmin.schoolId);
+      if (school) {
+        if (role === 'Teacher') {
+          school.current_teachers = (school.current_teachers || 0) + 1;
+        } else if (role === 'Student') {
+          school.current_students = (school.current_students || 0) + 1;
+        }
+        await school.save();
+      }
+    }
+    
+    // Send credentials via email
+    try {
+      const schoolData = await School.findById(schoolAdmin.schoolId);
+      const schoolName = schoolData ? schoolData.organization_name : 'Your School';
+      
+      if (role === 'Teacher') {
+        await sendTeacherWelcomeEmail(newUser, tempPassword, schoolName);
+      } else if (role === 'Student' && parentEmail) {
+        await sendStudentCredentialsToParent(newUser, tempPassword, parentEmail, schoolName);
+      }
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Continue even if email fails - user is still created
+    }
     
     res.status(201).json({
       success: true,
@@ -794,6 +979,7 @@ router.post('/users/manual', authenticateToken, async (req, res) => {
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
+        tempPassword: tempPassword // Return temp password so admin can share it if email fails
       }
     });
   } catch (error) {
