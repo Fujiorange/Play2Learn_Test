@@ -8,18 +8,9 @@ const School = require('../models/School');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
+const { generateTempPassword } = require('../utils/passwordGenerator');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
-
-// Password generator for school admins
-function generateTempPassword(userType) {
-  const crypto = require('crypto');
-  const prefix = userType.substring(0, 3).toUpperCase();
-  const random = crypto.randomBytes(2).toString('hex'); // 4 random chars
-  const specialChars = '!@#$%^&*';
-  const special = specialChars[Math.floor(Math.random() * specialChars.length)];
-  return `${prefix}${random}${special}`;
-}
 
 // Middleware to authenticate P2L Admins
 const authenticateP2LAdmin = async (req, res, next) => {

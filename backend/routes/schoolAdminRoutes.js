@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const School = require('../models/School');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
+const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
@@ -61,16 +62,6 @@ const authenticateSchoolAdmin = async (req, res, next) => {
 
 // ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
-
-// ==================== PASSWORD GENERATOR ====================
-function generateTempPassword(userType) {
-  const crypto = require('crypto');
-  const prefix = userType.substring(0, 3).toUpperCase();
-  const random = crypto.randomBytes(2).toString('hex'); // 4 random chars
-  const specialChars = '!@#$%^&*';
-  const special = specialChars[Math.floor(Math.random() * specialChars.length)];
-  return `${prefix}${random}${special}`;
-}
 
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {
@@ -249,7 +240,8 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     failed: 0,
     emailsSent: 0,
     emailsFailed: 0,
-    errors: []
+    errors: [],
+    limitReached: false
   };
 
   try {
@@ -289,13 +281,14 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         // Check license availability before processing
         const licenseCheck = await checkLicenseAvailability(schoolAdmin.schoolId, 'Student');
         if (!licenseCheck.available) {
-          console.log(`⚠️  License limit reached`);
+          console.log(`⚠️  License limit reached - stopping bulk import`);
+          results.limitReached = true;
           results.failed++;
           results.errors.push({ 
             email: studentData.email || 'unknown', 
-            error: licenseCheck.error
+            error: `${licenseCheck.error}. Import stopped at student ${results.created + 1} of ${students.length}.`
           });
-          break; // Stop processing remaining students
+          break; // Stop processing remaining students when limit is reached
         }
         
         // Validate required fields
@@ -425,10 +418,15 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     console.log(`   Emails sent: ${results.emailsSent}`);
     console.log(`   Emails failed: ${results.emailsFailed}\n`);
 
+    const message = results.limitReached 
+      ? `Bulk import partially completed. License limit reached after creating ${results.created} student(s).`
+      : 'Bulk import completed';
+
     res.json({
       success: true,
-      message: 'Bulk import completed',
-      results
+      message: message,
+      results,
+      warning: results.limitReached ? 'Student license limit reached. Please upgrade your plan to add more students.' : null
     });
 
   } catch (error) {
@@ -463,7 +461,8 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
     failed: 0,
     emailsSent: 0,
     emailsFailed: 0,
-    errors: []
+    errors: [],
+    limitReached: false
   };
 
   try {
@@ -491,13 +490,14 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
         // Check license availability before processing
         const licenseCheck = await checkLicenseAvailability(schoolAdmin.schoolId, 'Teacher');
         if (!licenseCheck.available) {
-          console.log(`⚠️  License limit reached`);
+          console.log(`⚠️  License limit reached - stopping bulk import`);
+          results.limitReached = true;
           results.failed++;
           results.errors.push({ 
             email: teacherData.email || 'unknown', 
-            error: licenseCheck.error
+            error: `${licenseCheck.error}. Import stopped at teacher ${results.created + 1} of ${teachers.length}.`
           });
-          break; // Stop processing remaining teachers
+          break; // Stop processing remaining teachers when limit is reached
         }
         
         if (!teacherData.name || !teacherData.email) {
@@ -573,10 +573,15 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
 
     fs.unlinkSync(req.file.path);
 
+    const message = results.limitReached 
+      ? `Bulk import partially completed. License limit reached after creating ${results.created} teacher(s).`
+      : 'Bulk import completed';
+
     res.json({
       success: true,
-      message: 'Bulk import completed',
-      results
+      message: message,
+      results,
+      warning: results.limitReached ? 'Teacher license limit reached. Please upgrade your plan to add more teachers.' : null
     });
 
   } catch (error) {
