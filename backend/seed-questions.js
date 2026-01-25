@@ -511,11 +511,19 @@ async function seedQuestions() {
     console.log('✅ Seeding completed successfully!');
     console.log('==================================\n');
     
+    await mongoose.connection.close();
+    console.log('✅ Database connection closed\n');
     process.exit(0);
   } catch (error) {
     console.error('\n==================================');
     console.error('❌ Seeding failed:', error.message);
     console.error('==================================\n');
+    
+    try {
+      await mongoose.connection.close();
+    } catch (closeError) {
+      console.error('Error closing connection:', closeError.message);
+    }
     process.exit(1);
   }
 }
