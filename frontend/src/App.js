@@ -1,6 +1,6 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
 // Landing Page Components
@@ -196,6 +196,8 @@ function App() {
           <Route path="/school-admin/points" element={<PointsManagement />} />
 
           {/* ========== P2LADMIN ROUTES ========== */}
+          {/* Redirect /platform-admin to /p2ladmin/dashboard */}
+          <Route path="/platform-admin" element={<Navigate to="/p2ladmin/dashboard" replace />} />
           <Route path="/p2ladmin/dashboard" element={<P2LAdminDashboard />} />
           <Route path="/p2ladmin/schools" element={<SchoolManagement />} />
           <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
