@@ -6,8 +6,8 @@ const questionSchema = new mongoose.Schema({
   answer: { type: String, required: true },
   difficulty: { 
     type: Number, 
-    enum: [1, 2, 3], 
-    default: 2,
+    enum: [1, 2, 3, 4, 5], 
+    default: 3,
     required: true 
   },
   subject: { type: String, default: 'General' },

@@ -1,7 +1,7 @@
 // Quiz Manager Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuizzes, createQuiz, getQuestions } from '../../services/p2lAdminService';
+import { getQuizzes, createQuiz, updateQuiz, deleteQuiz, getQuestions } from '../../services/p2lAdminService';
 import './QuizManager.css';
 
 function QuizManager() {
@@ -9,6 +9,7 @@ function QuizManager() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -55,9 +56,15 @@ function QuizManager() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await createQuiz(formData);
-      alert('Quiz created successfully');
+      if (editingQuiz) {
+        await updateQuiz(editingQuiz._id, formData);
+        alert('Quiz updated successfully');
+      } else {
+        await createQuiz(formData);
+        alert('Quiz created successfully');
+      }
       setShowForm(false);
+      setEditingQuiz(null);
       setFormData({
         title: '',
         description: '',
@@ -66,9 +73,45 @@ function QuizManager() {
       });
       fetchData();
     } catch (error) {
-      console.error('Failed to create quiz:', error);
-      alert(error.message || 'Failed to create quiz');
+      console.error('Failed to save quiz:', error);
+      alert(error.message || 'Failed to save quiz');
     }
+  };
+
+  const handleEdit = (quiz) => {
+    setEditingQuiz(quiz);
+    setFormData({
+      title: quiz.title,
+      description: quiz.description || '',
+      question_ids: quiz.questions?.map(q => q.question_id?._id || q.question_id) || [],
+      is_adaptive: quiz.is_adaptive !== undefined ? quiz.is_adaptive : true
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this quiz?')) {
+      return;
+    }
+    try {
+      await deleteQuiz(id);
+      alert('Quiz deleted successfully');
+      fetchData();
+    } catch (error) {
+      console.error('Failed to delete quiz:', error);
+      alert(error.message || 'Failed to delete quiz');
+    }
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingQuiz(null);
+    setFormData({
+      title: '',
+      description: '',
+      question_ids: [],
+      is_adaptive: true
+    });
   };
 
   if (loading) {
@@ -90,7 +133,7 @@ function QuizManager() {
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content large">
-            <h2>Create New Quiz</h2>
+            <h2>{editingQuiz ? 'Edit Quiz' : 'Create New Quiz'}</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>Quiz Title *</label>
@@ -148,8 +191,10 @@ function QuizManager() {
               </div>
 
               <div className="form-actions">
-                <button type="submit" className="btn-submit">Create Quiz</button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-cancel">
+                <button type="submit" className="btn-submit">
+                  {editingQuiz ? 'Update Quiz' : 'Create Quiz'}
+                </button>
+                <button type="button" onClick={cancelForm} className="btn-cancel">
                   Cancel
                 </button>
               </div>
@@ -169,6 +214,14 @@ function QuizManager() {
               <div className="quiz-meta">
                 <p>Questions: {quiz.questions?.length || 0}</p>
                 <p>Type: {quiz.is_adaptive ? '🎯 Adaptive' : '📝 Standard'}</p>
+              </div>
+              <div className="card-actions">
+                <button onClick={() => handleEdit(quiz)} className="btn-edit">
+                  Edit
+                </button>
+                <button onClick={() => handleDelete(quiz._id)} className="btn-delete">
+                  Delete
+                </button>
               </div>
             </div>
           ))

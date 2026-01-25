@@ -14,7 +14,7 @@ function QuestionBank() {
     text: '',
     choices: ['', '', '', ''],
     answer: '',
-    difficulty: 2,
+    difficulty: 3,
     subject: 'General',
     topic: ''
   });
@@ -112,19 +112,19 @@ function QuestionBank() {
       text: '',
       choices: ['', '', '', ''],
       answer: '',
-      difficulty: 2,
+      difficulty: 3,
       subject: 'General',
       topic: ''
     });
   };
 
   const getDifficultyLabel = (level) => {
-    const labels = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
+    const labels = { 1: 'Level 1', 2: 'Level 2', 3: 'Level 3', 4: 'Level 4', 5: 'Level 5' };
     return labels[level] || 'Unknown';
   };
 
   const getDifficultyClass = (level) => {
-    const classes = { 1: 'easy', 2: 'medium', 3: 'hard' };
+    const classes = { 1: 'level-1', 2: 'level-2', 3: 'level-3', 4: 'level-4', 5: 'level-5' };
     return classes[level] || '';
   };
 
@@ -152,9 +152,11 @@ function QuestionBank() {
             onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
           >
             <option value="">All</option>
-            <option value="1">Easy</option>
-            <option value="2">Medium</option>
-            <option value="3">Hard</option>
+            <option value="1">Level 1</option>
+            <option value="2">Level 2</option>
+            <option value="3">Level 3</option>
+            <option value="4">Level 4</option>
+            <option value="5">Level 5</option>
           </select>
         </div>
 
@@ -235,9 +237,11 @@ function QuestionBank() {
                     onChange={handleInputChange}
                     required
                   >
-                    <option value={1}>Easy</option>
-                    <option value={2}>Medium</option>
-                    <option value={3}>Hard</option>
+                    <option value={1}>Level 1</option>
+                    <option value={2}>Level 2</option>
+                    <option value={3}>Level 3</option>
+                    <option value={4}>Level 4</option>
+                    <option value={5}>Level 5</option>
                   </select>
                 </div>
 

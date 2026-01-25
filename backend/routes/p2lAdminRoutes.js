@@ -7,6 +7,7 @@ const User = require('../models/User');
 const School = require('../models/School');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
+const LandingPage = require('../models/LandingPage');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 
@@ -135,14 +136,34 @@ router.post('/register-admin', async (req, res) => {
 // ==================== Default Health Check Endpoint ====================
 router.get('/health', async (req, res) => {
   try {
-    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    const dbState = mongoose.connection.readyState;
+    const dbStatus = dbState === 1 ? 'connected' : 'disconnected';
+    const isConnected = dbState === 1;
+    
     res.json({
-      status: 'success',
-      database: dbStatus,
-      timestamp: new Date().toISOString(),
+      success: true,
+      status: 'healthy',
+      database: {
+        status: dbStatus,
+        connected: isConnected,
+        type: 'MongoDB'
+      },
+      environment: process.env.NODE_ENV || 'development',
+      server: {
+        environment: process.env.NODE_ENV || 'development',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+      },
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Health check failed' });
+    console.error('Health check error:', err);
+    return res.status(500).json({ 
+      success: false,
+      status: 'unhealthy',
+      error: 'Health check failed' 
+    });
   }
 });
 
@@ -742,6 +763,137 @@ router.post('/quizzes/run', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to run quiz' 
+    });
+  }
+});
+
+// ==================== LANDING PAGE MANAGEMENT ROUTES ====================
+
+// Get landing page
+router.get('/landing', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Get the active landing page or the most recent one
+    let landingPage = await LandingPage.findOne({ is_active: true });
+    
+    if (!landingPage) {
+      // If no active page, get the most recent one
+      landingPage = await LandingPage.findOne().sort({ createdAt: -1 });
+    }
+    
+    if (!landingPage) {
+      // If no landing page exists at all, return empty structure
+      return res.json({
+        success: true,
+        blocks: [],
+        message: 'No landing page found'
+      });
+    }
+
+    res.json({
+      success: true,
+      blocks: landingPage.blocks || [],
+      id: landingPage._id,
+      is_active: landingPage.is_active,
+      version: landingPage.version
+    });
+  } catch (error) {
+    console.error('Get landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch landing page' 
+    });
+  }
+});
+
+// Create/Save landing page
+router.post('/landing', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { blocks } = req.body;
+    
+    if (!blocks || !Array.isArray(blocks)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'blocks array is required' 
+      });
+    }
+
+    // Deactivate all existing landing pages
+    await LandingPage.updateMany({}, { is_active: false });
+
+    // Create new landing page
+    const landingPage = new LandingPage({
+      blocks,
+      is_active: true,
+      version: 1,
+      updated_by: req.user._id
+    });
+
+    await landingPage.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Landing page saved successfully',
+      data: landingPage
+    });
+  } catch (error) {
+    console.error('Save landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to save landing page' 
+    });
+  }
+});
+
+// Update landing page
+router.put('/landing/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { blocks } = req.body;
+    
+    const landingPage = await LandingPage.findById(req.params.id);
+    if (!landingPage) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Landing page not found' 
+      });
+    }
+
+    // Update the landing page
+    landingPage.blocks = blocks || landingPage.blocks;
+    landingPage.version = (landingPage.version || 1) + 1;
+    landingPage.updated_by = req.user._id;
+
+    await landingPage.save();
+
+    res.json({
+      success: true,
+      message: 'Landing page updated successfully',
+      data: landingPage
+    });
+  } catch (error) {
+    console.error('Update landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update landing page' 
+    });
+  }
+});
+
+// Delete landing page
+router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Delete all landing pages or just the active one
+    const result = await LandingPage.deleteMany({ is_active: true });
+    
+    res.json({
+      success: true,
+      message: 'Landing page(s) deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Delete landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete landing page' 
     });
   }
 });
