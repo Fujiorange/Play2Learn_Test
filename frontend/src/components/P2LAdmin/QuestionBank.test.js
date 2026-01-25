@@ -4,7 +4,7 @@ import QuestionBank from './QuestionBank';
 
 // Mock p2lAdminService
 jest.mock('../../services/p2lAdminService', () => ({
-  getQuestions: jest.fn(() => Promise.resolve({ questions: [] })),
+  getQuestions: jest.fn(() => Promise.resolve({ data: [] })),
   createQuestion: jest.fn(),
   updateQuestion: jest.fn(),
   deleteQuestion: jest.fn()

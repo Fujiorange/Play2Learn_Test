@@ -4,7 +4,7 @@ import SchoolManagement from './SchoolManagement';
 
 // Mock p2lAdminService
 jest.mock('../../services/p2lAdminService', () => ({
-  getSchools: jest.fn(() => Promise.resolve({ schools: [] })),
+  getSchools: jest.fn(() => Promise.resolve({ data: [] })),
   createSchool: jest.fn(),
   updateSchool: jest.fn(),
   deleteSchool: jest.fn()
