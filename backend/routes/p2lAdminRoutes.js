@@ -29,6 +29,14 @@ const authenticateP2LAdmin = async (req, res, next) => {
 // Public endpoint - allows creation of admin accounts
 router.post('/register-admin', async (req, res) => {
   try {
+    // Check MongoDB connection status
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database connection unavailable. Please try again later.' 
+      });
+    }
+
     const { email, password, name } = req.body;
     
     // Validate required fields
@@ -96,9 +104,23 @@ router.post('/register-admin', async (req, res) => {
     });
   } catch (err) {
     console.error('Admin registration error:', err);
+    
+    // Provide more specific error messages
+    let errorMessage = 'An error occurred during registration';
+    
+    if (err.name === 'MongoNetworkError' || err.name === 'MongoTimeoutError') {
+      errorMessage = 'Database connection error. Please try again later.';
+    } else if (err.code === 11000) {
+      // Duplicate key error (email already exists, but caught by validation)
+      errorMessage = 'Email already registered';
+    } else if (err.message) {
+      // Log the actual error for debugging but don't expose internal details
+      console.error('Detailed error:', err.message, err.stack);
+    }
+    
     res.status(500).json({ 
       success: false, 
-      error: 'An error occurred during registration' 
+      error: errorMessage 
     });
   }
 });
