@@ -157,9 +157,14 @@ function QuizManager() {
           <h1>Adaptive Quiz Manager</h1>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          + Create Quiz
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Link to="/p2ladmin/quizzes/create-adaptive" className="btn-primary">
+            + Create Adaptive Quiz
+          </Link>
+          <button onClick={() => setShowForm(true)} className="btn-primary">
+            + Create Quiz
+          </button>
+        </div>
       </header>
 
       {showForm && (

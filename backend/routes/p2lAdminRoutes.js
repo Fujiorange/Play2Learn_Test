@@ -858,47 +858,89 @@ router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Run adaptive quiz
-// NOTE: This endpoint currently returns the full quiz structure.
-// Adaptive quiz logic (selecting questions based on student performance) 
-// should be implemented in a future iteration. For now, this serves as a
-// placeholder to load quiz data for execution.
-router.post('/quizzes/run', authenticateP2LAdmin, async (req, res) => {
+// Generate adaptive quiz with specific difficulty distribution
+router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { quizId, studentId } = req.body;
+    const { title, description, difficulty_distribution, target_correct, difficulty_progression } = req.body;
     
-    if (!quizId) {
+    if (!title) {
       return res.status(400).json({ 
         success: false, 
-        error: 'quizId is required' 
+        error: 'title is required' 
       });
     }
 
-    const quiz = await Quiz.findById(quizId).populate('questions.question_id');
-    if (!quiz) {
-      return res.status(404).json({ 
+    // difficulty_distribution should be like: { 1: 10, 2: 10, 3: 10 }
+    // meaning 10 questions of difficulty 1, 10 of difficulty 2, etc.
+    if (!difficulty_distribution || typeof difficulty_distribution !== 'object') {
+      return res.status(400).json({ 
         success: false, 
-        error: 'Quiz not found' 
+        error: 'difficulty_distribution is required and must be an object' 
       });
     }
 
-    // Return the quiz with all questions
-    // Future enhancement: implement adaptive logic to select questions based on student's ability level
-    res.json({
-      success: true,
-      message: 'Quiz loaded for execution',
-      data: {
-        quiz_id: quiz._id,
-        title: quiz.title,
-        is_adaptive: quiz.is_adaptive,
-        questions: quiz.questions
+    const questions = [];
+    
+    // Fetch questions for each difficulty level
+    for (const [difficulty, count] of Object.entries(difficulty_distribution)) {
+      const diff = parseInt(difficulty);
+      const questionCount = parseInt(count);
+      
+      if (questionCount > 0) {
+        const availableQuestions = await Question.find({ 
+          difficulty: diff,
+          is_active: true 
+        });
+        
+        if (availableQuestions.length < questionCount) {
+          return res.status(400).json({ 
+            success: false, 
+            error: `Not enough questions available for difficulty ${diff}. Need ${questionCount}, have ${availableQuestions.length}` 
+          });
+        }
+        
+        // Randomly select questions
+        const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, questionCount);
+        
+        selected.forEach(q => {
+          questions.push({
+            question_id: q._id,
+            text: q.text,
+            choices: q.choices,
+            answer: q.answer,
+            difficulty: q.difficulty
+          });
+        });
       }
+    }
+
+    const quiz = new Quiz({
+      title,
+      description: description || '',
+      questions,
+      is_adaptive: true,
+      is_active: true,
+      adaptive_config: {
+        target_correct_answers: target_correct || 10,
+        difficulty_progression: difficulty_progression || 'gradual',
+        starting_difficulty: 1
+      },
+      created_by: req.user._id
+    });
+
+    await quiz.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Adaptive quiz created successfully',
+      data: quiz
     });
   } catch (error) {
-    console.error('Run quiz error:', error);
+    console.error('Generate adaptive quiz error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to run quiz' 
+      error: 'Failed to generate adaptive quiz' 
     });
   }
 });

@@ -91,8 +91,13 @@ import SchoolManagement from './components/P2LAdmin/SchoolManagement';
 import SchoolAdminManagement from './components/P2LAdmin/SchoolAdminManagement';
 import QuestionBank from './components/P2LAdmin/QuestionBank';
 import QuizManager from './components/P2LAdmin/QuizManager';
+import AdaptiveQuizCreator from './components/P2LAdmin/AdaptiveQuizCreator';
 import LandingPageManager from './components/P2LAdmin/LandingPageManager';
 import HealthCheck from './components/P2LAdmin/HealthCheck';
+
+// Student Adaptive Quiz Components
+import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
+import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 
 function App() {
   return (
@@ -159,6 +164,10 @@ function App() {
           <Route path="/student/quiz/take" element={<TakeQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
 
+          {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
+          <Route path="/student/adaptive-quizzes" element={<AdaptiveQuizzes />} />
+          <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
+
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
           <Route path="/student/testimonial" element={<StudentWriteTestimonial />} />
@@ -203,6 +212,7 @@ function App() {
           <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
           <Route path="/p2ladmin/questions" element={<QuestionBank />} />
           <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
+          <Route path="/p2ladmin/quizzes/create-adaptive" element={<AdaptiveQuizCreator />} />
           <Route path="/p2ladmin/landing-page" element={<LandingPageManager />} />
           <Route path="/p2ladmin/health" element={<HealthCheck />} />
 
