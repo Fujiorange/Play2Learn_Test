@@ -286,14 +286,13 @@ router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
 // Get school admins
 router.get('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
   try {
-    const db = mongoose.connection.db;
     const schoolId = req.params.id;
 
     // Find users who are school-admins for this school
-    const admins = await db.collection('users').find({
-      school_id: new mongoose.Types.ObjectId(schoolId),
+    const admins = await User.find({
+      school_id: schoolId,
       role: 'school-admin'
-    }).toArray();
+    }).select('-password');
 
     res.json({
       success: true,
@@ -679,7 +678,11 @@ router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Run adaptive quiz (placeholder for adaptive quiz logic)
+// Run adaptive quiz
+// NOTE: This endpoint currently returns the full quiz structure.
+// Adaptive quiz logic (selecting questions based on student performance) 
+// should be implemented in a future iteration. For now, this serves as a
+// placeholder to load quiz data for execution.
 router.post('/quizzes/run', authenticateP2LAdmin, async (req, res) => {
   try {
     const { quizId, studentId } = req.body;
@@ -699,8 +702,8 @@ router.post('/quizzes/run', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    // TODO: Implement adaptive quiz logic
-    // For now, return the quiz with all questions
+    // Return the quiz with all questions
+    // Future enhancement: implement adaptive logic to select questions based on student's ability level
     res.json({
       success: true,
       message: 'Quiz loaded for execution',
