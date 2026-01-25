@@ -148,14 +148,11 @@ router.get('/health', async (req, res) => {
         connected: isConnected,
         type: 'MongoDB'
       },
-      environment: process.env.NODE_ENV || 'development',
       server: {
         environment: process.env.NODE_ENV || 'development',
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
-      },
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString()
+      }
     });
   } catch (err) {
     console.error('Health check error:', err);

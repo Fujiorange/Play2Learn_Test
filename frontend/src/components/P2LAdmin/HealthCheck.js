@@ -70,14 +70,14 @@ function HealthCheck() {
 
           <div className="health-card">
             <h3>🌍 Environment</h3>
-            <p className="status-value">{health?.environment || 'Unknown'}</p>
+            <p className="status-value">{health?.server?.environment || 'Unknown'}</p>
           </div>
 
           <div className="health-card">
             <h3>⏱️ Server Uptime</h3>
             <p className="status-value">
-              {health?.uptime 
-                ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m`
+              {health?.server?.uptime 
+                ? `${Math.floor(health.server.uptime / 3600)}h ${Math.floor((health.server.uptime % 3600) / 60)}m`
                 : 'N/A'
               }
             </p>
