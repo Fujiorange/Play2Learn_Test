@@ -45,6 +45,60 @@
   margin-bottom: 20px;
 }
 
+.warning-message {
+  background-color: #fef3c7;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.warning-message div {
+  margin: 4px 0;
+}
+
+.info-message {
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.info-message strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.info-message p {
+  margin: 8px 0;
+}
+
+.info-message ul {
+  margin: 8px 0 8px 20px;
+}
+
+.info-message li {
+  margin: 4px 0;
+}
+
+.info-message a {
+  color: #1e40af;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.info-message code {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
 .creator-container {
   display: grid;
   grid-template-columns: 1fr 350px;

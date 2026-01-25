@@ -444,6 +444,42 @@ router.get('/questions', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Get question statistics (counts by difficulty)
+router.get('/questions-stats', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const stats = {};
+    
+    // Count active questions for each difficulty level
+    for (let difficulty = 1; difficulty <= 5; difficulty++) {
+      const count = await Question.countDocuments({ 
+        difficulty, 
+        is_active: true 
+      });
+      stats[difficulty] = count;
+    }
+    
+    // Also get total count
+    const totalActive = await Question.countDocuments({ is_active: true });
+    const totalInactive = await Question.countDocuments({ is_active: false });
+    
+    res.json({
+      success: true,
+      data: {
+        byDifficulty: stats,
+        totalActive,
+        totalInactive,
+        total: totalActive + totalInactive
+      }
+    });
+  } catch (error) {
+    console.error('Get question stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch question statistics' 
+    });
+  }
+});
+
 // Get single question
 router.get('/questions/:id', authenticateP2LAdmin, async (req, res) => {
   try {
@@ -880,8 +916,44 @@ router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res)
     }
 
     const questions = [];
+    const missingQuestions = [];
     
-    // Fetch questions for each difficulty level
+    // First, check availability for all difficulty levels
+    for (const [difficulty, count] of Object.entries(difficulty_distribution)) {
+      const diff = parseInt(difficulty);
+      const questionCount = parseInt(count);
+      
+      if (questionCount > 0) {
+        const availableCount = await Question.countDocuments({ 
+          difficulty: diff,
+          is_active: true 
+        });
+        
+        if (availableCount < questionCount) {
+          missingQuestions.push({
+            difficulty: diff,
+            needed: questionCount,
+            available: availableCount,
+            missing: questionCount - availableCount
+          });
+        }
+      }
+    }
+    
+    // If any difficulty level doesn't have enough questions, return detailed error
+    if (missingQuestions.length > 0) {
+      const errorDetails = missingQuestions.map(m => 
+        `Difficulty ${m.difficulty}: need ${m.needed}, have ${m.available} (missing ${m.missing})`
+      ).join('; ');
+      
+      return res.status(400).json({ 
+        success: false, 
+        error: `Not enough active questions in question bank. ${errorDetails}. Please add more questions or adjust your quiz configuration.`,
+        missingQuestions
+      });
+    }
+    
+    // Fetch and select questions for each difficulty level
     for (const [difficulty, count] of Object.entries(difficulty_distribution)) {
       const diff = parseInt(difficulty);
       const questionCount = parseInt(count);
@@ -891,13 +963,6 @@ router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res)
           difficulty: diff,
           is_active: true 
         });
-        
-        if (availableQuestions.length < questionCount) {
-          return res.status(400).json({ 
-            success: false, 
-            error: `Not enough questions available for difficulty ${diff}. Need ${questionCount}, have ${availableQuestions.length}` 
-          });
-        }
         
         // Randomly select questions
         const shuffled = availableQuestions.sort(() => 0.5 - Math.random());

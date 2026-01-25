@@ -196,6 +196,10 @@ export const uploadQuestionsCSV = async (file) => {
   return data;
 };
 
+export const getQuestionStats = async () => {
+  return apiCall('/api/p2ladmin/questions-stats');
+};
+
 // ==================== QUIZZES ====================
 export const getQuizzes = async () => {
   return apiCall('/api/p2ladmin/quizzes');

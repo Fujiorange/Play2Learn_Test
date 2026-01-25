@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getQuestions } from '../../services/p2lAdminService';
+import { getQuestionStats } from '../../services/p2lAdminService';
 import './AdaptiveQuizCreator.css';
 
 function AdaptiveQuizCreator() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [questions, setQuestions] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -21,27 +20,33 @@ function AdaptiveQuizCreator() {
     }
   });
   const [availableCounts, setAvailableCounts] = useState({});
+  const [totalQuestions, setTotalQuestions] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [warnings, setWarnings] = useState([]);
 
   useEffect(() => {
-    fetchQuestions();
+    fetchQuestionStats();
   }, []);
 
-  const fetchQuestions = async () => {
+  const fetchQuestionStats = async () => {
     try {
-      const result = await getQuestions();
-      setQuestions(result.data || []);
-      
-      // Count available questions by difficulty
-      const counts = {};
-      (result.data || []).forEach(q => {
-        counts[q.difficulty] = (counts[q.difficulty] || 0) + 1;
-      });
-      setAvailableCounts(counts);
+      const result = await getQuestionStats();
+      if (result.success && result.data) {
+        setAvailableCounts(result.data.byDifficulty || {});
+        setTotalQuestions(result.data.totalActive || 0);
+        
+        // Check if there are no questions at all
+        if (result.data.totalActive === 0) {
+          setWarnings([
+            'No questions found in the question bank. Please add questions before creating a quiz.',
+            'You can use the Question Bank page to add questions manually, or run the seed script to add sample questions.'
+          ]);
+        }
+      }
     } catch (error) {
-      console.error('Failed to fetch questions:', error);
-      setError('Failed to load questions');
+      console.error('Failed to fetch question stats:', error);
+      setError('Failed to load question statistics');
     } finally {
       setLoading(false);
     }
@@ -68,6 +73,8 @@ function AdaptiveQuizCreator() {
   };
 
   const validateForm = () => {
+    setWarnings([]);
+    
     if (!formData.title.trim()) {
       setError('Quiz title is required');
       return false;
@@ -80,14 +87,25 @@ function AdaptiveQuizCreator() {
     }
 
     // Check if enough questions are available for each difficulty
+    const newWarnings = [];
     for (const [diff, count] of Object.entries(formData.difficulty_distribution)) {
       if (count > 0) {
         const available = availableCounts[diff] || 0;
         if (count > available) {
-          setError(`Not enough questions for difficulty ${diff}. Need ${count}, have ${available}`);
+          setError(
+            `Not enough questions for difficulty ${diff}. You requested ${count} but only ${available} ${
+              available === 1 ? 'is' : 'are'
+            } available. Please add more questions to the question bank or reduce the number requested.`
+          );
           return false;
+        } else if (available === 0) {
+          newWarnings.push(`Note: No questions available at difficulty level ${diff}`);
         }
       }
+    }
+    
+    if (newWarnings.length > 0) {
+      setWarnings(newWarnings);
     }
 
     if (formData.target_correct > total) {
@@ -155,6 +173,25 @@ function AdaptiveQuizCreator() {
 
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}
+      {warnings.length > 0 && (
+        <div className="warning-message">
+          {warnings.map((warning, index) => (
+            <div key={index}>⚠️ {warning}</div>
+          ))}
+        </div>
+      )}
+      {totalQuestions === 0 && !loading && (
+        <div className="info-message">
+          <strong>No questions found in the question bank!</strong>
+          <p>
+            To create an adaptive quiz, you first need to add questions to the question bank:
+          </p>
+          <ul>
+            <li>Go to <Link to="/p2ladmin/question-bank">Question Bank</Link> to add questions manually</li>
+            <li>Or run the seed script: <code>node backend/seed-questions.js</code> to add sample questions</li>
+          </ul>
+        </div>
+      )}
 
       <div className="creator-container">
         <form onSubmit={handleSubmit} className="quiz-form">
