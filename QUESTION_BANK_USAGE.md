@@ -1,5 +1,23 @@
 # Question Bank Usage Guide
 
+## 🎯 Quick Start
+
+**The adaptive quiz system already uses your Question Bank!** If you're seeing errors when creating quizzes, you simply need to add questions to the database.
+
+### Fastest Solution
+
+Run this diagnostic to see what you need:
+```bash
+node backend/check-questions.js
+```
+
+Then add questions using one of these methods:
+1. **Seed sample questions** (fastest for testing): `node backend/seed-questions.js`
+2. **Use the UI**: P2L Admin → Question Bank → + Add Question
+3. **Upload CSV**: P2L Admin → Question Bank → Upload CSV
+
+---
+
 ## Overview
 
 The adaptive quiz creation system **automatically uses questions from your Question Bank**. This guide explains how to ensure your questions are properly available for quiz creation.

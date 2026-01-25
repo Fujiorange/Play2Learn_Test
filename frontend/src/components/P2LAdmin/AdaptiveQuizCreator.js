@@ -150,7 +150,12 @@ function AdaptiveQuizCreator() {
           navigate('/p2ladmin/quizzes');
         }, 2000);
       } else {
-        setError(data.error || 'Failed to create quiz');
+        // Display error with suggestion if available
+        let errorMsg = data.error || 'Failed to create quiz';
+        if (data.suggestion) {
+          errorMsg += '\n\nSuggestion: ' + data.suggestion;
+        }
+        setError(errorMsg);
       }
     } catch (error) {
       console.error('Failed to create quiz:', error);
