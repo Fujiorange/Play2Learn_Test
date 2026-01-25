@@ -11,9 +11,8 @@ const studentProfileSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-studentProfileSchema.pre('save', function(next) {
+studentProfileSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('StudentProfile', studentProfileSchema);

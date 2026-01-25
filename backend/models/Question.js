@@ -18,9 +18,8 @@ const questionSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-questionSchema.pre('save', function(next) {
+questionSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Question', questionSchema);

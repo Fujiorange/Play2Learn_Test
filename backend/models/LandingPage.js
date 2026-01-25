@@ -21,9 +21,8 @@ const landingPageSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-landingPageSchema.pre('save', function(next) {
+landingPageSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('LandingPage', landingPageSchema);
