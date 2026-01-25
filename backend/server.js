@@ -120,8 +120,10 @@ const PORT = process.env.PORT || 5000;
 // Connect to MongoDB first, then start server
 async function startServer() {
   try {
+    // MongoDB default serverSelectionTimeoutMS is 30000ms (30 seconds)
+    // We reduce it to 5000ms (5 seconds) for faster failure detection
     await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds instead of 30
+      serverSelectionTimeoutMS: 5000,
     });
     console.log('✅ MongoDB Connected Successfully!');
     console.log('📊 Database:', mongoose.connection.db.databaseName);

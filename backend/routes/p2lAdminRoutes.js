@@ -30,7 +30,9 @@ const authenticateP2LAdmin = async (req, res, next) => {
 router.post('/register-admin', async (req, res) => {
   try {
     // Check MongoDB connection status
-    if (mongoose.connection.readyState !== 1) {
+    // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    const CONNECTED_STATE = 1;
+    if (mongoose.connection.readyState !== CONNECTED_STATE) {
       return res.status(503).json({ 
         success: false, 
         error: 'Database connection unavailable. Please try again later.' 
