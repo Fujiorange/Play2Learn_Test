@@ -1,5 +1,5 @@
 // Quiz Manager Component
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getQuizzes, createQuiz, updateQuiz, deleteQuiz, getQuestions } from '../../services/p2lAdminService';
 import './QuizManager.css';
@@ -127,18 +127,24 @@ function QuizManager() {
     setQuestionFilters({ topic: '', difficulty: '' });
   };
 
-  // Get unique topics from questions
-  const uniqueTopics = [...new Set(questions.map(q => q.topic).filter(Boolean))].sort();
+  // Get unique topics from questions (memoized)
+  const uniqueTopics = useMemo(() => {
+    return [...new Set(questions.map(q => q.topic).filter(Boolean))].sort();
+  }, [questions]);
   
-  // Get unique difficulty levels from questions
-  const uniqueDifficulties = [...new Set(questions.map(q => q.difficulty).filter(Boolean))].sort((a, b) => a - b);
+  // Get unique difficulty levels from questions (memoized)
+  const uniqueDifficulties = useMemo(() => {
+    return [...new Set(questions.map(q => q.difficulty).filter(Boolean))].sort((a, b) => a - b);
+  }, [questions]);
 
   // Filter questions based on selected filters
-  const filteredQuestions = questions.filter(q => {
-    const topicMatch = !questionFilters.topic || q.topic === questionFilters.topic;
-    const difficultyMatch = !questionFilters.difficulty || q.difficulty === parseInt(questionFilters.difficulty);
-    return topicMatch && difficultyMatch;
-  });
+  const filteredQuestions = useMemo(() => {
+    return questions.filter(q => {
+      const topicMatch = !questionFilters.topic || q.topic === questionFilters.topic;
+      const difficultyMatch = !questionFilters.difficulty || q.difficulty === Number(questionFilters.difficulty);
+      return topicMatch && difficultyMatch;
+    });
+  }, [questions, questionFilters]);
 
   if (loading) {
     return <div className="loading">Loading...</div>;
