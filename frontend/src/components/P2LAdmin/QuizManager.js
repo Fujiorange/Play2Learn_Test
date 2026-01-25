@@ -10,6 +10,10 @@ function QuizManager() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
+  const [questionFilters, setQuestionFilters] = useState({
+    topic: '',
+    difficulty: ''
+  });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -120,7 +124,21 @@ function QuizManager() {
       question_ids: [],
       is_adaptive: true
     });
+    setQuestionFilters({ topic: '', difficulty: '' });
   };
+
+  // Get unique topics from questions
+  const uniqueTopics = [...new Set(questions.map(q => q.topic).filter(Boolean))].sort();
+  
+  // Get unique difficulty levels from questions
+  const uniqueDifficulties = [...new Set(questions.map(q => q.difficulty).filter(Boolean))].sort((a, b) => a - b);
+
+  // Filter questions based on selected filters
+  const filteredQuestions = questions.filter(q => {
+    const topicMatch = !questionFilters.topic || q.topic === questionFilters.topic;
+    const difficultyMatch = !questionFilters.difficulty || q.difficulty === parseInt(questionFilters.difficulty);
+    return topicMatch && difficultyMatch;
+  });
 
   if (loading) {
     return <div className="loading">Loading...</div>;
@@ -181,20 +199,62 @@ function QuizManager() {
 
               <div className="form-group">
                 <label>Select Questions ({formData.question_ids.length} selected)</label>
+                
+                {/* Filter controls */}
+                <div className="question-filters">
+                  <div className="filter-group">
+                    <label htmlFor="topic-filter">Filter by Topic:</label>
+                    <select
+                      id="topic-filter"
+                      value={questionFilters.topic}
+                      onChange={(e) => setQuestionFilters({ ...questionFilters, topic: e.target.value })}
+                    >
+                      <option value="">All Topics</option>
+                      {uniqueTopics.map(topic => (
+                        <option key={topic} value={topic}>{topic}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="filter-group">
+                    <label htmlFor="difficulty-filter">Filter by Difficulty:</label>
+                    <select
+                      id="difficulty-filter"
+                      value={questionFilters.difficulty}
+                      onChange={(e) => setQuestionFilters({ ...questionFilters, difficulty: e.target.value })}
+                    >
+                      <option value="">All Difficulties</option>
+                      {uniqueDifficulties.map(diff => (
+                        <option key={diff} value={diff}>Level {diff}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
                 <div className="questions-selector">
-                  {questions.map((q) => (
-                    <div key={q._id} className="question-option">
-                      <input
-                        type="checkbox"
-                        checked={formData.question_ids.includes(q._id)}
-                        onChange={() => handleQuestionToggle(q._id)}
-                      />
-                      <span className="question-preview">
-                        {q.text.length > 80 ? `${q.text.substring(0, 80)}...` : q.text}
-                        <span className="badge">Difficulty: {q.difficulty}</span>
-                      </span>
-                    </div>
-                  ))}
+                  {filteredQuestions.length === 0 ? (
+                    <p className="no-questions">No questions match the selected filters.</p>
+                  ) : (
+                    filteredQuestions.map((q) => (
+                      <div key={q._id} className="question-option">
+                        <input
+                          type="checkbox"
+                          id={`question-${q._id}`}
+                          checked={formData.question_ids.includes(q._id)}
+                          onChange={() => handleQuestionToggle(q._id)}
+                        />
+                        <label htmlFor={`question-${q._id}`} className="question-preview">
+                          <span className="question-text">
+                            {q.text.length > 80 ? `${q.text.substring(0, 80)}...` : q.text}
+                          </span>
+                          <div className="question-meta">
+                            {q.topic && <span className="badge topic-badge">📚 {q.topic}</span>}
+                            <span className="badge difficulty-badge">Difficulty: {q.difficulty}</span>
+                          </div>
+                        </label>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
