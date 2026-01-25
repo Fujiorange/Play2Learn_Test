@@ -52,18 +52,6 @@ console.log('🚀 Starting Play2Learn Server...');
 console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔗 MongoDB:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
 
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => {
-    console.log('✅ MongoDB Connected Successfully!');
-    console.log('📊 Database:', mongoose.connection.db.databaseName);
-    console.log('🏢 Host:', mongoose.connection.host);
-  })
-  .catch((err) => {
-    console.error('❌ MongoDB Connection Failed:', err.message);
-    process.exit(1);
-  });
-
 // ==================== JWT CONFIGURATION ====================
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -126,7 +114,28 @@ app.use((req, res) => {
   });
 });
 
+// ==================== SERVER STARTUP ====================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+// Connect to MongoDB first, then start server
+async function startServer() {
+  try {
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds instead of 30
+    });
+    console.log('✅ MongoDB Connected Successfully!');
+    console.log('📊 Database:', mongoose.connection.db.databaseName);
+    console.log('🏢 Host:', mongoose.connection.host);
+    
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log('✅ Ready to accept connections');
+    });
+  } catch (err) {
+    console.error('❌ MongoDB Connection Failed:', err.message);
+    console.error('❌ Server startup aborted');
+    process.exit(1);
+  }
+}
+
+startServer();
