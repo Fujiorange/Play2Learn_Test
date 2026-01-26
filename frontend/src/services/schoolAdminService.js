@@ -52,6 +52,7 @@ const schoolAdminService = {
   // CLASSES
   async getClasses() { return this.apiCall('/classes'); },
   async createClass(data) { return this.apiCall('/classes', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateClass(id, data) { return this.apiCall(`/classes/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
   async deleteClass(id) { return this.apiCall(`/classes/${id}`, { method: 'DELETE' }); },
 
   // BADGES

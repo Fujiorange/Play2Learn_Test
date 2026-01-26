@@ -350,14 +350,31 @@ router.post('/users', authenticateToken, async (req, res) => {
 
 // Helper: Check if School Admin can modify this user
 const canModifyUser = async (db, userId) => {
-  const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(userId) });
-  if (!user) return { allowed: false, error: 'User not found', user: null };
-  
-  const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin'];
-  if (protectedRoles.includes(user.role?.toLowerCase())) {
-    return { allowed: false, error: 'You cannot modify admin accounts', user };
+  try {
+    // Handle both string and ObjectId
+    let objectId;
+    try {
+      objectId = new mongoose.Types.ObjectId(userId);
+    } catch (e) {
+      console.error('Invalid ObjectId:', userId);
+      return { allowed: false, error: 'Invalid user ID format', user: null };
+    }
+    
+    const user = await db.collection('users').findOne({ _id: objectId });
+    if (!user) {
+      console.log('User not found:', userId);
+      return { allowed: false, error: 'User not found', user: null };
+    }
+    
+    const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin'];
+    if (protectedRoles.includes(user.role?.toLowerCase())) {
+      return { allowed: false, error: 'You cannot modify admin accounts', user };
+    }
+    return { allowed: true, user };
+  } catch (error) {
+    console.error('canModifyUser error:', error);
+    return { allowed: false, error: 'Error checking user permissions', user: null };
   }
-  return { allowed: true, user };
 };
 
 // Update user
@@ -446,24 +463,41 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
     const { id } = req.params;
+    
+    console.log('🗑️ Attempting to delete user:', id);
 
     // Check authority
     const check = await canModifyUser(db, id);
     if (!check.allowed) {
+      console.log('❌ Delete blocked:', check.error);
       return res.status(403).json({ success: false, error: check.error });
     }
 
-    await db.collection('users').deleteOne({ _id: new mongoose.Types.ObjectId(id) });
+    // Convert to ObjectId
+    let objectId;
+    try {
+      objectId = new mongoose.Types.ObjectId(id);
+    } catch (e) {
+      return res.status(400).json({ success: false, error: 'Invalid user ID format' });
+    }
+
+    const result = await db.collection('users').deleteOne({ _id: objectId });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'User not found or already deleted' });
+    }
     
     // Also delete from students collection if applicable
     if (check.user.role?.toLowerCase() === 'student') {
-      await db.collection('students').deleteOne({ user_id: new mongoose.Types.ObjectId(id) });
+      await db.collection('students').deleteOne({ user_id: objectId });
+      await db.collection('students').deleteOne({ email: check.user.email });
     }
 
+    console.log('✅ User deleted successfully:', check.user.email);
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete user' });
+    res.status(500).json({ success: false, error: error.message || 'Failed to delete user' });
   }
 });
 
@@ -476,12 +510,24 @@ router.get('/classes', authenticateToken, async (req, res) => {
     const db = getDb();
     const classes = await db.collection('classes').find({}).sort({ name: 1 }).toArray();
     
-    // Get student counts for each class
+    // Get student counts and teacher info for each class
     for (let cls of classes) {
       cls.studentCount = await db.collection('users').countDocuments({ 
         class: cls.name, 
         role: { $in: ['Student', 'student'] } 
       });
+      
+      // Get teacher name if teacherId exists
+      if (cls.teacherId) {
+        const teacher = await db.collection('users').findOne({ 
+          _id: new mongoose.Types.ObjectId(cls.teacherId) 
+        });
+        cls.teacherName = teacher?.name || 'Unknown';
+        cls.teacherEmail = teacher?.email || '';
+      } else {
+        cls.teacherName = 'Not assigned';
+        cls.teacherEmail = '';
+      }
     }
 
     res.json({ success: true, classes });
@@ -494,22 +540,47 @@ router.get('/classes', authenticateToken, async (req, res) => {
 router.post('/classes', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const { name, gradeLevel, teacherId } = req.body;
+    const { name, grade, subject, teacherId } = req.body;
 
-    const existing = await db.collection('classes').findOne({ name });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Class name is required' });
+    }
+
+    const existing = await db.collection('classes').findOne({ name: name.trim() });
     if (existing) {
       return res.status(400).json({ success: false, error: 'Class name already exists' });
     }
 
+    // Get teacher name if provided
+    let teacherName = null;
+    if (teacherId) {
+      const teacher = await db.collection('users').findOne({ 
+        _id: new mongoose.Types.ObjectId(teacherId) 
+      });
+      teacherName = teacher?.name || null;
+      
+      // Also add this class to teacher's classes array
+      await db.collection('users').updateOne(
+        { _id: new mongoose.Types.ObjectId(teacherId) },
+        { $addToSet: { classes: name.trim() } }
+      );
+    }
+
     const newClass = {
-      name,
-      gradeLevel: gradeLevel || 'Primary 1',
+      name: name.trim(),
+      grade: grade || 'Primary 1',
+      subject: subject || 'Mathematics',
       teacherId: teacherId || null,
+      teacherName: teacherName,
+      studentCount: 0,
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
     const result = await db.collection('classes').insertOne(newClass);
+    
+    console.log(`✅ Class "${name}" created${teacherName ? ` with teacher ${teacherName}` : ''}`);
+    
     res.json({ success: true, class: { ...newClass, _id: result.insertedId } });
   } catch (error) {
     console.error('Create class error:', error);
@@ -517,10 +588,126 @@ router.post('/classes', authenticateToken, async (req, res) => {
   }
 });
 
+// Update class (assign/remove teacher)
+router.put('/classes/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { id } = req.params;
+    const { teacherId, name } = req.body;
+
+    console.log('✏️ Updating class:', id, { teacherId, name });
+
+    // Validate ObjectId
+    let objectId;
+    try {
+      objectId = new mongoose.Types.ObjectId(id);
+    } catch (e) {
+      return res.status(400).json({ success: false, error: 'Invalid class ID format' });
+    }
+
+    const cls = await db.collection('classes').findOne({ _id: objectId });
+    
+    if (!cls) {
+      console.log('❌ Class not found:', id);
+      return res.status(404).json({ success: false, error: 'Class not found. Please create the class first.' });
+    }
+
+    const updates = { updatedAt: new Date() };
+    
+    // Handle teacher assignment change
+    if (teacherId !== undefined) {
+      // Remove class from old teacher's array if there was one
+      if (cls.teacherId) {
+        try {
+          await db.collection('users').updateOne(
+            { _id: new mongoose.Types.ObjectId(cls.teacherId) },
+            { $pull: { classes: cls.name } }
+          );
+        } catch (e) {
+          console.log('Could not remove class from old teacher');
+        }
+      }
+      
+      // Assign new teacher
+      if (teacherId && teacherId !== '' && teacherId !== 'null') {
+        const teacher = await db.collection('users').findOne({ 
+          _id: new mongoose.Types.ObjectId(teacherId) 
+        });
+        if (teacher) {
+          updates.teacherId = teacherId;
+          updates.teacherName = teacher.name || null;
+          
+          // Add class to new teacher's array
+          await db.collection('users').updateOne(
+            { _id: new mongoose.Types.ObjectId(teacherId) },
+            { $addToSet: { classes: cls.name } }
+          );
+          console.log(`✅ Assigned teacher ${teacher.name} to class ${cls.name}`);
+        }
+      } else {
+        // Remove teacher
+        updates.teacherId = null;
+        updates.teacherName = null;
+        console.log(`✅ Removed teacher from class ${cls.name}`);
+      }
+    }
+    
+    if (name && name !== cls.name) {
+      // Check if new name exists
+      const existing = await db.collection('classes').findOne({ name: name.trim() });
+      if (existing) {
+        return res.status(400).json({ success: false, error: 'Class name already exists' });
+      }
+      updates.name = name.trim();
+      
+      // Update students and teachers with old class name
+      await db.collection('users').updateMany(
+        { class: cls.name },
+        { $set: { class: name.trim() } }
+      );
+      await db.collection('users').updateMany(
+        { classes: cls.name },
+        { $set: { 'classes.$': name.trim() } }
+      );
+    }
+
+    await db.collection('classes').updateOne(
+      { _id: objectId },
+      { $set: updates }
+    );
+
+    const updatedClass = await db.collection('classes').findOne({ 
+      _id: new mongoose.Types.ObjectId(id) 
+    });
+
+    console.log(`✅ Class "${cls.name}" updated`);
+    
+    res.json({ success: true, class: updatedClass });
+  } catch (error) {
+    console.error('Update class error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update class' });
+  }
+});
+
 router.delete('/classes/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const cls = await db.collection('classes').findOne({ 
+      _id: new mongoose.Types.ObjectId(req.params.id) 
+    });
+    
+    if (cls && cls.teacherId) {
+      // Remove class from teacher's array
+      await db.collection('users').updateOne(
+        { _id: new mongoose.Types.ObjectId(cls.teacherId) },
+        { $pull: { classes: cls.name } }
+      );
+    }
+    
     await db.collection('classes').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    
+    console.log(`🗑️ Class "${cls?.name}" deleted`);
+    
     res.json({ success: true, message: 'Class deleted successfully' });
   } catch (error) {
     console.error('Delete class error:', error);
