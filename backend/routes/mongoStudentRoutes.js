@@ -1014,4 +1014,243 @@ router.get("/testimonials", async (req, res) => {
   }
 });
 
+// ==================== BADGES ====================
+
+// Get student's earned badges
+router.get("/badges", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const student = await db.collection('students').findOne({ 
+      $or: [
+        { user_id: new mongoose.Types.ObjectId(req.user.id) },
+        { email: req.user.email }
+      ]
+    });
+
+    if (!student) {
+      return res.json({ success: true, badges: [], earnedBadges: [] });
+    }
+
+    const allBadges = await db.collection('badges').find({ isActive: true }).toArray();
+    const earnedBadgeIds = student.badges || [];
+    
+    const badgesWithStatus = allBadges.map(badge => ({
+      ...badge,
+      earned: earnedBadgeIds.some(id => id.toString() === badge._id.toString()),
+      earnedAt: student.badgeEarnedDates?.[badge._id.toString()] || null
+    }));
+
+    res.json({ 
+      success: true, 
+      badges: badgesWithStatus,
+      earnedBadges: badgesWithStatus.filter(b => b.earned),
+      totalPoints: student.points || 0
+    });
+  } catch (error) {
+    console.error("❌ Get badges error:", error);
+    res.status(500).json({ success: false, error: "Failed to load badges" });
+  }
+});
+
+router.get("/badges/all", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const badges = await db.collection('badges').find({ isActive: true }).toArray();
+    res.json({ success: true, badges });
+  } catch (error) {
+    console.error("❌ Get all badges error:", error);
+    res.status(500).json({ success: false, error: "Failed to load badges" });
+  }
+});
+
+// ==================== POINTS ====================
+
+router.get("/points", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const student = await db.collection('students').findOne({ 
+      $or: [
+        { user_id: new mongoose.Types.ObjectId(req.user.id) },
+        { email: req.user.email }
+      ]
+    });
+
+    if (!student) {
+      return res.json({ success: true, points: 0, level: 1 });
+    }
+
+    res.json({ 
+      success: true, 
+      points: student.points || 0,
+      level: student.level || 1,
+      streak: student.streak || 0,
+      totalQuizzes: student.total_quizzes || 0
+    });
+  } catch (error) {
+    console.error("❌ Get points error:", error);
+    res.status(500).json({ success: false, error: "Failed to load points" });
+  }
+});
+
+router.get("/points/history", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const student = await db.collection('students').findOne({ 
+      $or: [
+        { user_id: new mongoose.Types.ObjectId(req.user.id) },
+        { email: req.user.email }
+      ]
+    });
+
+    if (!student) {
+      return res.json({ success: true, history: [] });
+    }
+
+    const history = await db.collection('point_transactions')
+      .find({ student_id: student._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray();
+
+    res.json({ success: true, history });
+  } catch (error) {
+    console.error("❌ Get point history error:", error);
+    res.status(500).json({ success: false, error: "Failed to load point history" });
+  }
+});
+
+// ==================== SHOP ====================
+
+router.get("/shop", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    
+    const student = await db.collection('students').findOne({ 
+      $or: [
+        { user_id: new mongoose.Types.ObjectId(req.user.id) },
+        { email: req.user.email }
+      ]
+    });
+
+    const studentPoints = student?.points || 0;
+    const items = await db.collection('shop_items').find({ isActive: true }).sort({ cost: 1 }).toArray();
+    
+    const purchases = await db.collection('purchases').find({ student_id: student?._id }).toArray();
+    const purchasedItemIds = purchases.map(p => p.item_id.toString());
+
+    const itemsWithStatus = items.map(item => ({
+      ...item,
+      canAfford: studentPoints >= item.cost,
+      owned: purchasedItemIds.includes(item._id.toString())
+    }));
+
+    res.json({ success: true, items: itemsWithStatus, studentPoints });
+  } catch (error) {
+    console.error("❌ Get shop items error:", error);
+    res.status(500).json({ success: false, error: "Failed to load shop items" });
+  }
+});
+
+router.post("/shop/purchase", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.body;
+
+    if (!itemId) {
+      return res.status(400).json({ success: false, error: "Item ID required" });
+    }
+
+    const student = await db.collection('students').findOne({ 
+      $or: [
+        { user_id: new mongoose.Types.ObjectId(req.user.id) },
+        { email: req.user.email }
+      ]
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, error: "Student not found" });
+    }
+
+    const item = await db.collection('shop_items').findOne({ _id: new mongoose.Types.ObjectId(itemId) });
+
+    if (!item || !item.isActive) {
+      return res.status(404).json({ success: false, error: "Item not found or unavailable" });
+    }
+
+    const existingPurchase = await db.collection('purchases').findOne({
+      student_id: student._id,
+      item_id: new mongoose.Types.ObjectId(itemId)
+    });
+
+    if (existingPurchase) {
+      return res.status(400).json({ success: false, error: "You already own this item" });
+    }
+
+    if ((student.points || 0) < item.cost) {
+      return res.status(400).json({ success: false, error: "Not enough points" });
+    }
+
+    const newPoints = (student.points || 0) - item.cost;
+    await db.collection('students').updateOne(
+      { _id: student._id },
+      { $set: { points: newPoints, updated_at: new Date() } }
+    );
+
+    await db.collection('purchases').insertOne({
+      student_id: student._id,
+      item_id: new mongoose.Types.ObjectId(itemId),
+      item_name: item.name,
+      cost: item.cost,
+      purchasedAt: new Date()
+    });
+
+    await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId) },
+      { $inc: { purchaseCount: 1 } }
+    );
+
+    await db.collection('point_transactions').insertOne({
+      student_id: student._id,
+      amount: -item.cost,
+      reason: `Purchased: ${item.name}`,
+      type: 'purchase',
+      previousBalance: student.points || 0,
+      newBalance: newPoints,
+      createdAt: new Date()
+    });
+
+    res.json({ success: true, message: `Successfully purchased ${item.name}!`, newPoints });
+  } catch (error) {
+    console.error("❌ Purchase item error:", error);
+    res.status(500).json({ success: false, error: "Failed to purchase item" });
+  }
+});
+
+router.get("/shop/purchases", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    
+    const student = await db.collection('students').findOne({ 
+      $or: [
+        { user_id: new mongoose.Types.ObjectId(req.user.id) },
+        { email: req.user.email }
+      ]
+    });
+
+    if (!student) {
+      return res.json({ success: true, purchases: [] });
+    }
+
+    const purchases = await db.collection('purchases')
+      .find({ student_id: student._id })
+      .sort({ purchasedAt: -1 })
+      .toArray();
+
+    res.json({ success: true, purchases });
+  } catch (error) {
+    console.error("❌ Get purchases error:", error);
+    res.status(500).json({ success: false, error: "Failed to load purchases" });
+  }
+});
+
 module.exports = router;

@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import schoolAdminService from '../../services/schoolAdminService';
 import './SchoolAdmin.css';
-
-const mockAnnouncements = [
-  { id: 1, title: 'Welcome to Term 2!', content: 'We hope everyone had a great break. Term 2 starts with exciting new math topics including addition and subtraction with numbers up to 100!', priority: 'info', audience: 'all', pinned: true, createdAt: '2026-01-20', expiresAt: '2026-02-20', author: 'School Admin' },
-  { id: 2, title: 'System Maintenance Notice', content: 'Play2Learn will be under maintenance on Saturday 25th Jan from 2am-4am SGT. Please save your work before this time.', priority: 'urgent', audience: 'all', pinned: true, createdAt: '2026-01-22', expiresAt: '2026-01-26', author: 'School Admin' },
-  { id: 3, title: 'Math Competition Registration Open', content: 'Register your students for the upcoming Primary 1 Math Challenge! Great prizes to be won. Deadline: 31st Jan.', priority: 'event', audience: 'teachers', pinned: false, createdAt: '2026-01-18', expiresAt: '2026-01-31', author: 'School Admin' },
-  { id: 4, title: 'New Badges Available!', content: 'Check out the new achievement badges you can earn this term: Speed Demon, Helping Hand, and Early Bird!', priority: 'info', audience: 'students', pinned: false, createdAt: '2026-01-15', expiresAt: '2026-03-15', author: 'School Admin' }
-];
 
 const priorityConfig = {
   urgent: { label: 'Urgent', color: '#dc2626', bg: '#fef2f2', icon: '🚨' },
@@ -40,17 +34,21 @@ export default function Announcements() {
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') { navigate('/login'); return; }
+    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
     loadAnnouncements();
   }, [navigate]);
 
   const loadAnnouncements = async () => {
     try {
-      // TODO: Replace with real API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAnnouncements(mockAnnouncements);
+      const result = await schoolAdminService.getAnnouncements();
+      if (result.success) {
+        setAnnouncements(result.announcements || []);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load announcements' });
+      }
     } catch (error) {
       console.error('Error loading announcements:', error);
+      setMessage({ type: 'error', text: 'Failed to load announcements' });
     } finally {
       setLoading(false);
     }
@@ -66,64 +64,74 @@ export default function Announcements() {
     setEditingId(null);
   };
 
-  const openCreateModal = () => {
-    resetForm();
-    setShowModal(true);
-  };
+  const openCreateModal = () => { resetForm(); setShowModal(true); };
 
   const openEditModal = (announcement) => {
-    setEditingId(announcement.id);
+    setEditingId(announcement._id);
     setFormData({
       title: announcement.title,
       content: announcement.content,
       priority: announcement.priority,
       audience: announcement.audience,
       pinned: announcement.pinned,
-      expiresAt: announcement.expiresAt
+      expiresAt: announcement.expiresAt ? announcement.expiresAt.split('T')[0] : ''
     });
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.title || !formData.content) {
       setMessage({ type: 'error', text: 'Please fill in title and content' });
       return;
     }
 
-    if (editingId) {
-      setAnnouncements(announcements.map(a => 
-        a.id === editingId ? { ...a, ...formData } : a
-      ));
-      setMessage({ type: 'success', text: 'Announcement updated successfully!' });
-    } else {
-      const newAnnouncement = {
-        id: Date.now(),
-        ...formData,
-        createdAt: new Date().toISOString().split('T')[0],
-        author: 'School Admin'
-      };
-      setAnnouncements([newAnnouncement, ...announcements]);
-      setMessage({ type: 'success', text: 'Announcement created successfully!' });
-    }
+    try {
+      let result;
+      if (editingId) {
+        result = await schoolAdminService.updateAnnouncement(editingId, formData);
+      } else {
+        result = await schoolAdminService.createAnnouncement(formData);
+      }
 
-    setShowModal(false);
-    resetForm();
+      if (result.success) {
+        setMessage({ type: 'success', text: editingId ? 'Announcement updated!' : 'Announcement created!' });
+        setShowModal(false);
+        resetForm();
+        loadAnnouncements();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to save announcement' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to save announcement' });
+    }
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleDelete = () => {
-    setAnnouncements(announcements.filter(a => a.id !== selectedAnnouncement.id));
-    setMessage({ type: 'success', text: 'Announcement deleted successfully!' });
+  const handleDelete = async () => {
+    try {
+      const result = await schoolAdminService.deleteAnnouncement(selectedAnnouncement._id);
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Announcement deleted!' });
+        loadAnnouncements();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to delete' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete announcement' });
+    }
     setShowDeleteModal(false);
     setSelectedAnnouncement(null);
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const togglePin = (announcement) => {
-    setAnnouncements(announcements.map(a => 
-      a.id === announcement.id ? { ...a, pinned: !a.pinned } : a
-    ));
-    setMessage({ type: 'success', text: `Announcement ${announcement.pinned ? 'unpinned' : 'pinned'}!` });
+  const togglePin = async (announcement) => {
+    try {
+      await schoolAdminService.updateAnnouncement(announcement._id, { pinned: !announcement.pinned });
+      setMessage({ type: 'success', text: `Announcement ${announcement.pinned ? 'unpinned' : 'pinned'}!` });
+      loadAnnouncements();
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update' });
+    }
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
@@ -157,7 +165,7 @@ export default function Announcements() {
         <div className="badge-page-header">
           <div>
             <h1 className="sa-page-title">📢 Announcements</h1>
-            <p className="sa-page-subtitle">Create and manage school-wide announcements</p>
+            <p className="sa-page-subtitle">Create and manage school-wide announcements (Stored in Database)</p>
           </div>
           <button className="sa-button-primary" onClick={openCreateModal}>+ New Announcement</button>
         </div>
@@ -186,9 +194,9 @@ export default function Announcements() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {filteredAnnouncements.map(announcement => {
-              const config = priorityConfig[announcement.priority];
+              const config = priorityConfig[announcement.priority] || priorityConfig.info;
               return (
-                <div key={announcement.id} className="sa-card" style={{ borderLeft: `4px solid ${config.color}` }}>
+                <div key={announcement._id} className="sa-card" style={{ borderLeft: `4px solid ${config.color}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       {announcement.pinned && <span title="Pinned">📌</span>}
@@ -206,7 +214,7 @@ export default function Announcements() {
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                      Created: {announcement.createdAt} • Expires: {announcement.expiresAt} • By: {announcement.author}
+                      Created: {new Date(announcement.createdAt).toLocaleDateString()} • By: {announcement.author || 'Admin'}
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="sa-button-secondary" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => togglePin(announcement)}>
@@ -268,9 +276,7 @@ export default function Announcements() {
               <div className="sa-form-group">
                 <label className="sa-label">Pin to Top</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                  <div className={`toggle-switch ${formData.pinned ? 'toggle-active' : ''}`} onClick={() => setFormData({ ...formData, pinned: !formData.pinned })}>
-                    <div className="toggle-knob"></div>
-                  </div>
+                  <input type="checkbox" checked={formData.pinned} onChange={(e) => setFormData({ ...formData, pinned: e.target.checked })} />
                   <span style={{ color: '#6b7280' }}>{formData.pinned ? 'Yes' : 'No'}</span>
                 </div>
               </div>
@@ -290,8 +296,7 @@ export default function Announcements() {
           <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
             <h2 className="sa-modal-title">🗑️ Delete Announcement</h2>
             <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-              Are you sure you want to delete <strong>"{selectedAnnouncement.title}"</strong>?<br /><br />
-              This action cannot be undone.
+              Are you sure you want to delete <strong>"{selectedAnnouncement.title}"</strong>?
             </p>
             <div className="sa-modal-buttons">
               <button className="sa-modal-button-cancel" onClick={() => setShowDeleteModal(false)}>Cancel</button>

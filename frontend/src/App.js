@@ -37,6 +37,7 @@ import Chat from './components/Teacher/Chat';
 import WriteTestimonial from './components/Teacher/WriteTestimonial';
 import TeacherCreateTicket from './components/Teacher/CreateTicket';
 import TeacherTrackTicket from './components/Teacher/TrackTicket';
+import TeacherPointsManagement from './components/Teacher/TeacherPointsManagement';
 
 // Student Components
 import StudentDashboard from './components/Student/StudentDashboard';
@@ -57,6 +58,7 @@ import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
 import StudentCreateSupportTicket from './components/Student/CreateSupportTicket';
 import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
+import StudentBadgesShop from './components/Student/StudentBadgesShop';
 
 // Parent Components
 import ParentDashboard from './components/Parents/ParentDashboard';
@@ -135,6 +137,7 @@ function App() {
           <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
           <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
           <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
+          <Route path="/teacher/points" element={<TeacherPointsManagement />} />
 
           {/* ========== STUDENT ROUTES ========== */}
           <Route path="/student" element={<StudentDashboard />} />
@@ -146,6 +149,8 @@ function App() {
           <Route path="/student/leaderboard" element={<ViewLeaderboard />} />
           <Route path="/student/skills" element={<DisplaySkillMatrix />} />
           <Route path="/student/subjects" element={<ViewDetailedSubjectInfo />} />
+          <Route path="/student/badges" element={<StudentBadgesShop />} />
+          <Route path="/student/shop" element={<StudentBadgesShop />} />
 
           {/* ========== QUIZ ROUTES ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />

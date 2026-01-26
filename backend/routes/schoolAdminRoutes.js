@@ -1,15 +1,14 @@
-// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX
-// ✅ Queries USERS collection correctly for dashboard stats
-// ✅ Parent CSV import with linkedStudents integration
-// ✅ FIXED: Student credentials email now sends correct parameters
+// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION
+// ✅ All School Admin CRUD operations
+// ✅ Badges, Points, Announcements, Support Tickets, Classes
+// ✅ Proper MongoDB integration
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
-const User = require('../models/User');
-const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
@@ -36,781 +35,431 @@ const authenticateToken = (req, res, next) => {
 // ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
 
+// ==================== HELPER: Get DB Connection ====================
+const getDb = () => mongoose.connection.db;
+
+// ==================== HELPER: Normalize Role ====================
+const normalizeRole = (role) => {
+  const roleMap = {
+    'student': 'Student',
+    'teacher': 'Teacher',
+    'parent': 'Parent',
+    'school-admin': 'School-Admin',
+    'schooladmin': 'School-Admin',
+    'p2ladmin': 'P2L-Admin',
+    'platform-admin': 'P2L-Admin',
+    'trial user': 'Trial-User',
+    'trial': 'Trial-User'
+  };
+  return roleMap[role?.toLowerCase()] || role;
+};
+
 // ==================== PASSWORD GENERATOR ====================
 function generateTempPassword(userType) {
   const crypto = require('crypto');
   const prefix = userType.substring(0, 3).toUpperCase();
   const year = new Date().getFullYear();
   const random = crypto.randomBytes(3).toString('hex');
-  const special = '!';
-  return `${prefix}${year}${random}${special}`;
+  return `${prefix}${year}${random}!`;
 }
 
-// ==================== DASHBOARD STATS (FIXED!) ====================
+// ============================================================
+//                    DASHBOARD STATS (with License Info)
+// ============================================================
 router.get('/dashboard-stats', authenticateToken, async (req, res) => {
   try {
-    console.log('📊 Fetching dashboard stats...');
+    const db = getDb();
     
-    // ✅ FIX: Query the 'users' collection with role field, not separate collections!
-    const [
-      totalStudents,
-      totalTeachers,
-      totalParents,
-      totalUsers
-    ] = await Promise.all([
-      User.countDocuments({ role: 'Student' }),
-      User.countDocuments({ role: 'Teacher' }),
-      User.countDocuments({ role: 'Parent' }),
-      User.countDocuments()
+    // Get the school admin's school info to check license
+    const schoolAdmin = await db.collection('users').findOne({ 
+      email: req.user.email 
+    });
+    
+    // Get school license info
+    let licenseInfo = null;
+    if (schoolAdmin?.schoolId) {
+      const school = await db.collection('schools').findOne({ 
+        _id: new mongoose.Types.ObjectId(schoolAdmin.schoolId) 
+      });
+      if (school) {
+        licenseInfo = {
+          plan: school.plan || 'starter',
+          teacherLimit: school.plan_info?.teacher_limit || 50,
+          studentLimit: school.plan_info?.student_limit || 500,
+          currentTeachers: school.current_teachers || 0,
+          currentStudents: school.current_students || 0
+        };
+      }
+    }
+    
+    // If no school found, try to find by school admin's organization
+    if (!licenseInfo) {
+      const school = await db.collection('schools').findOne({
+        $or: [
+          { contact: req.user.email },
+          { admin_email: req.user.email }
+        ]
+      });
+      if (school) {
+        licenseInfo = {
+          plan: school.plan || 'starter',
+          teacherLimit: school.plan_info?.teacher_limit || 50,
+          studentLimit: school.plan_info?.student_limit || 500,
+          currentTeachers: school.current_teachers || 0,
+          currentStudents: school.current_students || 0
+        };
+      }
+    }
+    
+    // Count users by role
+    const [totalStudents, totalTeachers, totalParents, totalClasses] = await Promise.all([
+      db.collection('users').countDocuments({ role: { $in: ['Student', 'student'] } }),
+      db.collection('users').countDocuments({ role: { $in: ['Teacher', 'teacher'] } }),
+      db.collection('users').countDocuments({ role: { $in: ['Parent', 'parent'] } }),
+      db.collection('classes').countDocuments({})
     ]);
 
-    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents`);
-
-    // Get recent registrations (last 7 days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    const recentRegistrations = await User.countDocuments({
-      createdAt: { $gte: sevenDaysAgo }
-    });
-
-    // Get active users (last 30 days login)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const activeUsers = await User.countDocuments({
-      accountActive: true
-    });
+    // Update license info with actual counts
+    if (licenseInfo) {
+      licenseInfo.currentTeachers = totalTeachers;
+      licenseInfo.currentStudents = totalStudents;
+    }
 
     res.json({
       success: true,
-      stats: {
-        students: totalStudents,
-        teachers: totalTeachers,
-        parents: totalParents,
-        totalUsers: totalUsers,
-        activeUsers: activeUsers,
-        recentRegistrations: recentRegistrations,
-        classes: 0, // Will implement when class management is ready
+      total_students: totalStudents,
+      total_teachers: totalTeachers,
+      total_parents: totalParents,
+      total_classes: totalClasses,
+      license: licenseInfo || {
+        plan: 'starter',
+        teacherLimit: 50,
+        studentLimit: 500,
+        currentTeachers: totalTeachers,
+        currentStudents: totalStudents
       }
     });
   } catch (error) {
-    console.error('❌ Dashboard stats error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to load dashboard stats',
-      details: error.message 
-    });
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load dashboard stats' });
   }
 });
 
-// ==================== GET USERS (FIXED!) ====================
+// ============================================================
+//                    USER MANAGEMENT
+// ============================================================
+
+// Get all users (with filters)
+// School Admin can ONLY see: Students, Teachers, Parents (NOT P2L Admin or School Admin)
 router.get('/users', authenticateToken, async (req, res) => {
   try {
-    const { gradeLevel, subject, role } = req.query;
+    const db = getDb();
+    const { role, search, status } = req.query;
     
-    const filter = {};
+    // School Admin can only manage these roles
+    const allowedRoles = ['Student', 'student', 'Teacher', 'teacher', 'Parent', 'parent'];
     
-    // Filter by role
-    if (role) {
-      filter.role = role;
+    let filter = {
+      role: { $in: allowedRoles }
+    };
+    
+    if (role && role !== 'all') {
+      filter.role = { $regex: new RegExp(`^${role}$`, 'i') };
+      // Double check it's an allowed role
+      if (!allowedRoles.some(r => r.toLowerCase() === role.toLowerCase())) {
+        return res.status(403).json({ success: false, error: 'Cannot view this role' });
+      }
     }
-    
-    // Filter by grade level (for students)
-    if (gradeLevel) {
-      filter.gradeLevel = gradeLevel;
+    if (status === 'active') filter.accountActive = true;
+    if (status === 'disabled') filter.accountActive = false;
+    if (search) {
+      filter.$and = [
+        { role: { $in: allowedRoles } },
+        { $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]}
+      ];
     }
-    
-    // Filter by subject (for teachers)
-    if (subject) {
-      filter.subject = subject;
-    }
 
-    console.log('🔍 Fetching users with filter:', filter);
+    const users = await db.collection('users')
+      .find(filter)
+      .project({ password: 0, password_hash: 0 })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray();
 
-    const users = await User.find(filter)
-      .select('-password')
-      .sort({ createdAt: -1 });
-
-    console.log(`✅ Found ${users.length} users`);
-
-    res.json({
-      success: true,
-      users: users.map(user => ({
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        class: user.class,
-        gradeLevel: user.gradeLevel,
-        subject: user.subject,
-        contact: user.contact,
-        accountActive: user.accountActive,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-      }))
-    });
+    res.json({ success: true, users });
   } catch (error) {
-    console.error('❌ Get users error:', error);
+    console.error('Get users error:', error);
     res.status(500).json({ success: false, error: 'Failed to load users' });
   }
 });
 
-// ==================== BULK IMPORT STUDENTS (FIXED - NO DUPLICATE PROFILE) ====================
-router.post('/bulk-import-students', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk import students request received');
-  
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-
-  console.log('📄 Parsing CSV file...');
-  
-  const students = [];
-  const results = {
-    created: 0,
-    failed: 0,
-    emailsSent: 0,
-    emailsFailed: 0,
-    errors: []
-  };
-
+// Add single user
+// School Admin can ONLY create: Students, Teachers, Parents
+// Must check license limits before creating
+router.post('/users', authenticateToken, async (req, res) => {
   try {
-    // Parse CSV
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(req.file.path)
-        .pipe(csv())
-        .on('data', (row) => {
-          students.push({
-            name: row.Name || row.name || '',
-            email: row.Email || row.email || '',
-            class: row.Class || row.class || '',
-            gradeLevel: row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || '',
-            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || row.parent_email || '',
-            contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || '',
-            gender: row.Gender || row.gender || '',
-            dateOfBirth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || ''
-          });
-        })
-        .on('end', () => {
-          console.log(`✅ Found ${students.length} students in CSV`);
-          resolve();
-        })
-        .on('error', (error) => {
-          console.error('❌ CSV parsing error:', error);
-          reject(error);
-        });
+    const db = getDb();
+    const { name, email, role, gender, gradeLevel, class: userClass, subject, classes, linkedStudents } = req.body;
+
+    // School Admin cannot create admin accounts
+    const allowedRoles = ['student', 'teacher', 'parent'];
+    if (!allowedRoles.includes(role.toLowerCase())) {
+      return res.status(403).json({ success: false, error: 'You can only create Student, Teacher, or Parent accounts' });
+    }
+
+    // Check license limits
+    const school = await db.collection('schools').findOne({
+      $or: [
+        { contact: req.user.email },
+        { admin_email: req.user.email }
+      ]
     });
 
-    console.log('\n🔄 Processing students...\n');
-
-    // ✅ FIX: Only create user in 'users' collection, NO separate student profile
-    for (const studentData of students) {
-      try {
-        console.log(`👤 Processing: ${studentData.name} (${studentData.email})`);
-        
-        // Validate required fields
-        if (!studentData.name || !studentData.email) {
-          console.log(`⚠️  Skipping - Missing required fields`);
-          results.failed++;
-          results.errors.push({ 
-            email: studentData.email || 'unknown', 
-            error: 'Missing required fields (name or email)' 
+    if (school) {
+      const teacherLimit = school.plan_info?.teacher_limit || 50;
+      const studentLimit = school.plan_info?.student_limit || 500;
+      
+      if (role.toLowerCase() === 'teacher') {
+        const currentTeachers = await db.collection('users').countDocuments({ role: { $in: ['Teacher', 'teacher'] } });
+        if (currentTeachers >= teacherLimit) {
+          return res.status(403).json({ 
+            success: false, 
+            error: `Teacher license limit reached (${currentTeachers}/${teacherLimit}). Please upgrade your plan.` 
           });
-          continue;
         }
-
-        // Check if user already exists
-        const existingUser = await User.findOne({ email: studentData.email });
-        if (existingUser) {
-          console.log(`⚠️  Skipping - Email already exists: ${studentData.email}`);
-          results.failed++;
-          results.errors.push({ 
-            email: studentData.email, 
-            error: 'Email already registered' 
+      }
+      
+      if (role.toLowerCase() === 'student') {
+        const currentStudents = await db.collection('users').countDocuments({ role: { $in: ['Student', 'student'] } });
+        if (currentStudents >= studentLimit) {
+          return res.status(403).json({ 
+            success: false, 
+            error: `Student license limit reached (${currentStudents}/${studentLimit}). Please upgrade your plan.` 
           });
-          continue;
         }
-
-        // Generate password
-        const tempPassword = generateTempPassword('Student');
-        console.log(`🔑 Generated password: ${tempPassword}`);
-        
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-        const username = studentData.email.split('@')[0];
-
-        // Parse date of birth
-        let parsedDateOfBirth = null;
-        if (studentData.dateOfBirth) {
-          try {
-            const dateStr = studentData.dateOfBirth.trim();
-            
-            if (dateStr.includes('-')) {
-              parsedDateOfBirth = new Date(dateStr);
-            } else if (dateStr.includes('/')) {
-              const parts = dateStr.split('/');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1;
-                const year = parseInt(parts[2]);
-                parsedDateOfBirth = new Date(year, month, day);
-              }
-            }
-            
-            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              parsedDateOfBirth = null;
-            }
-          } catch (error) {
-            console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}`);
-            parsedDateOfBirth = null;
-          }
-        }
-
-        // ✅ Create ONLY user document in 'users' collection
-        const newUser = await User.create({
-          name: studentData.name.trim(),
-          email: studentData.email.toLowerCase().trim(),
-          username: username,
-          password: hashedPassword,
-          role: 'Student',
-          class: studentData.class?.trim() || null,
-          gradeLevel: studentData.gradeLevel?.trim() || 'Primary 1',
-          parentEmail: studentData.parentEmail?.toLowerCase().trim() || null,
-          contact: studentData.contact?.trim() || null,
-          gender: studentData.gender?.trim() || null,
-          dateOfBirth: parsedDateOfBirth,
-          emailVerified: true,
-          accountActive: true,
-          createdBy: 'school-admin',
-          createdAt: new Date()
-        });
-
-        console.log(`✅ Student created in users collection: ${newUser.email}`);
-        results.created++;
-
-        // ✅ FIXED: Send credentials email with correct parameter order
-        if (studentData.parentEmail) {
-          try {
-            await sendStudentCredentialsToParent(
-              newUser,                    // 1. student object (has .name, .email, .class)
-              tempPassword,               // 2. tempPassword string
-              studentData.parentEmail,    // 3. parentEmail string
-              'Your School'               // 4. schoolName string
-            );
-            console.log(`📧 Sent credentials to parent: ${studentData.parentEmail}`);
-            results.emailsSent++;
-          } catch (emailError) {
-            console.error(`❌ Failed to send email to parent:`, emailError.message);
-            results.emailsFailed++;
-          }
-        } else {
-          results.emailsFailed++;
-        }
-
-      } catch (error) {
-        console.error(`❌ Error creating student:`, error);
-        results.failed++;
-        results.errors.push({ 
-          email: studentData.email, 
-          error: error.message 
-        });
       }
     }
 
-    fs.unlinkSync(req.file.path);
-
-    console.log('\n✅ Bulk import completed!');
-    console.log(`   Created: ${results.created}`);
-    console.log(`   Failed: ${results.failed}`);
-    console.log(`   Emails sent: ${results.emailsSent}`);
-    console.log(`   Emails failed: ${results.emailsFailed}\n`);
-
-    res.json({
-      success: true,
-      message: 'Bulk import completed',
-      results
-    });
-
-  } catch (error) {
-    console.error('❌ Bulk import error:', error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.status(500).json({ success: false, error: 'Bulk import failed' });
-  }
-});
-
-// ==================== BULK IMPORT TEACHERS ====================
-router.post('/bulk-import-teachers', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk import teachers request received');
-  
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-
-  const teachers = [];
-  const results = {
-    created: 0,
-    failed: 0,
-    emailsSent: 0,
-    emailsFailed: 0,
-    errors: []
-  };
-
-  try {
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(req.file.path)
-        .pipe(csv())
-        .on('data', (row) => {
-          teachers.push({
-            name: row.Name || row.name || '',
-            email: row.Email || row.email || '',
-            subject: row.Subject || row.subject || 'Mathematics',
-            contact: row.ContactNumber || row.contactNumber || row.contact || '',
-            gender: row.Gender || row.gender || ''
-          });
-        })
-        .on('end', () => {
-          console.log(`✅ Found ${teachers.length} teachers in CSV`);
-          resolve();
-        })
-        .on('error', reject);
-    });
-
-    for (const teacherData of teachers) {
-      try {
-        if (!teacherData.name || !teacherData.email) {
-          results.failed++;
-          results.errors.push({ 
-            email: teacherData.email || 'unknown', 
-            error: 'Missing required fields' 
-          });
-          continue;
-        }
-
-        const existingUser = await User.findOne({ email: teacherData.email });
-        if (existingUser) {
-          results.failed++;
-          results.errors.push({ 
-            email: teacherData.email, 
-            error: 'Email already registered' 
-          });
-          continue;
-        }
-
-        const tempPassword = generateTempPassword('Teacher');
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-        const newTeacher = await User.create({
-          name: teacherData.name.trim(),
-          email: teacherData.email.toLowerCase().trim(),
-          password: hashedPassword,
-          role: 'Teacher',
-          subject: teacherData.subject?.trim() || 'Mathematics',
-          contact: teacherData.contact?.trim() || null,
-          gender: teacherData.gender?.trim() || null,
-          emailVerified: true,
-          accountActive: true,
-          createdBy: 'school-admin'
-        });
-
-        console.log(`✅ Teacher created: ${newTeacher.email}`);
-        results.created++;
-
-        try {
-          await sendTeacherWelcomeEmail(
-            newTeacher,
-            tempPassword,
-            'Your School'
-          );
-          results.emailsSent++;
-        } catch (emailError) {
-          console.error(`❌ Failed to send email:`, emailError.message);
-          results.emailsFailed++;
-        }
-
-      } catch (error) {
-        console.error(`❌ Error creating teacher:`, error);
-        results.failed++;
-        results.errors.push({ 
-          email: teacherData.email, 
-          error: error.message 
-        });
-      }
+    // Check if email exists
+    const existing = await db.collection('users').findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return res.status(400).json({ success: false, error: 'Email already exists' });
     }
 
-    fs.unlinkSync(req.file.path);
-
-    res.json({
-      success: true,
-      message: 'Bulk import completed',
-      results
-    });
-
-  } catch (error) {
-    console.error('❌ Bulk import error:', error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.status(500).json({ success: false, error: 'Bulk import failed' });
-  }
-});
-
-// ==================== BULK IMPORT PARENTS (COMPLETE VERSION WITH LINKEDSTUDENTS) ====================
-router.post('/bulk-import-parents', upload.single('file'), async (req, res) => {
-  console.log('\n📤 Bulk import parents request received');
-  
-  if (!req.file) {
-    return res.status(400).json({ success: false, error: 'No file uploaded' });
-  }
-
-  console.log('📄 Parsing CSV file...');
-  
-  const parents = [];
-  const results = {
-    created: 0,
-    updated: 0,
-    failed: 0,
-    emailsSent: 0,
-    emailsFailed: 0,
-    errors: [],
-    details: []
-  };
-
-  try {
-    // Parse CSV
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(req.file.path)
-        .pipe(csv())
-        .on('data', (row) => {
-          parents.push({
-            parentName: row.ParentName || row.parentName || row['Parent Name'] || '',
-            parentEmail: row.ParentEmail || row.parentEmail || row['Parent Email'] || '',
-            studentEmail: row.StudentEmail || row.studentEmail || row['Student Email'] || '',
-            relationship: row.Relationship || row.relationship || 'Parent'
-          });
-        })
-        .on('end', () => {
-          console.log(`✅ Found ${parents.length} parent records in CSV`);
-          resolve();
-        })
-        .on('error', (error) => {
-          console.error('❌ CSV parsing error:', error);
-          reject(error);
-        });
-    });
-
-    console.log('\n🔄 Processing parents...\n');
-
-    // Process each parent
-    for (let i = 0; i < parents.length; i++) {
-      const parentData = parents[i];
-      const rowNum = i + 2; // CSV row number (header is row 1)
-
-      try {
-        console.log(`\n👤 Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
-
-        // Validate required fields
-        if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
-          console.log(`⚠️  Skipping - Missing required fields`);
-          results.failed++;
-          results.errors.push({
-            row: rowNum,
-            parentEmail: parentData.parentEmail || 'N/A',
-            error: 'Missing required fields (ParentName, ParentEmail, or StudentEmail)'
-          });
-          continue;
-        }
-
-        // Validate email formats
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(parentData.parentEmail)) {
-          console.log(`⚠️  Skipping - Invalid parent email format`);
-          results.failed++;
-          results.errors.push({
-            row: rowNum,
-            parentEmail: parentData.parentEmail,
-            error: 'Invalid parent email format'
-          });
-          continue;
-        }
-
-        if (!emailRegex.test(parentData.studentEmail)) {
-          console.log(`⚠️  Skipping - Invalid student email format`);
-          results.failed++;
-          results.errors.push({
-            row: rowNum,
-            parentEmail: parentData.parentEmail,
-            error: 'Invalid student email format'
-          });
-          continue;
-        }
-
-        // Find the student by email
-        const student = await User.findOne({ 
-          email: parentData.studentEmail.toLowerCase().trim(),
-          role: 'Student'
-        });
-
-        if (!student) {
-          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
-          results.failed++;
-          results.errors.push({
-            row: rowNum,
-            parentEmail: parentData.parentEmail,
-            error: `Student not found with email: ${parentData.studentEmail}. Please import students first.`
-          });
-          continue;
-        }
-
-        console.log(`✅ Found student: ${student.name} (${student.email})`);
-
-        // Check if parent already exists
-        const existingParent = await User.findOne({ 
-          email: parentData.parentEmail.toLowerCase().trim()
-        });
-
-        if (existingParent) {
-          // Parent exists - just add student link if not already linked
-          console.log(`ℹ️  Parent already exists: ${existingParent.email}`);
-
-          // Initialize linkedStudents array if it doesn't exist
-          if (!existingParent.linkedStudents) {
-            existingParent.linkedStudents = [];
-          }
-
-          // Check if already linked to this student
-          const alreadyLinked = existingParent.linkedStudents.some(
-            link => link.studentEmail === student.email
-          );
-
-          if (alreadyLinked) {
-            console.log(`ℹ️  Parent already linked to student ${student.email}`);
-            results.details.push({
-              row: rowNum,
-              parentName: existingParent.name,
-              parentEmail: existingParent.email,
-              studentEmail: student.email,
-              status: 'already_linked',
-              message: 'Parent already linked to this student'
-            });
-          } else {
-            // Add new student link
-            existingParent.linkedStudents.push({
-              studentId: student._id,
-              studentName: student.name,
-              studentEmail: student.email,
-              relationship: parentData.relationship || 'Parent',
-              gradeLevel: student.gradeLevel,
-              class: student.class
-            });
-
-            await existingParent.save();
-
-            // Update student's parentEmail if not already set
-            if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
-              student.parentEmail = parentData.parentEmail.toLowerCase().trim();
-              await student.save();
-            }
-
-            console.log(`✅ Linked existing parent to new student`);
-            results.updated++;
-            
-            results.details.push({
-              row: rowNum,
-              parentName: existingParent.name,
-              parentEmail: existingParent.email,
-              studentEmail: student.email,
-              studentName: student.name,
-              relationship: parentData.relationship,
-              status: 'linked',
-              message: 'Existing parent linked to student'
-            });
-          }
-
-          continue;
-        }
-
-        // Parent doesn't exist - create new parent account
-        const tempPassword = generateTempPassword('Parent');
-        console.log(`🔑 Generated password for new parent: ${tempPassword}`);
-
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-        // Create new parent with linkedStudents array
-        const newParent = await User.create({
-          name: parentData.parentName.trim(),
-          email: parentData.parentEmail.toLowerCase().trim(),
-          password: hashedPassword,
-          role: 'Parent',
-          linkedStudents: [
-            {
-              studentId: student._id,
-              studentName: student.name,
-              studentEmail: student.email,
-              relationship: parentData.relationship || 'Parent',
-              gradeLevel: student.gradeLevel,
-              class: student.class
-            }
-          ],
-          emailVerified: true,
-          accountActive: true,
-          createdBy: 'school-admin',
-          createdAt: new Date()
-        });
-
-        console.log(`✅ Created new parent: ${newParent.email}`);
-        results.created++;
-
-        // Update student's parentEmail
-        if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
-          student.parentEmail = parentData.parentEmail.toLowerCase().trim();
-          await student.save();
-          console.log(`✅ Updated student's parentEmail field`);
-        }
-
-        // Send welcome email to parent
-        try {
-          await sendParentWelcomeEmail(
-            newParent,
-            tempPassword,
-            student.name,
-            'Your School'
-          );
-          console.log(`📧 Sent welcome email to: ${newParent.email}`);
-          results.emailsSent++;
-        } catch (emailError) {
-          console.error(`❌ Failed to send email to parent:`, emailError.message);
-          results.emailsFailed++;
-        }
-
-        results.details.push({
-          row: rowNum,
-          parentName: newParent.name,
-          parentEmail: newParent.email,
-          studentEmail: student.email,
-          studentName: student.name,
-          relationship: parentData.relationship,
-          password: tempPassword,
-          status: 'created',
-          message: 'New parent account created and linked to student'
-        });
-
-      } catch (error) {
-        console.error(`❌ Error processing row ${rowNum}:`, error);
-        results.failed++;
-        results.errors.push({
-          row: rowNum,
-          parentEmail: parentData.parentEmail || 'N/A',
-          error: error.message
-        });
-      }
+    // Validate teacher must have at least one class
+    if (role.toLowerCase() === 'teacher' && (!classes || classes.length === 0)) {
+      return res.status(400).json({ success: false, error: 'Teacher must be assigned to at least one class' });
     }
 
-    // Clean up uploaded file
-    fs.unlinkSync(req.file.path);
-
-    console.log('\n✅ Parent bulk import completed!');
-    console.log(`   Created: ${results.created}`);
-    console.log(`   Updated (linked): ${results.updated}`);
-    console.log(`   Failed: ${results.failed}`);
-    console.log(`   Emails sent: ${results.emailsSent}`);
-    console.log(`   Emails failed: ${results.emailsFailed}\n`);
-
-    // Return summary
-    res.json({
-      success: true,
-      message: `Parent import completed: ${results.created} created, ${results.updated} updated, ${results.failed} failed`,
-      summary: {
-        totalRows: parents.length,
-        created: results.created,
-        updated: results.updated,
-        failed: results.failed,
-        emailsSent: results.emailsSent,
-        emailsFailed: results.emailsFailed
-      },
-      details: results.details,
-      errors: results.errors.length > 0 ? results.errors : undefined
-    });
-
-  } catch (error) {
-    console.error('❌ Bulk import parents error:', error);
-    
-    // Clean up uploaded file if it exists
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    // Validate parent must have at least one linked student
+    if (role.toLowerCase() === 'parent' && (!linkedStudents || linkedStudents.length === 0)) {
+      return res.status(400).json({ success: false, error: 'Parent must be linked to at least one student' });
     }
 
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to import parents: ' + error.message 
-    });
-  }
-});
+    const tempPassword = generateTempPassword(role);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const normalizedRole = normalizeRole(role);
 
-// ==================== MANUAL CREATE USER ====================
-router.post('/users/manual', authenticateToken, async (req, res) => {
-  try {
-    const { name, email, password, role, gradeLevel, subject, gender } = req.body;
-    
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Name, email, password, and role are required' 
-      });
-    }
-    
-    // Check if email already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).json({ 
-        success: false, 
-        error: 'Email already exists' 
-      });
-    }
-    
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create user
-    const newUser = await User.create({
+    const newUser = {
       name,
-      email,
+      email: email.toLowerCase(),
       password: hashedPassword,
-      role: role,
+      role: normalizedRole,
       gender: gender || null,
-      gradeLevel: gradeLevel || 'Primary 1',
-      subject: subject || 'Mathematics',
-      emailVerified: true,
+      gradeLevel: gradeLevel || null,
+      class: userClass || null,
+      subject: subject || null,
+      // Teacher: array of classes they teach
+      classes: normalizedRole === 'Teacher' ? (classes || []) : undefined,
+      // Parent: array of linked student IDs
+      linkedStudents: normalizedRole === 'Parent' ? (linkedStudents || []) : [],
       accountActive: true,
-      createdBy: 'school-admin',
-    });
-    
-    res.status(201).json({
-      success: true,
-      message: 'User created successfully',
-      user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
+      emailVerified: false,
+      createdBy: req.user.email,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('users').insertOne(newUser);
+
+    // If student, also create entry in students collection
+    if (normalizedRole === 'Student') {
+      await db.collection('students').insertOne({
+        user_id: result.insertedId,
+        name,
+        email: email.toLowerCase(),
+        grade_level: gradeLevel || 'Primary 1',
+        class: userClass || null,
+        points: 0,
+        level: 1,
+        current_profile: 1,
+        streak: 0,
+        total_quizzes: 0,
+        badges: [],
+        achievements: [],
+        placement_completed: false,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      
+      // Update school's current student count
+      if (school) {
+        await db.collection('schools').updateOne(
+          { _id: school._id },
+          { $inc: { current_students: 1 } }
+        );
       }
+    }
+
+    // If teacher, update school's current teacher count
+    if (normalizedRole === 'Teacher' && school) {
+      await db.collection('schools').updateOne(
+        { _id: school._id },
+        { $inc: { current_teachers: 1 } }
+      );
+    }
+
+    // If parent, update the linked students' parent reference
+    if (normalizedRole === 'Parent' && linkedStudents && linkedStudents.length > 0) {
+      for (const studentId of linkedStudents) {
+        await db.collection('users').updateOne(
+          { _id: new mongoose.Types.ObjectId(studentId) },
+          { $set: { parentId: result.insertedId } }
+        );
+        await db.collection('students').updateOne(
+          { user_id: new mongoose.Types.ObjectId(studentId) },
+          { $set: { parent_id: result.insertedId } }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `User created successfully`,
+      user: { ...newUser, _id: result.insertedId, password: undefined },
+      tempPassword
     });
   } catch (error) {
-    console.error('Create user error:', error);
+    console.error('Add user error:', error);
     res.status(500).json({ success: false, error: 'Failed to create user' });
   }
 });
 
-// ==================== DELETE USER ====================
+// Helper: Check if School Admin can modify this user
+const canModifyUser = async (db, userId) => {
+  const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(userId) });
+  if (!user) return { allowed: false, error: 'User not found', user: null };
+  
+  const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin'];
+  if (protectedRoles.includes(user.role?.toLowerCase())) {
+    return { allowed: false, error: 'You cannot modify admin accounts', user };
+  }
+  return { allowed: true, user };
+};
+
+// Update user
+router.put('/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { id } = req.params;
+    
+    // Check authority
+    const check = await canModifyUser(db, id);
+    if (!check.allowed) {
+      return res.status(403).json({ success: false, error: check.error });
+    }
+
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+    delete updates.password;
+    delete updates.role; // Cannot change role via this endpoint
+
+    await db.collection('users').updateOne(
+      { _id: new mongoose.Types.ObjectId(id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'User updated successfully' });
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+// Disable/Enable user
+router.patch('/users/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { id } = req.params;
+    const { accountActive } = req.body;
+
+    // Check authority
+    const check = await canModifyUser(db, id);
+    if (!check.allowed) {
+      return res.status(403).json({ success: false, error: check.error });
+    }
+
+    await db.collection('users').updateOne(
+      { _id: new mongoose.Types.ObjectId(id) },
+      { $set: { accountActive, updatedAt: new Date() } }
+    );
+
+    res.json({ success: true, message: `User ${accountActive ? 'enabled' : 'disabled'} successfully` });
+  } catch (error) {
+    console.error('Toggle user status error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update user status' });
+  }
+});
+
+// Reset password
+router.post('/users/:id/reset-password', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { id } = req.params;
+    
+    // Check authority
+    const check = await canModifyUser(db, id);
+    if (!check.allowed) {
+      return res.status(403).json({ success: false, error: check.error });
+    }
+
+    const tempPassword = generateTempPassword(check.user.role || 'user');
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    await db.collection('users').updateOne(
+      { _id: new mongoose.Types.ObjectId(id) },
+      { $set: { password: hashedPassword, updatedAt: new Date() } }
+    );
+
+    res.json({ success: true, tempPassword, message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset password' });
+  }
+});
+
+// Delete user
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
-    const result = await User.findByIdAndDelete(req.params.id);
-    
-    if (!result) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+    const db = getDb();
+    const { id } = req.params;
+
+    // Check authority
+    const check = await canModifyUser(db, id);
+    if (!check.allowed) {
+      return res.status(403).json({ success: false, error: check.error });
     }
+
+    await db.collection('users').deleteOne({ _id: new mongoose.Types.ObjectId(id) });
     
+    // Also delete from students collection if applicable
+    if (check.user.role?.toLowerCase() === 'student') {
+      await db.collection('students').deleteOne({ user_id: new mongoose.Types.ObjectId(id) });
+    }
+
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
@@ -818,110 +467,23 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== UPDATE USER STATUS ====================
-router.put('/users/:id/status', authenticateToken, async (req, res) => {
-  try {
-    const { isActive } = req.body;
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { accountActive: isActive },
-      { new: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    
-    res.json({ success: true, message: 'User status updated successfully' });
-  } catch (error) {
-    console.error('Update status error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update user status' });
-  }
-});
+// ============================================================
+//                    CLASS MANAGEMENT
+// ============================================================
 
-// ==================== UPDATE USER ROLE ====================
-router.put('/users/:id/role', authenticateToken, async (req, res) => {
-  try {
-    const { role } = req.body;
-    
-    // Security check
-    if (role === 'School Admin') {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Cannot assign school-admin role' 
-      });
-    }
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { role: role },
-      { new: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    
-    res.json({ success: true, message: 'User role updated successfully' });
-  } catch (error) {
-    console.error('Update role error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update user role' });
-  }
-});
-
-// ==================== RESET USER PASSWORD ====================
-router.put('/users/:id/password', authenticateToken, async (req, res) => {
-  try {
-    const { password } = req.body;
-    
-    if (!password || password.length < 8) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Password must be at least 8 characters' 
-      });
-    }
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { password: hashedPassword },
-      { new: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    
-    res.json({ success: true, message: 'Password reset successfully' });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ success: false, error: 'Failed to reset password' });
-  }
-});
-
-// ==================== GET CLASSES ====================
 router.get('/classes', authenticateToken, async (req, res) => {
   try {
-    // Get unique classes
-    const classes = await User.aggregate([
-      { $match: { role: 'Student', class: { $ne: null } } },
-      { $group: { 
-        _id: { class: '$class', gradeLevel: '$gradeLevel' },
-        studentCount: { $sum: 1 }
-      }},
-      { $project: {
-        _id: 0,
-        id: '$_id.class',
-        name: '$_id.class',
-        grade: '$_id.gradeLevel',
-        subject: 'Mathematics',
-        students: '$studentCount',
-        teacher: 'Not assigned'
-      }}
-    ]);
+    const db = getDb();
+    const classes = await db.collection('classes').find({}).sort({ name: 1 }).toArray();
     
+    // Get student counts for each class
+    for (let cls of classes) {
+      cls.studentCount = await db.collection('users').countDocuments({ 
+        class: cls.name, 
+        role: { $in: ['Student', 'student'] } 
+      });
+    }
+
     res.json({ success: true, classes });
   } catch (error) {
     console.error('Get classes error:', error);
@@ -929,30 +491,677 @@ router.get('/classes', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== CREATE CLASS ====================
 router.post('/classes', authenticateToken, async (req, res) => {
   try {
-    const { name, grade, subject } = req.body;
-    
-    if (!name) {
-      return res.status(400).json({ success: false, error: 'Class name is required' });
+    const db = getDb();
+    const { name, gradeLevel, teacherId } = req.body;
+
+    const existing = await db.collection('classes').findOne({ name });
+    if (existing) {
+      return res.status(400).json({ success: false, error: 'Class name already exists' });
     }
-    
-    res.status(201).json({
-      success: true,
-      message: 'Class created successfully',
-      class: {
-        id: new mongoose.Types.ObjectId().toString(),
-        name,
-        grade: grade || 'Primary 1',
-        subject: subject || 'Mathematics',
-        students: 0,
-        teacher: 'Not assigned'
-      }
-    });
+
+    const newClass = {
+      name,
+      gradeLevel: gradeLevel || 'Primary 1',
+      teacherId: teacherId || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('classes').insertOne(newClass);
+    res.json({ success: true, class: { ...newClass, _id: result.insertedId } });
   } catch (error) {
     console.error('Create class error:', error);
     res.status(500).json({ success: false, error: 'Failed to create class' });
+  }
+});
+
+router.delete('/classes/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    await db.collection('classes').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    res.json({ success: true, message: 'Class deleted successfully' });
+  } catch (error) {
+    console.error('Delete class error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete class' });
+  }
+});
+
+// ============================================================
+//                    BADGES MANAGEMENT
+// ============================================================
+
+router.get('/badges', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const badges = await db.collection('badges').find({}).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, badges });
+  } catch (error) {
+    console.error('Get badges error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load badges' });
+  }
+});
+
+router.post('/badges', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { name, description, icon, criteriaType, criteriaValue, rarity, isActive } = req.body;
+
+    const newBadge = {
+      name,
+      description,
+      icon: icon || '🏆',
+      criteriaType,
+      criteriaValue: parseInt(criteriaValue),
+      rarity: rarity || 'common',
+      isActive: isActive !== false,
+      earnedCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('badges').insertOne(newBadge);
+    res.json({ success: true, badge: { ...newBadge, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Create badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create badge' });
+  }
+});
+
+router.put('/badges/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+
+    await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'Badge updated successfully' });
+  } catch (error) {
+    console.error('Update badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update badge' });
+  }
+});
+
+router.delete('/badges/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    await db.collection('badges').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    res.json({ success: true, message: 'Badge deleted successfully' });
+  } catch (error) {
+    console.error('Delete badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete badge' });
+  }
+});
+
+// ============================================================
+//                    POINTS MANAGEMENT
+// ============================================================
+
+router.get('/point-rules', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const rules = await db.collection('point_rules').find({}).sort({ points: -1 }).toArray();
+    res.json({ success: true, rules });
+  } catch (error) {
+    console.error('Get point rules error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load point rules' });
+  }
+});
+
+router.post('/point-rules', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { action, points, description, isActive } = req.body;
+
+    const newRule = {
+      action,
+      points: parseInt(points),
+      description,
+      isActive: isActive !== false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('point_rules').insertOne(newRule);
+    res.json({ success: true, rule: { ...newRule, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Create point rule error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create point rule' });
+  }
+});
+
+router.put('/point-rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+
+    await db.collection('point_rules').updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'Point rule updated successfully' });
+  } catch (error) {
+    console.error('Update point rule error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update point rule' });
+  }
+});
+
+router.delete('/point-rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    await db.collection('point_rules').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    res.json({ success: true, message: 'Point rule deleted successfully' });
+  } catch (error) {
+    console.error('Delete point rule error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete point rule' });
+  }
+});
+
+// NOTE: Points adjustment moved to Teacher routes
+// School Admin can view point rules but cannot adjust individual student points
+// See teacherRoutes.js for POST /students/:id/adjust-points
+
+// ============================================================
+//                    SHOP ITEMS
+// ============================================================
+
+router.get('/shop-items', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const items = await db.collection('shop_items').find({}).sort({ cost: 1 }).toArray();
+    res.json({ success: true, items });
+  } catch (error) {
+    console.error('Get shop items error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load shop items' });
+  }
+});
+
+router.post('/shop-items', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { name, description, icon, cost, category, stock, isActive } = req.body;
+
+    const newItem = {
+      name,
+      description,
+      icon: icon || '🎁',
+      cost: parseInt(cost),
+      category: category || 'cosmetic',
+      stock: stock === -1 ? -1 : parseInt(stock || -1),
+      purchaseCount: 0,
+      isActive: isActive !== false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('shop_items').insertOne(newItem);
+    res.json({ success: true, item: { ...newItem, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Create shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create shop item' });
+  }
+});
+
+router.put('/shop-items/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+
+    await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'Shop item updated successfully' });
+  } catch (error) {
+    console.error('Update shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update shop item' });
+  }
+});
+
+router.delete('/shop-items/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    await db.collection('shop_items').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    res.json({ success: true, message: 'Shop item deleted successfully' });
+  } catch (error) {
+    console.error('Delete shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete shop item' });
+  }
+});
+
+// ============================================================
+//                    ANNOUNCEMENTS
+// ============================================================
+
+router.get('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const announcements = await db.collection('announcements')
+      .find({})
+      .sort({ pinned: -1, createdAt: -1 })
+      .toArray();
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('Get announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
+router.get('/announcements/public', async (req, res) => {
+  try {
+    const db = getDb();
+    const { audience } = req.query;
+    
+    console.log('📢 Fetching public announcements for audience:', audience);
+    
+    const now = new Date();
+    
+    // Build filter - show announcements that are not expired
+    let filter = {
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ]
+    };
+
+    // If specific audience, filter by audience
+    if (audience && audience !== 'all') {
+      filter.audience = { $in: ['all', audience, 'students', 'teachers', 'parents'] };
+      // More specific: match 'all' OR the specific role
+      filter = {
+        $and: [
+          { $or: [
+            { expiresAt: { $gt: now } },
+            { expiresAt: null },
+            { expiresAt: { $exists: false } }
+          ]},
+          { $or: [
+            { audience: 'all' },
+            { audience: audience },
+            { audience: { $exists: false } }
+          ]}
+        ]
+      };
+    }
+
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(10)
+      .toArray();
+
+    console.log(`✅ Found ${announcements.length} announcements`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('Get public announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
+router.post('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { title, content, priority, audience, pinned, expiresAt } = req.body;
+
+    const newAnnouncement = {
+      title,
+      content,
+      priority: priority || 'info',
+      audience: audience || 'all',
+      pinned: pinned || false,
+      author: req.user.name || req.user.email,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('announcements').insertOne(newAnnouncement);
+    res.json({ success: true, announcement: { ...newAnnouncement, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Create announcement error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create announcement' });
+  }
+});
+
+router.put('/announcements/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+    if (updates.expiresAt) updates.expiresAt = new Date(updates.expiresAt);
+
+    await db.collection('announcements').updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'Announcement updated successfully' });
+  } catch (error) {
+    console.error('Update announcement error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update announcement' });
+  }
+});
+
+router.delete('/announcements/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    await db.collection('announcements').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    res.json({ success: true, message: 'Announcement deleted successfully' });
+  } catch (error) {
+    console.error('Delete announcement error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete announcement' });
+  }
+});
+
+// ============================================================
+//                    MAINTENANCE MESSAGES
+// ============================================================
+
+router.get('/maintenance', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const messages = await db.collection('maintenance_messages')
+      .find({})
+      .sort({ scheduledDate: -1 })
+      .toArray();
+    res.json({ success: true, messages });
+  } catch (error) {
+    console.error('Get maintenance messages error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load maintenance messages' });
+  }
+});
+
+router.post('/maintenance', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { title, description, scheduledDate, startTime, endTime, notifyBefore } = req.body;
+
+    const newMessage = {
+      title,
+      description,
+      scheduledDate: new Date(scheduledDate),
+      startTime,
+      endTime,
+      notifyBefore: notifyBefore || '24',
+      status: 'scheduled',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('maintenance_messages').insertOne(newMessage);
+    res.json({ success: true, message: { ...newMessage, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Create maintenance message error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create maintenance message' });
+  }
+});
+
+router.put('/maintenance/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+    if (updates.scheduledDate) updates.scheduledDate = new Date(updates.scheduledDate);
+
+    await db.collection('maintenance_messages').updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'Maintenance message updated successfully' });
+  } catch (error) {
+    console.error('Update maintenance message error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update maintenance message' });
+  }
+});
+
+router.delete('/maintenance/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    await db.collection('maintenance_messages').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    res.json({ success: true, message: 'Maintenance message deleted successfully' });
+  } catch (error) {
+    console.error('Delete maintenance message error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete maintenance message' });
+  }
+});
+
+// ============================================================
+//                    SUPPORT TICKETS
+// ============================================================
+
+router.get('/support-tickets', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { status, priority } = req.query;
+    
+    let filter = {};
+    if (status && status !== 'all') filter.status = status;
+    if (priority && priority !== 'all') filter.priority = priority;
+
+    const tickets = await db.collection('supporttickets')
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const counts = {
+      all: await db.collection('supporttickets').countDocuments({}),
+      open: await db.collection('supporttickets').countDocuments({ status: 'open' }),
+      in_progress: await db.collection('supporttickets').countDocuments({ status: 'in_progress' }),
+      resolved: await db.collection('supporttickets').countDocuments({ status: 'resolved' }),
+      closed: await db.collection('supporttickets').countDocuments({ status: 'closed' })
+    };
+
+    res.json({ success: true, tickets, counts });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load support tickets' });
+  }
+});
+
+router.put('/support-tickets/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { id } = req.params;
+    const { status, reply } = req.body;
+
+    const ticket = await db.collection('supporttickets').findOne({ _id: new mongoose.Types.ObjectId(id) });
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    const updates = { status, updatedAt: new Date() };
+    
+    if (reply) {
+      const newResponse = {
+        by: req.user.name || 'School Admin',
+        message: reply,
+        at: new Date()
+      };
+      updates.responses = [...(ticket.responses || []), newResponse];
+    }
+
+    await db.collection('supporttickets').updateOne(
+      { _id: new mongoose.Types.ObjectId(id) },
+      { $set: updates }
+    );
+
+    res.json({ success: true, message: 'Ticket updated successfully' });
+  } catch (error) {
+    console.error('Update support ticket error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update ticket' });
+  }
+});
+
+// ============================================================
+//                    ANALYTICS
+// ============================================================
+
+router.get('/analytics', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+
+    const [totalStudents, activeToday, totalQuizzes] = await Promise.all([
+      db.collection('students').countDocuments({}),
+      db.collection('students').countDocuments({ 
+        last_active: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } 
+      }),
+      db.collection('quiz_attempts').countDocuments({})
+    ]);
+
+    const classPerformance = await db.collection('students').aggregate([
+      { $match: { class: { $ne: null } } },
+      { $group: {
+        _id: '$class',
+        students: { $sum: 1 },
+        avgScore: { $avg: '$average_score' },
+        avgPoints: { $avg: '$points' },
+        totalQuizzes: { $sum: '$total_quizzes' }
+      }},
+      { $sort: { avgScore: -1 } }
+    ]).toArray();
+
+    const topStudents = await db.collection('students')
+      .find({})
+      .sort({ points: -1 })
+      .limit(10)
+      .toArray();
+
+    const strugglingStudents = await db.collection('students')
+      .find({
+        $or: [
+          { average_score: { $lt: 60 } },
+          { last_active: { $lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }
+        ]
+      })
+      .sort({ average_score: 1 })
+      .limit(10)
+      .toArray();
+
+    res.json({
+      success: true,
+      overview: { totalStudents, activeToday, totalQuizzes, avgScore: 0 },
+      classPerformance,
+      topStudents,
+      strugglingStudents
+    });
+  } catch (error) {
+    console.error('Get analytics error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load analytics' });
+  }
+});
+
+// ============================================================
+//                    CSV BULK UPLOAD
+// ============================================================
+
+router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    const db = getDb();
+    const { type } = req.params;
+    const results = [];
+    const errors = [];
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const rows = [];
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (row) => rows.push(row))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    for (const row of rows) {
+      try {
+        const email = (row.email || row.Email || '').toLowerCase().trim();
+        const name = row.name || row.Name || '';
+
+        if (!email || !name) {
+          errors.push({ row, error: 'Missing name or email' });
+          continue;
+        }
+
+        const existing = await db.collection('users').findOne({ email });
+        if (existing) {
+          errors.push({ row, error: 'Email already exists' });
+          continue;
+        }
+
+        const role = normalizeRole(type.slice(0, -1));
+        const tempPassword = generateTempPassword(role);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+        const newUser = {
+          name,
+          email,
+          password: hashedPassword,
+          role,
+          gender: row.gender || row.Gender || null,
+          gradeLevel: row.gradeLevel || row.GradeLevel || row.grade_level || 'Primary 1',
+          class: row.class || row.Class || null,
+          subject: row.subject || row.Subject || null,
+          accountActive: true,
+          emailVerified: false,
+          createdBy: req.user.email,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        const result = await db.collection('users').insertOne(newUser);
+
+        if (role === 'Student') {
+          await db.collection('students').insertOne({
+            user_id: result.insertedId,
+            name,
+            email,
+            grade_level: newUser.gradeLevel,
+            class: newUser.class,
+            points: 0,
+            level: 1,
+            current_profile: 1,
+            streak: 0,
+            total_quizzes: 0,
+            badges: [],
+            achievements: [],
+            placement_completed: false,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
+
+        results.push({ name, email, tempPassword });
+      } catch (err) {
+        errors.push({ row, error: err.message });
+      }
+    }
+
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      message: `Processed ${rows.length} rows`,
+      created: results.length,
+      failed: errors.length,
+      results,
+      errors
+    });
+  } catch (error) {
+    console.error('Bulk upload error:', error);
+    res.status(500).json({ success: false, error: 'Failed to process file' });
   }
 });
 

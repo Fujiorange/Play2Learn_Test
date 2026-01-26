@@ -140,11 +140,13 @@ try {
 try {
   const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
   const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
+  const mongoTeacherRoutes = require('./routes/mongoTeacherRoutes');
   const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
   
   app.use('/api/mongo/auth', mongoAuthRoutes);
   app.use('/api/auth', mongoAuthRoutes); // Backward compatibility
   app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
+  app.use('/api/mongo/teacher', authenticateToken, mongoTeacherRoutes);
   app.use('/api/mongo/school-admin', schoolAdminRoutes);
   
   console.log('✅ Routes loaded successfully');

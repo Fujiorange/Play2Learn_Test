@@ -1,78 +1,95 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import schoolAdminService from '../../services/schoolAdminService';
 import './SchoolAdmin.css';
-
-// Mock analytics data - will be replaced with real API calls
-const mockAnalytics = {
-  overview: {
-    totalStudents: 156,
-    activeToday: 89,
-    avgPointsPerStudent: 245,
-    totalBadgesEarned: 423,
-    quizzesCompletedThisWeek: 312,
-    avgQuizScore: 78.5
-  },
-  classPerformance: [
-    { class: 'P1-A', students: 32, avgScore: 85, avgPoints: 268, quizzesCompleted: 89, trend: 'up' },
-    { class: 'P1-B', students: 30, avgScore: 72, avgPoints: 198, quizzesCompleted: 76, trend: 'down' },
-    { class: 'P1-C', students: 28, avgScore: 68, avgPoints: 175, quizzesCompleted: 62, trend: 'down' },
-    { class: 'P1-D', students: 33, avgScore: 81, avgPoints: 245, quizzesCompleted: 91, trend: 'up' },
-    { class: 'P1-E', students: 33, avgScore: 77, avgPoints: 221, quizzesCompleted: 82, trend: 'stable' }
-  ],
-  topStudents: [
-    { id: 1, name: 'Carol Wong', class: 'P1-A', points: 450, badges: 5, avgScore: 94 },
-    { id: 2, name: 'Alice Tan', class: 'P1-D', points: 320, badges: 4, avgScore: 89 },
-    { id: 3, name: 'Emma Chen', class: 'P1-A', points: 275, badges: 3, avgScore: 87 },
-    { id: 4, name: 'Bob Lee', class: 'P1-E', points: 185, badges: 2, avgScore: 82 },
-    { id: 5, name: 'David Lim', class: 'P1-D', points: 165, badges: 2, avgScore: 80 }
-  ],
-  strugglingStudents: [
-    { id: 6, name: 'Tom Koh', class: 'P1-C', points: 45, avgScore: 52, lastActive: '5 days ago', issue: 'Low quiz scores' },
-    { id: 7, name: 'Sarah Ng', class: 'P1-B', points: 38, avgScore: 48, lastActive: '7 days ago', issue: 'Inactive' },
-    { id: 8, name: 'James Ong', class: 'P1-C', points: 52, avgScore: 55, lastActive: '3 days ago', issue: 'Low quiz scores' },
-    { id: 9, name: 'Lily Teo', class: 'P1-B', points: 61, avgScore: 58, lastActive: '2 days ago', issue: 'Declining trend' }
-  ],
-  badgeDistribution: [
-    { name: 'First Steps', earned: 142, icon: '🌟' },
-    { name: 'Fast Learner', earned: 89, icon: '🚀' },
-    { name: 'Streak Master', earned: 67, icon: '🔥' },
-    { name: 'High Achiever', earned: 45, icon: '📈' },
-    { name: 'Perfect Score', earned: 23, icon: '💯' },
-    { name: 'Math Champion', earned: 8, icon: '👑' }
-  ],
-  weeklyTrend: [
-    { week: 'Week 1', avgScore: 72, activeStudents: 134 },
-    { week: 'Week 2', avgScore: 74, activeStudents: 141 },
-    { week: 'Week 3', avgScore: 76, activeStudents: 138 },
-    { week: 'Week 4', avgScore: 78, activeStudents: 145 }
-  ]
-};
 
 export default function AnalyticsDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') { navigate('/login'); return; }
+    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
     loadAnalytics();
   }, [navigate]);
 
   const loadAnalytics = async () => {
     try {
-      // TODO: Replace with real API call
-      // const result = await schoolAdminService.getAnalytics();
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAnalytics(mockAnalytics);
+      setError('');
+      const result = await schoolAdminService.getAnalytics();
+      
+      if (result.success) {
+        // Transform backend data to frontend format
+        const transformed = {
+          overview: {
+            totalStudents: result.overview?.totalStudents || 0,
+            activeToday: result.overview?.activeToday || 0,
+            totalQuizzes: result.overview?.totalQuizzes || 0,
+            avgQuizScore: result.overview?.avgScore || 0
+          },
+          classPerformance: (result.classPerformance || []).map(c => ({
+            class: c._id || 'Unknown',
+            students: c.students || 0,
+            avgScore: Math.round(c.avgScore || 0),
+            avgPoints: Math.round(c.avgPoints || 0),
+            quizzesCompleted: c.totalQuizzes || 0,
+            trend: 'stable'
+          })),
+          topStudents: (result.topStudents || []).map((s, i) => ({
+            id: s._id,
+            name: s.name || 'Unknown',
+            class: s.class || '-',
+            points: s.points || 0,
+            badges: s.badges?.length || 0,
+            avgScore: s.average_score || 0
+          })),
+          strugglingStudents: (result.strugglingStudents || []).map(s => ({
+            id: s._id,
+            name: s.name || 'Unknown',
+            class: s.class || '-',
+            points: s.points || 0,
+            avgScore: s.average_score || 0,
+            lastActive: s.last_active ? getTimeSince(s.last_active) : 'Never',
+            issue: (s.average_score || 0) < 60 ? 'Low quiz scores' : 'Inactive'
+          })),
+          badgeDistribution: [],
+          weeklyTrend: []
+        };
+        setAnalytics(transformed);
+      } else {
+        setError(result.error || 'Failed to load analytics');
+        // Set empty data
+        setAnalytics({
+          overview: { totalStudents: 0, activeToday: 0, totalQuizzes: 0, avgQuizScore: 0 },
+          classPerformance: [],
+          topStudents: [],
+          strugglingStudents: [],
+          badgeDistribution: [],
+          weeklyTrend: []
+        });
+      }
     } catch (error) {
       console.error('Error loading analytics:', error);
+      setError('Failed to load analytics');
     } finally {
       setLoading(false);
     }
+  };
+
+  const getTimeSince = (dateString) => {
+    if (!dateString) return 'Never';
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return '1 day ago';
+    return `${diffDays} days ago`;
   };
 
   const getScoreColor = (score) => {
@@ -91,8 +108,8 @@ export default function AnalyticsDashboard() {
     return <div className="sa-loading"><div className="sa-loading-text">Loading analytics...</div></div>;
   }
 
-  const strugglingClasses = analytics.classPerformance.filter(c => c.avgScore < 75);
-  const topClasses = analytics.classPerformance.filter(c => c.avgScore >= 80);
+  const strugglingClasses = analytics?.classPerformance?.filter(c => c.avgScore < 75) || [];
+  const topClasses = analytics?.classPerformance?.filter(c => c.avgScore >= 80) || [];
 
   return (
     <div className="sa-container">
@@ -108,16 +125,17 @@ export default function AnalyticsDashboard() {
 
       <main className="sa-main-wide">
         <h1 className="sa-page-title">📊 Analytics & Performance</h1>
-        <p className="sa-page-subtitle">Monitor class performance, identify struggling students, and track trends</p>
+        <p className="sa-page-subtitle">Monitor class performance, identify struggling students, and track trends (Live from Database)</p>
+
+        {error && <div className="sa-message sa-message-error">⚠️ {error}</div>}
 
         {/* Tabs */}
         <div className="points-tabs">
-          {['overview', 'classes', 'students', 'trends'].map(tab => (
+          {['overview', 'classes', 'students'].map(tab => (
             <button key={tab} className={`points-tab ${activeTab === tab ? 'points-tab-active' : ''}`} onClick={() => setActiveTab(tab)}>
               {tab === 'overview' && '📈 Overview'}
               {tab === 'classes' && '🏫 Class Performance'}
               {tab === 'students' && '👥 Students'}
-              {tab === 'trends' && '📅 Trends'}
             </button>
           ))}
         </div>
@@ -130,17 +148,17 @@ export default function AnalyticsDashboard() {
               <div className="sa-stat-card">
                 <div className="sa-stat-icon">👥</div>
                 <p className="sa-stat-label">Total Students</p>
-                <p className="sa-stat-value">{analytics.overview.totalStudents}</p>
+                <p className="sa-stat-value">{analytics?.overview?.totalStudents || 0}</p>
               </div>
               <div className="sa-stat-card">
                 <div className="sa-stat-icon">✅</div>
                 <p className="sa-stat-label">Active Today</p>
-                <p className="sa-stat-value">{analytics.overview.activeToday}</p>
+                <p className="sa-stat-value">{analytics?.overview?.activeToday || 0}</p>
               </div>
               <div className="sa-stat-card">
-                <div className="sa-stat-icon">📊</div>
-                <p className="sa-stat-label">Avg Quiz Score</p>
-                <p className="sa-stat-value">{analytics.overview.avgQuizScore}%</p>
+                <div className="sa-stat-icon">📝</div>
+                <p className="sa-stat-label">Total Quizzes Taken</p>
+                <p className="sa-stat-value">{analytics?.overview?.totalQuizzes || 0}</p>
               </div>
             </div>
 
@@ -155,7 +173,7 @@ export default function AnalyticsDashboard() {
                   {strugglingClasses.map(cls => (
                     <div key={cls.class} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                       <span style={{ fontWeight: '600' }}>{cls.class}</span>
-                      <span style={{ color: '#dc2626' }}>Avg: {cls.avgScore}% {getTrendIcon(cls.trend)}</span>
+                      <span style={{ color: '#dc2626' }}>Avg: {cls.avgScore}%</span>
                     </div>
                   ))}
                 </div>
@@ -170,33 +188,17 @@ export default function AnalyticsDashboard() {
                   {topClasses.map(cls => (
                     <div key={cls.class} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                       <span style={{ fontWeight: '600' }}>{cls.class}</span>
-                      <span style={{ color: '#16a34a' }}>Avg: {cls.avgScore}% {getTrendIcon(cls.trend)}</span>
+                      <span style={{ color: '#16a34a' }}>Avg: {cls.avgScore}%</span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
 
-            {/* Badge Distribution */}
-            <div className="sa-card">
-              <h3 className="points-card-title">🏅 Badge Distribution</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {analytics.badgeDistribution.map((badge, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '24px', width: '32px' }}>{badge.icon}</span>
-                    <span style={{ width: '120px', fontWeight: '500' }}>{badge.name}</span>
-                    <div style={{ flex: 1, background: '#e5e7eb', borderRadius: '8px', height: '24px', overflow: 'hidden' }}>
-                      <div style={{ 
-                        width: `${(badge.earned / 142) * 100}%`, 
-                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
-                        height: '100%', 
-                        borderRadius: '8px'
-                      }}></div>
-                    </div>
-                    <span style={{ width: '50px', textAlign: 'right', fontWeight: '600', color: '#10b981' }}>{badge.earned}</span>
-                  </div>
-                ))}
-              </div>
+              {strugglingClasses.length === 0 && topClasses.length === 0 && (
+                <div className="sa-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
+                  <p style={{ color: '#6b7280' }}>No class performance data yet. Assign students to classes to see analytics.</p>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -205,44 +207,48 @@ export default function AnalyticsDashboard() {
         {activeTab === 'classes' && (
           <div className="sa-card">
             <h3 className="points-card-title">🏫 Class Performance Comparison</h3>
-            <table className="sa-table">
-              <thead>
-                <tr>
-                  <th>Class</th>
-                  <th>Students</th>
-                  <th>Avg Score</th>
-                  <th>Avg Points</th>
-                  <th>Quizzes Done</th>
-                  <th>Trend</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analytics.classPerformance.sort((a, b) => b.avgScore - a.avgScore).map((cls, index) => (
-                  <tr key={index}>
-                    <td style={{ fontWeight: '600' }}>{cls.class}</td>
-                    <td>{cls.students}</td>
-                    <td>
-                      <span style={{ color: getScoreColor(cls.avgScore), fontWeight: '600' }}>
-                        {cls.avgScore}%
-                      </span>
-                    </td>
-                    <td className="points-value">{cls.avgPoints}</td>
-                    <td>{cls.quizzesCompleted}</td>
-                    <td style={{ fontSize: '20px' }}>{getTrendIcon(cls.trend)}</td>
-                    <td>
-                      {cls.avgScore >= 80 ? (
-                        <span className="sa-badge sa-badge-success">Excellent</span>
-                      ) : cls.avgScore >= 70 ? (
-                        <span className="sa-badge sa-badge-primary">Good</span>
-                      ) : (
-                        <span className="sa-badge sa-badge-danger">Needs Help</span>
-                      )}
-                    </td>
+            {analytics?.classPerformance?.length > 0 ? (
+              <table className="sa-table">
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Students</th>
+                    <th>Avg Score</th>
+                    <th>Avg Points</th>
+                    <th>Quizzes Done</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {analytics.classPerformance.sort((a, b) => b.avgScore - a.avgScore).map((cls, index) => (
+                    <tr key={index}>
+                      <td style={{ fontWeight: '600' }}>{cls.class}</td>
+                      <td>{cls.students}</td>
+                      <td>
+                        <span style={{ color: getScoreColor(cls.avgScore), fontWeight: '600' }}>
+                          {cls.avgScore}%
+                        </span>
+                      </td>
+                      <td className="points-value">{cls.avgPoints}</td>
+                      <td>{cls.quizzesCompleted}</td>
+                      <td>
+                        {cls.avgScore >= 80 ? (
+                          <span className="sa-badge sa-badge-success">Excellent</span>
+                        ) : cls.avgScore >= 70 ? (
+                          <span className="sa-badge sa-badge-primary">Good</span>
+                        ) : (
+                          <span className="sa-badge sa-badge-danger">Needs Help</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                <p>No class data available. Create classes and assign students to see performance metrics.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -252,96 +258,71 @@ export default function AnalyticsDashboard() {
             {/* Struggling Students Alert */}
             <div className="sa-card sa-mb-4" style={{ borderLeft: '4px solid #dc2626' }}>
               <h3 style={{ color: '#dc2626', margin: '0 0 16px 0' }}>⚠️ Students Needing Support</h3>
-              <table className="sa-table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Class</th>
-                    <th>Avg Score</th>
-                    <th>Points</th>
-                    <th>Last Active</th>
-                    <th>Issue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analytics.strugglingStudents.map(student => (
-                    <tr key={student.id}>
-                      <td style={{ fontWeight: '600' }}>{student.name}</td>
-                      <td><span className="sa-badge sa-badge-primary">{student.class}</span></td>
-                      <td style={{ color: '#dc2626', fontWeight: '600' }}>{student.avgScore}%</td>
-                      <td>{student.points}</td>
-                      <td style={{ color: '#6b7280' }}>{student.lastActive}</td>
-                      <td><span className="sa-badge sa-badge-danger">{student.issue}</span></td>
+              {analytics?.strugglingStudents?.length > 0 ? (
+                <table className="sa-table">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Avg Score</th>
+                      <th>Points</th>
+                      <th>Last Active</th>
+                      <th>Issue</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {analytics.strugglingStudents.map(student => (
+                      <tr key={student.id}>
+                        <td style={{ fontWeight: '600' }}>{student.name}</td>
+                        <td><span className="sa-badge sa-badge-primary">{student.class}</span></td>
+                        <td style={{ color: '#dc2626', fontWeight: '600' }}>{student.avgScore}%</td>
+                        <td>{student.points}</td>
+                        <td style={{ color: '#6b7280' }}>{student.lastActive}</td>
+                        <td><span className="sa-badge sa-badge-danger">{student.issue}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: '#6b7280', textAlign: 'center', padding: '20px' }}>No struggling students identified. Great job! 🎉</p>
+              )}
             </div>
 
             {/* Top Students */}
             <div className="sa-card">
               <h3 className="points-card-title">🏆 Top Performing Students</h3>
-              <table className="sa-table">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Student</th>
-                    <th>Class</th>
-                    <th>Avg Score</th>
-                    <th>Points</th>
-                    <th>Badges</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analytics.topStudents.map((student, index) => (
-                    <tr key={student.id}>
-                      <td style={{ fontSize: '20px' }}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
-                      </td>
-                      <td style={{ fontWeight: '600' }}>{student.name}</td>
-                      <td><span className="sa-badge sa-badge-primary">{student.class}</span></td>
-                      <td style={{ color: '#16a34a', fontWeight: '600' }}>{student.avgScore}%</td>
-                      <td className="points-value">{student.points}</td>
-                      <td>{student.badges} 🏆</td>
+              {analytics?.topStudents?.length > 0 ? (
+                <table className="sa-table">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Avg Score</th>
+                      <th>Points</th>
+                      <th>Badges</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {analytics.topStudents.map((student, index) => (
+                      <tr key={student.id}>
+                        <td style={{ fontSize: '20px' }}>
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                        </td>
+                        <td style={{ fontWeight: '600' }}>{student.name}</td>
+                        <td><span className="sa-badge sa-badge-primary">{student.class}</span></td>
+                        <td style={{ color: '#16a34a', fontWeight: '600' }}>{student.avgScore}%</td>
+                        <td className="points-value">{student.points}</td>
+                        <td>{student.badges} 🏆</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: '#6b7280', textAlign: 'center', padding: '20px' }}>No student data yet. Students will appear here after they complete quizzes.</p>
+              )}
             </div>
           </>
-        )}
-
-        {/* Trends Tab */}
-        {activeTab === 'trends' && (
-          <div className="sa-card">
-            <h3 className="points-card-title">📅 Weekly Performance Trend</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', height: '250px', padding: '20px 0' }}>
-              {analytics.weeklyTrend.map((week, index) => (
-                <div key={index} style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ 
-                    height: `${week.avgScore * 2}px`, 
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
-                    width: '60px', 
-                    margin: '0 auto',
-                    borderRadius: '8px 8px 0 0',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'center',
-                    paddingTop: '8px',
-                    color: 'white',
-                    fontWeight: '600'
-                  }}>
-                    {week.avgScore}%
-                  </div>
-                  <p style={{ fontWeight: '600', marginTop: '12px', color: '#374151' }}>{week.week}</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280' }}>{week.activeStudents} active</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ textAlign: 'center', marginTop: '16px', padding: '16px', background: '#f0fdf4', borderRadius: '8px' }}>
-              <span style={{ color: '#16a34a', fontWeight: '600' }}>📈 Overall Trend: +6% improvement over 4 weeks</span>
-            </div>
-          </div>
         )}
       </main>
     </div>

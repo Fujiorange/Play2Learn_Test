@@ -1,29 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import schoolAdminService from '../../services/schoolAdminService';
 import './SchoolAdmin.css';
-
-const mockMaintenanceMessages = [
-  { id: 1, title: 'Scheduled Server Maintenance', description: 'Routine server maintenance and database optimization. Users may experience brief interruptions.', scheduledDate: '2026-01-25', startTime: '02:00', endTime: '04:00', status: 'scheduled', notifyBefore: '24', createdAt: '2026-01-22' },
-  { id: 2, title: 'Feature Update Deployment', description: 'Deploying new quiz features and performance improvements.', scheduledDate: '2026-02-01', startTime: '03:00', endTime: '05:00', status: 'scheduled', notifyBefore: '48', createdAt: '2026-01-20' },
-  { id: 3, title: 'Database Migration', description: 'Completed database migration for improved performance.', scheduledDate: '2026-01-15', startTime: '01:00', endTime: '03:00', status: 'completed', notifyBefore: '24', createdAt: '2026-01-10' }
-];
 
 const statusConfig = {
   scheduled: { label: 'Scheduled', color: '#2563eb', bg: '#eff6ff', icon: '📅' },
-  active: { label: 'In Progress', color: '#d97706', bg: '#fffbeb', icon: '🔧' },
+  active: { label: 'Active', color: '#d97706', bg: '#fffbeb', icon: '🔄' },
+  in_progress: { label: 'In Progress', color: '#d97706', bg: '#fffbeb', icon: '⚙️' },
   completed: { label: 'Completed', color: '#16a34a', bg: '#f0fdf4', icon: '✅' },
   cancelled: { label: 'Cancelled', color: '#6b7280', bg: '#f3f4f6', icon: '❌' }
 };
-
-const notifyOptions = [
-  { value: '1', label: '1 hour before' },
-  { value: '6', label: '6 hours before' },
-  { value: '12', label: '12 hours before' },
-  { value: '24', label: '24 hours before' },
-  { value: '48', label: '48 hours before' },
-  { value: '72', label: '72 hours before' }
-];
 
 export default function MaintenanceMessages() {
   const navigate = useNavigate();
@@ -42,16 +29,20 @@ export default function MaintenanceMessages() {
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') { navigate('/login'); return; }
+    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
     loadMessages();
   }, [navigate]);
 
   const loadMessages = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setMessages(mockMaintenanceMessages);
+      const result = await schoolAdminService.getMaintenanceMessages();
+      if (result.success) {
+        setMessages(result.messages || []);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load' });
+      }
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('Error loading maintenance messages:', error);
     } finally {
       setLoading(false);
     }
@@ -60,68 +51,108 @@ export default function MaintenanceMessages() {
   const resetForm = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    setFormData({ title: '', description: '', scheduledDate: tomorrow.toISOString().split('T')[0], startTime: '02:00', endTime: '04:00', notifyBefore: '24' });
+    setFormData({
+      title: '', description: '', 
+      scheduledDate: tomorrow.toISOString().split('T')[0], 
+      startTime: '02:00', endTime: '04:00', notifyBefore: '24'
+    });
     setEditingId(null);
   };
 
   const openCreateModal = () => { resetForm(); setShowModal(true); };
 
   const openEditModal = (msg) => {
-    setEditingId(msg.id);
-    setFormData({ title: msg.title, description: msg.description, scheduledDate: msg.scheduledDate, startTime: msg.startTime, endTime: msg.endTime, notifyBefore: msg.notifyBefore });
+    setEditingId(msg._id);
+    setFormData({
+      title: msg.title,
+      description: msg.description,
+      scheduledDate: msg.scheduledDate ? new Date(msg.scheduledDate).toISOString().split('T')[0] : '',
+      startTime: msg.startTime || '02:00',
+      endTime: msg.endTime || '04:00',
+      notifyBefore: msg.notifyBefore || '24'
+    });
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.title || !formData.scheduledDate) {
-      setMessage({ type: 'error', text: 'Please fill in title and scheduled date' });
+      setMessage({ type: 'error', text: 'Please fill in title and date' });
       return;
     }
-
-    if (editingId) {
-      setMessages(messages.map(m => m.id === editingId ? { ...m, ...formData } : m));
-      setMessage({ type: 'success', text: 'Maintenance scheduled updated!' });
-    } else {
-      const newMessage = { id: Date.now(), ...formData, status: 'scheduled', createdAt: new Date().toISOString().split('T')[0] };
-      setMessages([newMessage, ...messages]);
-      setMessage({ type: 'success', text: 'Maintenance scheduled successfully!' });
+    try {
+      let result;
+      if (editingId) {
+        result = await schoolAdminService.updateMaintenanceMessage(editingId, formData);
+      } else {
+        result = await schoolAdminService.createMaintenanceMessage(formData);
+      }
+      if (result.success) {
+        setMessage({ type: 'success', text: editingId ? 'Updated!' : 'Created!' });
+        setShowModal(false);
+        loadMessages();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to save' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to save' });
     }
-
-    setShowModal(false);
-    resetForm();
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleDelete = () => {
-    setMessages(messages.filter(m => m.id !== selectedMessage.id));
-    setMessage({ type: 'success', text: 'Maintenance message deleted!' });
+  const handleStatusChange = async (msg, newStatus) => {
+    try {
+      await schoolAdminService.updateMaintenanceMessage(msg._id, { status: newStatus });
+      setMessage({ type: 'success', text: `Status updated to ${newStatus}` });
+      loadMessages();
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update status' });
+    }
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  const handleDelete = async () => {
+    try {
+      const result = await schoolAdminService.deleteMaintenanceMessage(selectedMessage._id);
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Deleted!' });
+        loadMessages();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to delete' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete' });
+    }
     setShowDeleteModal(false);
     setSelectedMessage(null);
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const updateStatus = (msg, newStatus) => {
-    setMessages(messages.map(m => m.id === msg.id ? { ...m, status: newStatus } : m));
-    setMessage({ type: 'success', text: `Status updated to ${statusConfig[newStatus].label}!` });
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-  };
-
-  const getCountdown = (scheduledDate, startTime) => {
-    const scheduled = new Date(`${scheduledDate}T${startTime}`);
+  const getCountdown = (scheduledDate) => {
+    if (!scheduledDate) return '';
     const now = new Date();
-    const diff = scheduled - now;
-    if (diff < 0) return 'Past';
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h`;
+    const date = new Date(scheduledDate);
+    const diffMs = date - now;
+    if (diffMs < 0) return 'Past';
+    const diffDays = Math.floor(diffMs / 86400000);
+    const diffHours = Math.floor((diffMs % 86400000) / 3600000);
+    if (diffDays > 0) return `${diffDays}d ${diffHours}h`;
+    if (diffHours > 0) return `${diffHours}h`;
     return 'Soon';
   };
 
-  const filteredMessages = messages.filter(m => filter === 'all' || m.status === filter).sort((a, b) => new Date(b.scheduledDate) - new Date(a.scheduledDate));
+  const filteredMessages = messages
+    .filter(m => filter === 'all' || m.status === filter)
+    .sort((a, b) => new Date(b.scheduledDate) - new Date(a.scheduledDate));
+
+  const statusCounts = {
+    all: messages.length,
+    scheduled: messages.filter(m => m.status === 'scheduled').length,
+    active: messages.filter(m => m.status === 'active' || m.status === 'in_progress').length,
+    completed: messages.filter(m => m.status === 'completed').length
+  };
 
   if (loading) {
-    return <div className="sa-loading"><div className="sa-loading-text">Loading maintenance messages...</div></div>;
+    return <div className="sa-loading"><div className="sa-loading-text">Loading...</div></div>;
   }
 
   return (
@@ -140,7 +171,7 @@ export default function MaintenanceMessages() {
         <div className="badge-page-header">
           <div>
             <h1 className="sa-page-title">🔧 System Maintenance</h1>
-            <p className="sa-page-subtitle">Schedule maintenance windows and notify all school members</p>
+            <p className="sa-page-subtitle">Schedule and manage maintenance windows (Stored in Database)</p>
           </div>
           <button className="sa-button-primary" onClick={openCreateModal}>+ Schedule Maintenance</button>
         </div>
@@ -153,10 +184,10 @@ export default function MaintenanceMessages() {
 
         {/* Filter Tabs */}
         <div className="points-tabs">
-          <button className={`points-tab ${filter === 'all' ? 'points-tab-active' : ''}`} onClick={() => setFilter('all')}>All ({messages.length})</button>
-          <button className={`points-tab ${filter === 'scheduled' ? 'points-tab-active' : ''}`} onClick={() => setFilter('scheduled')}>📅 Scheduled</button>
-          <button className={`points-tab ${filter === 'active' ? 'points-tab-active' : ''}`} onClick={() => setFilter('active')}>🔧 In Progress</button>
-          <button className={`points-tab ${filter === 'completed' ? 'points-tab-active' : ''}`} onClick={() => setFilter('completed')}>✅ Completed</button>
+          <button className={`points-tab ${filter === 'all' ? 'points-tab-active' : ''}`} onClick={() => setFilter('all')}>All ({statusCounts.all})</button>
+          <button className={`points-tab ${filter === 'scheduled' ? 'points-tab-active' : ''}`} onClick={() => setFilter('scheduled')}>📅 Scheduled ({statusCounts.scheduled})</button>
+          <button className={`points-tab ${filter === 'active' ? 'points-tab-active' : ''}`} onClick={() => setFilter('active')}>🔄 Active ({statusCounts.active})</button>
+          <button className={`points-tab ${filter === 'completed' ? 'points-tab-active' : ''}`} onClick={() => setFilter('completed')}>✅ Completed ({statusCounts.completed})</button>
         </div>
 
         {/* Messages List */}
@@ -164,70 +195,54 @@ export default function MaintenanceMessages() {
           <div className="sa-card" style={{ textAlign: 'center', padding: '60px' }}>
             <p style={{ fontSize: '48px', marginBottom: '16px' }}>🔧</p>
             <p style={{ fontSize: '18px', fontWeight: '600', color: '#6b7280' }}>No maintenance scheduled</p>
-            <p style={{ color: '#9ca3af' }}>Schedule maintenance to notify users in advance</p>
+            <p style={{ color: '#9ca3af' }}>Schedule maintenance to notify users of upcoming downtime</p>
           </div>
         ) : (
-          <div className="sa-card">
-            <table className="sa-table">
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Title</th>
-                  <th>Scheduled</th>
-                  <th>Time Window</th>
-                  <th>Countdown</th>
-                  <th>Notify</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMessages.map(msg => {
-                  const config = statusConfig[msg.status];
-                  const countdown = getCountdown(msg.scheduledDate, msg.startTime);
-                  return (
-                    <tr key={msg.id}>
-                      <td>
-                        <span className="sa-badge" style={{ background: config.bg, color: config.color }}>
-                          {config.icon} {config.label}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: '600' }}>{msg.title}</div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{msg.description}</div>
-                      </td>
-                      <td>{msg.scheduledDate}</td>
-                      <td>{msg.startTime} - {msg.endTime}</td>
-                      <td>
-                        {msg.status === 'scheduled' && countdown !== 'Past' ? (
-                          <span style={{ background: countdown === 'Soon' ? '#fef3c7' : '#eff6ff', color: countdown === 'Soon' ? '#d97706' : '#2563eb', padding: '4px 8px', borderRadius: '4px', fontWeight: '600', fontSize: '13px' }}>
-                            {countdown}
-                          </span>
-                        ) : (
-                          <span style={{ color: '#9ca3af' }}>-</span>
-                        )}
-                      </td>
-                      <td>{msg.notifyBefore}h before</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {msg.status === 'scheduled' && (
-                            <>
-                              <button className="sa-button-warning" onClick={() => updateStatus(msg, 'active')}>Start</button>
-                              <button className="sa-button-action" onClick={() => openEditModal(msg)}>Edit</button>
-                            </>
-                          )}
-                          {msg.status === 'active' && (
-                            <button className="sa-button-enable" onClick={() => updateStatus(msg, 'completed')}>Complete</button>
-                          )}
-                          {msg.status !== 'active' && (
-                            <button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => { setSelectedMessage(msg); setShowDeleteModal(true); }}>Delete</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {filteredMessages.map(msg => {
+              const status = statusConfig[msg.status] || statusConfig.scheduled;
+              const countdown = getCountdown(msg.scheduledDate);
+              return (
+                <div key={msg._id} className="sa-card" style={{ borderLeft: `4px solid ${status.color}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{msg.title}</h3>
+                      <p style={{ color: '#6b7280', margin: 0 }}>{msg.description}</p>
+                    </div>
+                    <span className="sa-badge" style={{ background: status.bg, color: status.color }}>
+                      {status.icon} {status.label}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', fontSize: '14px', color: '#6b7280' }}>
+                    <span>📅 {msg.scheduledDate ? new Date(msg.scheduledDate).toLocaleDateString() : 'No date'}</span>
+                    <span>🕐 {msg.startTime} - {msg.endTime}</span>
+                    <span>⏰ Notify {msg.notifyBefore}h before</span>
+                    {msg.status === 'scheduled' && countdown !== 'Past' && (
+                      <span style={{ color: '#d97706', fontWeight: '600' }}>⏳ {countdown}</span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {msg.status === 'scheduled' && (
+                        <button className="sa-button-warning" onClick={() => handleStatusChange(msg, 'active')}>▶️ Start</button>
+                      )}
+                      {(msg.status === 'active' || msg.status === 'in_progress') && (
+                        <button className="sa-button-enable" onClick={() => handleStatusChange(msg, 'completed')}>✅ Complete</button>
+                      )}
+                      {msg.status === 'scheduled' && (
+                        <button className="sa-button-secondary" onClick={() => handleStatusChange(msg, 'cancelled')}>Cancel</button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="sa-button-action" onClick={() => openEditModal(msg)}>Edit</button>
+                      <button className="sa-button-danger" style={{ padding: '6px 12px' }} onClick={() => { setSelectedMessage(msg); setShowDeleteModal(true); }}>🗑️</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
@@ -235,17 +250,17 @@ export default function MaintenanceMessages() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="sa-modal" onClick={() => setShowModal(false)}>
-          <div className="sa-modal-content" style={{ maxWidth: '550px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="sa-modal-content" style={{ maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="sa-modal-title">{editingId ? '✏️ Edit Maintenance' : '🔧 Schedule Maintenance'}</h2>
-            
+
             <div className="sa-form-group">
               <label className="sa-label">Title *</label>
-              <input type="text" className="sa-input" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="e.g., Scheduled Server Maintenance" />
+              <input type="text" className="sa-input" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="e.g., Server Upgrade" />
             </div>
 
             <div className="sa-form-group">
               <label className="sa-label">Description</label>
-              <textarea className="sa-textarea" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Brief description of the maintenance..." style={{ minHeight: '80px' }} />
+              <textarea className="sa-textarea" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="What will be done during maintenance?" />
             </div>
 
             <div className="sa-form-group">
@@ -265,17 +280,20 @@ export default function MaintenanceMessages() {
             </div>
 
             <div className="sa-form-group">
-              <label className="sa-label">Notify Users</label>
+              <label className="sa-label">Notify Users Before</label>
               <select className="sa-select" value={formData.notifyBefore} onChange={(e) => setFormData({ ...formData, notifyBefore: e.target.value })}>
-                {notifyOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
+                <option value="1">1 hour</option>
+                <option value="6">6 hours</option>
+                <option value="12">12 hours</option>
+                <option value="24">24 hours</option>
+                <option value="48">48 hours</option>
+                <option value="72">72 hours</option>
               </select>
             </div>
 
             <div className="sa-modal-buttons">
               <button className="sa-modal-button-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="sa-modal-button-confirm" onClick={handleSave}>{editingId ? 'Save Changes' : 'Schedule'}</button>
+              <button className="sa-modal-button-confirm" onClick={handleSave}>{editingId ? 'Save' : 'Schedule'}</button>
             </div>
           </div>
         </div>

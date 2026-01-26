@@ -178,6 +178,13 @@ export default function StudentDashboard() {
       icon: '📩',
       action: () => navigate('/student/support/tickets'),
     },
+    {
+      id: 'badges',
+      title: 'Badges & Shop',
+      description: 'View earned badges and spend points',
+      icon: '🏆',
+      action: () => navigate('/student/badges'),
+    },
   ];
 
   const statCards = [

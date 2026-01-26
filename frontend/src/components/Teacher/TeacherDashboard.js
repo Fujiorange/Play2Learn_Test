@@ -503,6 +503,18 @@ export default function TeacherDashboard() {
                 <span>View Student Leaderboard</span>
                 <span style={styles.arrow}>→</span>
               </li>
+              <li
+                style={{
+                  ...styles.menuItem,
+                  ...(hoveredItem === 'points' ? styles.menuItemHover : {}),
+                }}
+                onMouseEnter={() => setHoveredItem('points')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => navigate('/teacher/points')}
+              >
+                <span>💰 Manage Student Points</span>
+                <span style={styles.arrow}>→</span>
+              </li>
             </ul>
           </div>
 
