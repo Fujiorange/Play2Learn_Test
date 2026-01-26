@@ -1,3 +1,7 @@
+// frontend/src/pages/Parent/ParentDashboard.js - WITH SKILL MATRIX OPTION
+// ✅ UPDATED: Added "📊 View Skill Matrix" button in Child Management section
+// ✅ No stat cards (from file 16) + new skill matrix navigation
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -124,11 +128,6 @@ export default function ParentDashboard() {
     welcomeTitle: { fontSize: '28px', fontWeight: '700', margin: '0 0 8px 0' },
     welcomeSubtitle: { fontSize: '16px', opacity: 0.9, margin: 0 },
     childSelectorWrapper: { marginBottom: '32px' },
-    statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '32px' },
-    statCard: { background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', transition: 'transform 0.2s' },
-    statIcon: { fontSize: '32px', marginBottom: '8px' },
-    statLabel: { fontSize: '13px', color: '#6b7280', margin: '0 0 4px 0', fontWeight: '500' },
-    statValue: { fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 },
     activitiesCard: { background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', marginBottom: '32px' },
     activitiesTitle: { fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '16px' },
     activityItem: { padding: '12px', background: '#f9fafb', borderRadius: '8px', marginBottom: '8px', borderLeft: '3px solid #10b981' },
@@ -227,68 +226,29 @@ export default function ParentDashboard() {
           />
         </div>
 
-        {/* Stats for Selected Child */}
-        {selectedChild && !statsLoading && childStats && (
-          <>
-            <div style={styles.statsGrid}>
-              <div style={styles.statCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={styles.statIcon}>🎓</div>
-                <p style={styles.statLabel}>Overall Grade</p>
-                <p style={{...styles.statValue, color: parentService.getGradeColor(childStats.overallGrade)}}>
-                  {childStats.overallGrade}
-                </p>
-              </div>
-              
-              <div style={styles.statCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={styles.statIcon}>📊</div>
-                <p style={styles.statLabel}>Average Score</p>
-                <p style={styles.statValue}>{childStats.averageScore}%</p>
-              </div>
-              
-              <div style={styles.statCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={styles.statIcon}>📝</div>
-                <p style={styles.statLabel}>Quizzes Completed</p>
-                <p style={styles.statValue}>{childStats.totalQuizzesCompleted}</p>
-              </div>
-              
-              <div style={styles.statCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={styles.statIcon}>🏆</div>
-                <p style={styles.statLabel}>Current Level</p>
-                <p style={styles.statValue}>{childStats.currentLevel}</p>
-              </div>
-              
-              <div style={styles.statCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={styles.statIcon}>⭐</div>
-                <p style={styles.statLabel}>Total Points</p>
-                <p style={styles.statValue}>{childStats.totalPoints}</p>
-              </div>
-              
-              <div style={styles.statCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={styles.statIcon}>📅</div>
-                <p style={styles.statLabel}>Attendance</p>
-                <p style={{...styles.statValue, color: '#10b981'}}>{childStats.attendance}</p>
-              </div>
-            </div>
+        {/* 
+        ========================================
+        STAT CARDS REMOVED (from file 16)
+        ========================================
+        */}
 
-            {/* Recent Activities */}
-            {childActivities.length > 0 && (
-              <div style={styles.activitiesCard}>
-                <h2 style={styles.activitiesTitle}>
-                  🎯 Recent Activities - {selectedChild.studentName}
-                </h2>
-                {childActivities.map((activity, index) => (
-                  <div key={index} style={styles.activityItem}>
-                    <div style={styles.activityTitle}>
-                      {activity.icon} {activity.title}
-                    </div>
-                    <div style={styles.activityDetails}>
-                      {activity.description} • {parentService.formatDate(activity.timestamp)}
-                    </div>
-                  </div>
-                ))}
+        {/* Recent Activities - KEPT AS IS */}
+        {selectedChild && !statsLoading && childActivities.length > 0 && (
+          <div style={styles.activitiesCard}>
+            <h2 style={styles.activitiesTitle}>
+              🎯 Recent Activities - {selectedChild.studentName}
+            </h2>
+            {childActivities.map((activity, index) => (
+              <div key={index} style={styles.activityItem}>
+                <div style={styles.activityTitle}>
+                  {activity.icon} {activity.title}
+                </div>
+                <div style={styles.activityDetails}>
+                  {activity.description} • {parentService.formatDate(activity.timestamp)}
+                </div>
               </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
 
         {statsLoading && (
@@ -297,9 +257,9 @@ export default function ParentDashboard() {
           </div>
         )}
 
-        {/* Quick Actions & Support Sections */}
+        {/* Quick Actions & Support Sections - WITH SKILL MATRIX ADDED */}
         <div style={styles.sectionsGrid}>
-          {/* Child Management */}
+          {/* Child Management - UPDATED WITH SKILL MATRIX */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <span style={styles.sectionIcon}>👨‍👩‍👧‍👦</span>
@@ -315,13 +275,23 @@ export default function ParentDashboard() {
                 <span>View All Children</span>
                 <span style={styles.arrow}>→</span>
               </li>
+              {/* NEW: Skill Matrix Option */}
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'skills' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('skills')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/parent/children/skills')}
+              >
+                <span>📊 View Skill Matrix</span>
+                <span style={styles.arrow}>→</span>
+              </li>
               <li
                 style={{ ...styles.menuItem, ...(hoveredItem === 'performance' ? styles.menuItemHover : {}) }}
                 onMouseEnter={() => setHoveredItem('performance')}
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => handleMenuClick('/parent/children/performance')}
               >
-                <span>📊 View Performance</span>
+                <span>📈 View Performance</span>
                 <span style={styles.arrow}>→</span>
               </li>
               <li
@@ -330,7 +300,7 @@ export default function ParentDashboard() {
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => handleMenuClick('/parent/children/progress')}
               >
-                <span>📈 View Progress</span>
+                <span>🎯 View Progress</span>
                 <span style={styles.arrow}>→</span>
               </li>
             </ul>

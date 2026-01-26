@@ -1,6 +1,6 @@
-// backend/routes/mongoParentRoutes.js - PHASE 2 COMPLETE VERSION
-// ✅ Includes EVERYTHING from Phase 1 + Testimonials, Feedback, Performance, Progress
-// ✅ This is the FINAL VERSION with all endpoints
+// backend/routes/mongoParentRoutes.js - WITH SKILL MATRIX ENDPOINT
+// ✅ UPDATED: Added GET /api/mongo/parent/child/:studentId/skills
+// ✅ Includes everything from Phase 2 + new skills endpoint
 
 const express = require('express');
 const router = express.Router();
@@ -494,14 +494,9 @@ router.get('/support-tickets/:ticketId', authenticateParent, async (req, res) =>
 });
 
 // ========================================
-// TESTIMONIAL ENDPOINTS (PHASE 2 - NEW)
+// TESTIMONIAL ENDPOINTS (PHASE 2)
 // ========================================
 
-/**
- * @route   POST /api/mongo/parent/testimonials
- * @desc    Submit a new testimonial
- * @access  Private (Parent only)
- */
 router.post('/testimonials', authenticateParent, async (req, res) => {
   try {
     const { rating, title, message } = req.body;
@@ -562,11 +557,6 @@ router.post('/testimonials', authenticateParent, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/mongo/parent/testimonials
- * @desc    Get all testimonials submitted by current parent
- * @access  Private (Parent only)
- */
 router.get('/testimonials', authenticateParent, async (req, res) => {
   try {
     const testimonials = await Testimonial.find({ 
@@ -600,14 +590,9 @@ router.get('/testimonials', authenticateParent, async (req, res) => {
 });
 
 // ========================================
-// FEEDBACK ENDPOINTS (PHASE 2 - NEW)
+// FEEDBACK ENDPOINTS (PHASE 2)
 // ========================================
 
-/**
- * @route   GET /api/mongo/parent/feedback
- * @desc    Get all feedback for parent's children
- * @access  Private (Parent only)
- */
 router.get('/feedback', authenticateParent, async (req, res) => {
   try {
     const parent = await User.findById(req.user.userId);
@@ -660,11 +645,6 @@ router.get('/feedback', authenticateParent, async (req, res) => {
   }
 });
 
-/**
- * @route   PUT /api/mongo/parent/feedback/:id/mark-read
- * @desc    Mark feedback as read
- * @access  Private (Parent only)
- */
 router.put('/feedback/:id/mark-read', authenticateParent, async (req, res) => {
   try {
     const parent = await User.findById(req.user.userId);
@@ -685,7 +665,6 @@ router.put('/feedback/:id/mark-read', authenticateParent, async (req, res) => {
       });
     }
 
-    // Verify feedback is for parent's child
     const isLinked = parent.linkedStudents?.some(
       ls => ls.studentId.toString() === feedback.studentId.toString()
     );
@@ -716,14 +695,9 @@ router.put('/feedback/:id/mark-read', authenticateParent, async (req, res) => {
 });
 
 // ========================================
-// PERFORMANCE ENDPOINTS (PHASE 2 - NEW)
+// PERFORMANCE ENDPOINTS (PHASE 2)
 // ========================================
 
-/**
- * @route   GET /api/mongo/parent/child/:studentId/performance
- * @desc    Get detailed performance breakdown for a child
- * @access  Private (Parent only)
- */
 router.get('/child/:studentId/performance', authenticateParent, async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -757,8 +731,6 @@ router.get('/child/:studentId/performance', authenticateParent, async (req, res)
       });
     }
 
-    // TODO: When quiz system is built, aggregate real quiz data here
-    // For now, return structured placeholder data
     res.json({
       success: true,
       student: {
@@ -808,14 +780,9 @@ router.get('/child/:studentId/performance', authenticateParent, async (req, res)
 });
 
 // ========================================
-// PROGRESS ENDPOINTS (PHASE 2 - NEW)
+// PROGRESS ENDPOINTS (PHASE 2)
 // ========================================
 
-/**
- * @route   GET /api/mongo/parent/child/:studentId/progress
- * @desc    Get detailed progress tracking for a child
- * @access  Private (Parent only)
- */
 router.get('/child/:studentId/progress', authenticateParent, async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -849,8 +816,6 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
       });
     }
 
-    // TODO: When quiz/badge system is built, aggregate real progress data here
-    // For now, return structured placeholder data
     res.json({
       success: true,
       student: {
@@ -894,6 +859,87 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     res.status(500).json({
       success: false,
       error: 'Failed to load child progress',
+      details: error.message
+    });
+  }
+});
+
+// ========================================
+// SKILL MATRIX ENDPOINT (NEW - PHASE 2.5)
+// ========================================
+
+/**
+ * @route   GET /api/mongo/parent/child/:studentId/skills
+ * @desc    Get child's math skill matrix (Addition, Subtraction, Multiplication, Division)
+ * @access  Private (Parent only)
+ */
+router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // Verify parent owns this child
+    const parent = await User.findById(req.user.userId);
+    
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Parent not found'
+      });
+    }
+
+    const isLinked = parent.linkedStudents?.some(
+      ls => ls.studentId.toString() === studentId
+    );
+
+    if (!isLinked) {
+      return res.status(403).json({
+        success: false,
+        error: 'This student is not linked to your account'
+      });
+    }
+
+    // Get student info
+    const student = await User.findById(studentId).select('name email class gradeLevel currentProfile mathSkills');
+    
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: 'Student not found'
+      });
+    }
+
+    // Get student's math skills (from mathSkills array in user document)
+    const mathSkills = student.mathSkills || [];
+    
+    // If no skills exist, return default skills
+    const defaultSkills = [
+      { skill_name: 'Addition', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: true },
+      { skill_name: 'Subtraction', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: true },
+      { skill_name: 'Multiplication', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: false },
+      { skill_name: 'Division', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: false }
+    ];
+
+    const skills = mathSkills.length > 0 ? mathSkills : defaultSkills;
+    const currentProfile = student.currentProfile || 1;
+
+    res.json({
+      success: true,
+      student: {
+        id: student._id,
+        name: student.name,
+        class: student.class,
+        gradeLevel: student.gradeLevel
+      },
+      currentProfile: currentProfile,
+      skills: skills,
+      message: skills.length === 0 ? 'Skills will be tracked once student completes quizzes' : null
+    });
+
+  } catch (error) {
+    console.error('Error fetching child skills:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load child skill matrix',
       details: error.message
     });
   }

@@ -72,6 +72,9 @@ import ParentWriteTestimonial from './components/Parents/WriteTestimonial';
 import ParentCreateSupportTicket from './components/Parents/CreateSupportTicket';
 import ParentTrackSupportTicket from './components/Parents/TrackSupportTicket';
 
+// ⭐ NEW IMPORT - Parent Skill Matrix Component
+import ParentViewChildSkillMatrix from './components/Parents/ViewChildSkillMatrix';
+
 // SchoolAdmin Components
 import SchoolAdminDashboard from './components/SchoolAdmin/SchoolAdminDashboard';
 import ManualAddUser from './components/SchoolAdmin/ManualAddUser';
@@ -166,6 +169,10 @@ function App() {
           <Route path="/parent/children" element={<ParentViewChildren />} />
           <Route path="/parent/children/performance" element={<ParentViewChildPerformance />} />
           <Route path="/parent/children/progress" element={<ParentViewChildProgress />} />
+          
+          {/* ⭐ NEW ROUTE - Parent View Child Skill Matrix */}
+          <Route path="/parent/children/skills" element={<ParentViewChildSkillMatrix />} />
+          
           <Route path="/parent/feedback" element={<ParentViewFeedback />} />
           <Route path="/parent/chat" element={<ParentChatWithTeacher />} />
           <Route path="/parent/testimonial" element={<ParentWriteTestimonial />} />
