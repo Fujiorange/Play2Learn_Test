@@ -12,8 +12,10 @@ const app = express();
 // Importing route files
 const authRoutes = require('./routes/mongoAuthRoutes');
 const studentRoutes = require('./routes/mongoStudentRoutes');
+const parentRoutes = require('./routes/mongoParentRoutes');
 const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
 const p2lAdminRoutes = require('./routes/p2lAdminRoutes');
+const p2lRoutes = require('./routes/mongoP2LRoutes');
 const adaptiveQuizRoutes = require('./routes/adaptiveQuizRoutes');
 
 // ==================== CORS CONFIGURATION ====================
@@ -83,8 +85,10 @@ function authenticateToken(req, res, next) {
 try {
   app.use('/api/mongo/auth', authRoutes); // User authentication
   app.use('/api/mongo/student', authenticateToken, studentRoutes); // Student-specific routes
+  app.use('/api/mongo/parent', authenticateToken, parentRoutes); // Parent-specific routes
   app.use('/api/mongo/school-admin', authenticateToken, schoolAdminRoutes); // School admin routes
   app.use('/api/p2ladmin', p2lAdminRoutes); // P2lAdmin routes
+  app.use('/api/mongo/p2l', p2lRoutes); // P2L Platform routes (MongoDB-based)
   app.use('/api/adaptive-quiz', adaptiveQuizRoutes); // Adaptive quiz routes
   console.log('✅ Registered all routes successfully.');
 } catch (error) {
