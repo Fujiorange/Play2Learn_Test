@@ -224,15 +224,14 @@ function SchoolAdminManagement() {
                   ⚠️ Important: Save these temporary passwords! They won't be shown again.
                 </p>
                 {createdAdmins.map((admin, index) => (
-                  <div key={index} className={`created-admin ${admin.success ? 'success' : 'error'}`}>
+                  <div key={index} className="created-admin success">
                     <p><strong>{admin.name}</strong></p>
                     <p>Email: {admin.email}</p>
-                    {admin.success && admin.tempPassword && (
+                    {admin.tempPassword && (
                       <p className="temp-password">
                         Password: <code>{admin.tempPassword}</code>
                       </p>
                     )}
-                    {!admin.success && <p className="error-msg">{admin.error}</p>}
                   </div>
                 ))}
               </div>
