@@ -334,7 +334,113 @@ router.get('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Create/assign school admin
+// Bulk create school admins (for frontend compatibility)
+router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { schoolId, admins } = req.body;
+    
+    // Validate required fields
+    if (!schoolId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'schoolId is required' 
+      });
+    }
+    
+    if (!admins || !Array.isArray(admins) || admins.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'admins array is required and must not be empty' 
+      });
+    }
+    
+    // Validate school exists
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+
+    const created = [];
+    const errors = [];
+
+    // Process each admin
+    for (const adminData of admins) {
+      try {
+        const { email, name, contact } = adminData;
+        
+        if (!email) {
+          errors.push({ email: 'unknown', error: 'Email is required' });
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+          errors.push({ email, error: 'Email already registered' });
+          continue;
+        }
+
+        // Generate temporary password
+        const tempPassword = generateTempPassword('school');
+        
+        // Hash password
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        // Create school admin
+        const admin = new User({
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          password: hashedPassword,
+          role: 'school-admin',
+          schoolId: schoolId,
+          contact: contact || null,
+          emailVerified: true,
+          accountActive: true,
+          requirePasswordChange: true
+        });
+
+        await admin.save();
+        
+        // Send welcome email with credentials
+        try {
+          await sendSchoolAdminWelcomeEmail(admin, tempPassword, school.organization_name);
+        } catch (emailError) {
+          console.error('Email sending error for', email, ':', emailError);
+          // Continue even if email fails - admin is still created
+        }
+
+        created.push({
+          id: admin._id,
+          email: admin.email,
+          name: admin.name,
+          role: admin.role,
+          tempPassword: tempPassword // Return temp password so P2L admin can share it if email fails
+        });
+      } catch (error) {
+        console.error('Error creating admin:', adminData.email, error);
+        errors.push({ email: adminData.email, error: error.message });
+      }
+    }
+
+    res.status(created.length > 0 ? 201 : 400).json({
+      success: created.length > 0,
+      message: `Created ${created.length} school admin(s)`,
+      created,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Bulk create school admins error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create school admins' 
+    });
+  }
+});
+
+// Create/assign school admin (single)
 router.post('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
   try {
     const { email, name } = req.body;
