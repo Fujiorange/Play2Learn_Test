@@ -11,7 +11,7 @@ function normalizeRole(role) {
   if (!role) return role;
   const lower = role.toLowerCase();
   if (lower.includes('platform')) return 'Platform Admin';
-  if (lower.includes('school')) return 'School Admin';
+  if (lower.includes('school')) return 'school-admin';
   if (lower.includes('teacher')) return 'Teacher';
   if (lower.includes('student')) return 'Student';
   if (lower.includes('parent')) return 'Parent';

@@ -318,7 +318,7 @@ router.get('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
     // Find users who are school-admins for this school
     const admins = await User.find({
       schoolId: schoolId,
-      role: 'School Admin'
+      role: 'school-admin'
     }).select('-password');
 
     res.json({
@@ -377,7 +377,7 @@ router.post('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
       name: name || email.split('@')[0],
       email: email.toLowerCase(),
       password: hashedPassword,
-      role: 'School Admin',
+      role: 'school-admin',
       schoolId: schoolId,
       emailVerified: true,
       accountActive: true,

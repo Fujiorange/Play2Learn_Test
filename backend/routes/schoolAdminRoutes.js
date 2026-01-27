@@ -1069,8 +1069,8 @@ router.put('/users/:id/role', authenticateToken, async (req, res) => {
   try {
     const { role } = req.body;
     
-    // Security check
-    if (role === 'School Admin') {
+    // Security check - prevent assignment of school-admin role via this endpoint
+    if (role === 'school-admin' || role === 'School Admin') {
       return res.status(403).json({ 
         success: false, 
         error: 'Cannot assign school-admin role' 
