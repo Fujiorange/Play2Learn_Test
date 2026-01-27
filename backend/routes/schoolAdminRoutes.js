@@ -15,7 +15,7 @@ const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 const authenticateToken = (req, res, next) => {
