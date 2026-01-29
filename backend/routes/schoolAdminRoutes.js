@@ -1,7 +1,8 @@
-// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX
+// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX + ANNOUNCEMENTS
 // ✅ Queries USERS collection correctly for dashboard stats
 // ✅ Parent CSV import with linkedStudents integration
 // ✅ FIXED: Student credentials email now sends correct parameters
+// ⭐ NEW: Added announcement routes from Wei Xiang's implementation
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -35,6 +36,9 @@ const authenticateToken = (req, res, next) => {
 
 // ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
+
+// ⭐ Helper to get MongoDB database (for announcements)
+const getDb = () => mongoose.connection.db;
 
 // ==================== PASSWORD GENERATOR ====================
 function generateTempPassword(userType) {
@@ -971,6 +975,177 @@ router.post('/classes', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Create class error:', error);
     res.status(500).json({ success: false, error: 'Failed to create class' });
+  }
+});
+
+// ==================================================================================
+// ⭐ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
+// ==================================================================================
+// These routes use direct MongoDB access (getDb()) for compatibility with Wei Xiang's admin UI
+
+// ==================== GET ANNOUNCEMENTS (Admin View) ====================
+router.get('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const announcements = await db.collection('announcements')
+      .find({})
+      .sort({ pinned: -1, createdAt: -1 })
+      .toArray();
+    
+    console.log(`📢 Admin fetched ${announcements.length} announcements`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('❌ Get announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
+// ==================== GET PUBLIC ANNOUNCEMENTS (For Students/Parents) ====================
+router.get('/announcements/public', async (req, res) => {
+  try {
+    const db = getDb();
+    const { audience } = req.query;
+    
+    console.log('📢 Fetching public announcements for:', audience);
+    
+    const now = new Date();
+    
+    // Base filter: not expired
+    let filter = {
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ]
+    };
+    
+    // Add audience filter if specified
+    if (audience && audience !== 'all') {
+      const audienceNormalized = audience.toLowerCase();
+      const audienceMatches = ['all']; // Always include 'all' audience
+      
+      if (audienceNormalized.includes('student')) {
+        audienceMatches.push('student', 'students');
+      } else if (audienceNormalized.includes('teacher')) {
+        audienceMatches.push('teacher', 'teachers');
+      } else if (audienceNormalized.includes('parent')) {
+        audienceMatches.push('parent', 'parents');
+      } else {
+        audienceMatches.push(audienceNormalized);
+      }
+      
+      filter = {
+        $and: [
+          { $or: [
+            { expiresAt: { $gt: now } },
+            { expiresAt: null },
+            { expiresAt: { $exists: false } }
+          ]},
+          { $or: [
+            { audience: { $in: audienceMatches } },
+            { audience: { $exists: false } }
+          ]}
+        ]
+      };
+    }
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    console.log(`✅ Found ${announcements.length} announcements for ${audience}`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('❌ Get public announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
+// ==================== CREATE ANNOUNCEMENT ====================
+router.post('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const { title, content, priority, audience, pinned, expiresAt } = req.body;
+    
+    if (!title || !content) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Title and content are required' 
+      });
+    }
+    
+    const newAnnouncement = {
+      title,
+      content,
+      priority: priority || 'info',
+      audience: audience || 'all',
+      pinned: pinned || false,
+      author: req.user.name || req.user.email,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    const result = await db.collection('announcements').insertOne(newAnnouncement);
+    
+    console.log(`📢 Announcement created: "${title}" by ${newAnnouncement.author}`);
+    res.json({ 
+      success: true, 
+      announcement: { ...newAnnouncement, _id: result.insertedId } 
+    });
+  } catch (error) {
+    console.error('❌ Create announcement error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create announcement' });
+  }
+});
+
+// ==================== UPDATE ANNOUNCEMENT ====================
+router.put('/announcements/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+    
+    if (updates.expiresAt) {
+      updates.expiresAt = new Date(updates.expiresAt);
+    }
+    
+    const result = await db.collection('announcements').updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: updates }
+    );
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Announcement not found' });
+    }
+    
+    console.log(`📢 Announcement updated: ${req.params.id}`);
+    res.json({ success: true, message: 'Announcement updated' });
+  } catch (error) {
+    console.error('❌ Update announcement error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update announcement' });
+  }
+});
+
+// ==================== DELETE ANNOUNCEMENT ====================
+router.delete('/announcements/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const result = await db.collection('announcements').deleteOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) }
+    );
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Announcement not found' });
+    }
+    
+    console.log(`📢 Announcement deleted: ${req.params.id}`);
+    res.json({ success: true, message: 'Announcement deleted' });
+  } catch (error) {
+    console.error('❌ Delete announcement error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete announcement' });
   }
 });
 

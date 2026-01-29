@@ -142,7 +142,7 @@ try {
   app.use('/api/mongo/auth', mongoAuthRoutes);
   app.use('/api/auth', mongoAuthRoutes); // Backward compatibility
   app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
-  app.use('/api/mongo/school-admin', schoolAdminRoutes);
+  app.use('/school-admin', schoolAdminRoutes);
   app.use('/api/mongo/parent', mongoParentRoutes); // ✅ ADDED - Parent routes
   
   console.log('✅ Routes loaded successfully');
@@ -195,7 +195,7 @@ app.get('/', (req, res) => {
       auth: '/api/auth/*',
       student: '/api/mongo/student/*',
       parent: '/api/mongo/parent/*', // ✅ ADDED
-      admin: '/api/mongo/school-admin/*'
+      admin: '/school-admin/*'
     },
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
