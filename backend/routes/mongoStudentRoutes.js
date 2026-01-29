@@ -231,7 +231,7 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
       const existingSkill = skillMap.get(skillName);
 
       if (existingSkill) {
-        // Update existing skill
+        // Update existing skill - calculate final values client-side
         const newXp = existingSkill.xp + xpGain;
         const newLevel = Math.min(5, Math.floor(newXp / 100));
         
@@ -239,8 +239,8 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
           updateOne: {
             filter: { _id: existingSkill._id },
             update: {
-              $inc: { xp: xpGain },
               $set: {
+                xp: newXp,
                 current_level: newLevel,
                 updatedAt: new Date()
               }
@@ -705,7 +705,7 @@ router.get("/math-progress", async (req, res) => {
 
     // Use MongoDB aggregation for better performance
     const aggregateResult = await StudentQuiz.aggregate([
-      { $match: { student_id: studentId, quiz_type: "regular" } },
+      { $match: { student_id: new mongoose.Types.ObjectId(studentId), quiz_type: "regular" } },
       {
         $group: {
           _id: null,
@@ -760,9 +760,14 @@ router.get("/quiz-results", async (req, res) => {
   try {
     const studentId = req.user.userId;
     
-    // Add pagination support
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50; // Default 50 results per page
+    // Add pagination support with validation
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 50; // Default 50 results per page
+    
+    // Validate pagination parameters
+    page = Math.max(1, page); // Ensure page >= 1
+    limit = Math.max(1, Math.min(100, limit)); // Ensure 1 <= limit <= 100
+    
     const skip = (page - 1) * limit;
     
     // Get total count for pagination metadata

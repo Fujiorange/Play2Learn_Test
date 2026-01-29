@@ -427,9 +427,14 @@ router.get('/questions', authenticateP2LAdmin, async (req, res) => {
     if (difficulty) filter.difficulty = parseInt(difficulty);
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
-    // Add pagination
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 50; // Default 50 questions per page
+    // Add pagination with validation
+    let pageNum = parseInt(page) || 1;
+    let limitNum = parseInt(limit) || 50; // Default 50 questions per page
+    
+    // Validate pagination parameters
+    pageNum = Math.max(1, pageNum); // Ensure page >= 1
+    limitNum = Math.max(1, Math.min(100, limitNum)); // Ensure 1 <= limit <= 100
+    
     const skip = (pageNum - 1) * limitNum;
 
     // Get total count for pagination
@@ -791,9 +796,14 @@ router.get('/quizzes', authenticateP2LAdmin, async (req, res) => {
     if (is_adaptive !== undefined) filter.is_adaptive = is_adaptive === 'true';
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
-    // Add pagination
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 20; // Default 20 quizzes per page
+    // Add pagination with validation
+    let pageNum = parseInt(page) || 1;
+    let limitNum = parseInt(limit) || 20; // Default 20 quizzes per page
+    
+    // Validate pagination parameters
+    pageNum = Math.max(1, pageNum); // Ensure page >= 1
+    limitNum = Math.max(1, Math.min(100, limitNum)); // Ensure 1 <= limit <= 100
+    
     const skip = (pageNum - 1) * limitNum;
 
     // Get total count for pagination

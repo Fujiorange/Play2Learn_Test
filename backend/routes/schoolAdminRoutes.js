@@ -187,9 +187,14 @@ router.get('/users', authenticateToken, async (req, res) => {
 
     console.log('🔍 Fetching users with filter:', filter);
 
-    // Add pagination
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 50; // Default 50 users per page
+    // Add pagination with validation
+    let pageNum = parseInt(page) || 1;
+    let limitNum = parseInt(limit) || 50; // Default 50 users per page
+    
+    // Validate pagination parameters
+    pageNum = Math.max(1, pageNum); // Ensure page >= 1
+    limitNum = Math.max(1, Math.min(100, limitNum)); // Ensure 1 <= limit <= 100
+    
     const skip = (pageNum - 1) * limitNum;
 
     // Get total count for pagination

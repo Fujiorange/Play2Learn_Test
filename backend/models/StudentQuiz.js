@@ -21,8 +21,6 @@ const studentQuizSchema = new mongoose.Schema({
 });
 
 // Add indexes for performance optimization
-studentQuizSchema.index({ student_id: 1 });
-studentQuizSchema.index({ student_id: 1, quiz_type: 1 });
-studentQuizSchema.index({ student_id: 1, completed_at: -1 });
+studentQuizSchema.index({ student_id: 1, quiz_type: 1, completed_at: -1 }); // Compound index for common query pattern
 
 module.exports = mongoose.model('StudentQuiz', studentQuizSchema);
