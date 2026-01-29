@@ -1,12 +1,25 @@
 // backend/routes/publicRoutes.js - Public routes (no authentication required)
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const LandingPage = require('../models/LandingPage');
+
+// ==================== RATE LIMITING ====================
+
+// Rate limiter for public landing page endpoint
+// Allow 100 requests per 15 minutes per IP
+const landingPageLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // ==================== PUBLIC LANDING PAGE ROUTE ====================
 
 // Get active landing page (public - no auth required)
-router.get('/landing', async (req, res) => {
+router.get('/landing', landingPageLimiter, async (req, res) => {
   try {
     // Get the active landing page
     let landingPage = await LandingPage.findOne({ is_active: true });
