@@ -118,7 +118,7 @@ function LandingPageManager() {
               <div className="preview-hero-content">
                 <h1>{block.title || 'Hero Title'}</h1>
                 <p>{block.content || 'Hero content will appear here'}</p>
-                {block.image_url && <img src={block.image_url} alt={block.title} />}
+                {block.image_url && <img src={block.image_url} alt={block.title || 'Hero section image'} />}
               </div>
             </div>
           </section>
@@ -143,7 +143,7 @@ function LandingPageManager() {
               <h2>{block.title || 'About Us'}</h2>
               <div className="preview-about-content">
                 <p>{block.content || 'About content will appear here'}</p>
-                {block.image_url && <img src={block.image_url} alt={block.title} />}
+                {block.image_url && <img src={block.image_url} alt={block.title || 'About section image'} />}
               </div>
             </div>
           </section>
@@ -325,7 +325,7 @@ function LandingPageManager() {
             </div>
           ) : (
             <div className="preview-content">
-              {blocks
+              {[...blocks]
                 .sort((a, b) => a.order - b.order)
                 .map((block, index) => (
                   <div key={index}>

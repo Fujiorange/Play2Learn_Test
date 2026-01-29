@@ -201,7 +201,7 @@ If you encounter issues:
 2. Verify you're logged in as a P2L Admin
 3. Try refreshing the page
 4. Clear browser cache and cookies
-5. Contact support at support@Play2Learn.com
+5. Contact support at hello@play2learn.com
 
 ## Conclusion
 
