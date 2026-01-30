@@ -799,7 +799,7 @@ router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
 // Create quiz
 router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { title, description, questions, is_adaptive, is_active } = req.body;
+    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
     
     // Validate required fields
     if (!title) {
@@ -809,10 +809,30 @@ router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Populate questions with full details from Question references
+    const populatedQuestions = [];
+    if (questions && questions.length > 0) {
+      for (const q of questions) {
+        if (q.question_id) {
+          const questionDoc = await Question.findById(q.question_id);
+          if (questionDoc) {
+            populatedQuestions.push({
+              question_id: questionDoc._id,
+              text: questionDoc.text,
+              choices: questionDoc.choices,
+              answer: questionDoc.answer,
+              difficulty: questionDoc.difficulty
+            });
+          }
+        }
+      }
+    }
+
     const quiz = new Quiz({
       title,
       description: description || '',
-      questions: questions || [],
+      quiz_type: quiz_type || (is_adaptive ? 'adaptive' : 'placement'),
+      questions: populatedQuestions,
       is_adaptive: is_adaptive !== undefined ? is_adaptive : true,
       is_active: is_active !== undefined ? is_active : true,
       created_by: req.user._id
@@ -996,6 +1016,7 @@ router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res)
     const quiz = new Quiz({
       title,
       description: description || '',
+      quiz_type: 'adaptive',
       questions,
       is_adaptive: true,
       is_active: true,

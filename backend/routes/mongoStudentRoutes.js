@@ -36,6 +36,7 @@ const StudentQuiz = require('../models/StudentQuiz');
 const MathSkill = require('../models/MathSkill');
 const SupportTicket = require('../models/SupportTicket');
 const Testimonial = require('../models/Testimonial');
+const Quiz = require('../models/Quiz');
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -410,18 +411,34 @@ router.post("/placement-quiz/generate", async (req, res) => {
       });
     }
 
-    const profile = 5;
-    const cfg = getProfileConfig(profile);
-    const opSeq = buildOperationSequence(profile);
-    const questions = opSeq.map((op) => generateQuestion(cfg.range, op));
+    // Get an active placement quiz from P2L Admin created quizzes
+    const placementQuiz = await Quiz.findOne({
+      quiz_type: 'placement',
+      is_active: true
+    }).sort({ createdAt: -1 }); // Get most recent placement quiz
 
+    if (!placementQuiz || !placementQuiz.questions || placementQuiz.questions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "No active placement quiz found. Please contact your administrator.",
+      });
+    }
+
+    // Create a student quiz attempt record using the P2L Admin quiz
     const quiz = await StudentQuiz.create({
       student_id: studentId,
       quiz_type: "placement",
-      profile_level: profile,
-      questions,
+      quiz_id: placementQuiz._id,
+      profile_level: 5,
+      questions: placementQuiz.questions.map(q => ({
+        question_text: q.text,
+        operation: 'general', // P2L Admin quizzes don't have operation field
+        correct_answer: q.answer,
+        student_answer: null,
+        is_correct: false,
+      })),
       score: 0,
-      total_questions: 15,
+      total_questions: placementQuiz.questions.length,
       percentage: 0,
       points_earned: 0,
     });
@@ -429,8 +446,12 @@ router.post("/placement-quiz/generate", async (req, res) => {
     res.json({
       success: true,
       quiz_id: quiz._id,
-      questions: questions.map((q) => ({ question_text: q.question_text, operation: q.operation })),
-      total_questions: 15,
+      questions: placementQuiz.questions.map((q) => ({ 
+        question_text: q.text, 
+        choices: q.choices,
+        operation: 'general' 
+      })),
+      total_questions: placementQuiz.questions.length,
     });
   } catch (error) {
     console.error("❌ Generate placement quiz error:", error);
@@ -450,15 +471,20 @@ router.post("/placement-quiz/submit", async (req, res) => {
     }
 
     let score = 0;
+    const totalQuestions = quiz.questions.length;
+    
     quiz.questions.forEach((q, i) => {
       const studentAnswer = answers[i];
       q.student_answer = studentAnswer;
-      q.is_correct = studentAnswer === q.correct_answer;
+      // Compare answers as strings (case-insensitive and trimmed)
+      const correctAnswer = String(q.correct_answer).trim().toLowerCase();
+      const givenAnswer = String(studentAnswer).trim().toLowerCase();
+      q.is_correct = givenAnswer === correctAnswer;
       if (q.is_correct) score++;
     });
 
     quiz.score = score;
-    quiz.percentage = Math.round((score / 15) * 100);
+    quiz.percentage = Math.round((score / totalQuestions) * 100);
     quiz.points_earned = score * 10;
     quiz.completed_at = new Date();
     await quiz.save();
@@ -485,7 +511,7 @@ router.post("/placement-quiz/submit", async (req, res) => {
       success: true,
       result: {
         score,
-        total: 15,
+        total: totalQuestions,
         percentage: quiz.percentage,
         points_earned: quiz.points_earned,
         starting_profile: startingProfile,

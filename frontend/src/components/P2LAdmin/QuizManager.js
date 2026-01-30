@@ -18,7 +18,8 @@ function QuizManager() {
     title: '',
     description: '',
     question_ids: [],
-    is_adaptive: true
+    quiz_type: 'placement',
+    is_adaptive: false
   });
 
   useEffect(() => {
@@ -65,6 +66,7 @@ function QuizManager() {
         title: formData.title,
         description: formData.description,
         questions: formData.question_ids.map(id => ({ question_id: id })),
+        quiz_type: formData.quiz_type,
         is_adaptive: formData.is_adaptive
       };
       
@@ -81,7 +83,8 @@ function QuizManager() {
         title: '',
         description: '',
         question_ids: [],
-        is_adaptive: true
+        quiz_type: 'placement',
+        is_adaptive: false
       });
       fetchData();
     } catch (error) {
@@ -96,7 +99,8 @@ function QuizManager() {
       title: quiz.title,
       description: quiz.description || '',
       question_ids: quiz.questions?.map(q => q.question_id?._id || q.question_id) || [],
-      is_adaptive: quiz.is_adaptive !== undefined ? quiz.is_adaptive : true
+      quiz_type: quiz.quiz_type || 'placement',
+      is_adaptive: quiz.is_adaptive !== undefined ? quiz.is_adaptive : false
     });
     setShowForm(true);
   };
@@ -122,7 +126,8 @@ function QuizManager() {
       title: '',
       description: '',
       question_ids: [],
-      is_adaptive: true
+      quiz_type: 'placement',
+      is_adaptive: false
     });
     setQuestionFilters({ topic: '', difficulty: '' });
   };
@@ -154,15 +159,18 @@ function QuizManager() {
     <div className="quiz-manager">
       <header className="page-header">
         <div>
-          <h1>Adaptive Quiz Manager</h1>
+          <h1>Quiz Manager</h1>
+          <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
+            Create and manage placement quizzes and adaptive quizzes for students
+          </p>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <Link to="/p2ladmin/quizzes/create-adaptive" className="btn-primary">
-            + Create Adaptive Quiz
+            + Create Adaptive Quiz (Advanced)
           </Link>
           <button onClick={() => setShowForm(true)} className="btn-primary">
-            + Create Quiz
+            + Create Placement Quiz
           </button>
         </div>
       </header>
@@ -191,6 +199,22 @@ function QuizManager() {
                   onChange={handleInputChange}
                   rows="3"
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Quiz Type *</label>
+                <select
+                  name="quiz_type"
+                  value={formData.quiz_type}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="placement">Placement Quiz (for student initial assessment)</option>
+                  <option value="adaptive">Adaptive Quiz (for ongoing practice)</option>
+                </select>
+                <p className="help-text">
+                  Placement quizzes are used for initial student assessment. Adaptive quizzes are used for ongoing practice with difficulty adjustment.
+                </p>
               </div>
 
               <div className="form-group">
@@ -292,7 +316,8 @@ function QuizManager() {
               <p className="quiz-description">{quiz.description || 'No description'}</p>
               <div className="quiz-meta">
                 <p>Questions: {quiz.questions?.length || 0}</p>
-                <p>Type: {quiz.is_adaptive ? '🎯 Adaptive' : '📝 Standard'}</p>
+                <p>Category: {quiz.quiz_type === 'placement' ? '📊 Placement Quiz' : '🎯 Adaptive Quiz'}</p>
+                <p>Mode: {quiz.is_adaptive ? '🔄 Adaptive' : '📝 Standard'}</p>
               </div>
               <div className="card-actions">
                 <button onClick={() => handleEdit(quiz)} className="btn-edit">

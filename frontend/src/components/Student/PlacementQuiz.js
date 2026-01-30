@@ -47,12 +47,10 @@ export default function PlacementQuiz() {
   }, [navigate]);
 
   const handleAnswerChange = (index, value) => {
-    // Only allow numbers
-    if (value === '' || /^-?\d+$/.test(value)) {
-      const newAnswers = [...answers];
-      newAnswers[index] = value;
-      setAnswers(newAnswers);
-    }
+    // Accept any value (for both numeric and multiple choice answers)
+    const newAnswers = [...answers];
+    newAnswers[index] = value;
+    setAnswers(newAnswers);
   };
 
   const handleNext = () => {
@@ -86,7 +84,7 @@ export default function PlacementQuiz() {
 
       const result = await studentService.submitPlacementQuiz(
         quizData.quiz_id,
-        answers.map(a => a === '' ? 0 : parseInt(a))
+        answers.map(a => a === '' ? '' : a) // Send answers as-is (strings or numbers)
       );
 
       console.log('📥 Submit result:', result);
@@ -211,17 +209,62 @@ export default function PlacementQuiz() {
           </div>
 
           <div style={styles.answerSection}>
-            <label style={styles.answerLabel}>Your Answer:</label>
-            <input
-              type="text"
-              value={answers[currentQuestion]}
-              onChange={(e) => handleAnswerChange(currentQuestion, e.target.value)}
-              placeholder="Enter your answer"
-              style={styles.answerInput}
-              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              autoFocus
-            />
+            {quizData.questions[currentQuestion].choices && quizData.questions[currentQuestion].choices.length > 0 ? (
+              // Multiple choice question
+              <div>
+                <label style={styles.answerLabel}>Select Your Answer:</label>
+                {quizData.questions[currentQuestion].choices.map((choice, idx) => (
+                  <div key={idx} style={{
+                    padding: '12px 16px',
+                    marginBottom: '8px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    background: answers[currentQuestion] === choice ? '#f0f9ff' : 'white',
+                    borderColor: answers[currentQuestion] === choice ? '#3b82f6' : '#e5e7eb',
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={() => handleAnswerChange(currentQuestion, choice)}
+                  onMouseEnter={(e) => {
+                    if (answers[currentQuestion] !== choice) {
+                      e.target.style.borderColor = '#3b82f6';
+                      e.target.style.background = '#f9fafb';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (answers[currentQuestion] !== choice) {
+                      e.target.style.borderColor = '#e5e7eb';
+                      e.target.style.background = 'white';
+                    }
+                  }}
+                  >
+                    <input
+                      type="radio"
+                      name={`question-${currentQuestion}`}
+                      checked={answers[currentQuestion] === choice}
+                      onChange={() => handleAnswerChange(currentQuestion, choice)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span>{choice}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Text input question
+              <div>
+                <label style={styles.answerLabel}>Your Answer:</label>
+                <input
+                  type="text"
+                  value={answers[currentQuestion]}
+                  onChange={(e) => handleAnswerChange(currentQuestion, e.target.value)}
+                  placeholder="Enter your answer"
+                  style={styles.answerInput}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
 
           <div style={styles.navigationButtons}>

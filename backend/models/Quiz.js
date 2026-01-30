@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const quizSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, default: '' },
+  quiz_type: { type: String, enum: ['placement', 'adaptive'], default: 'adaptive' },
   questions: [{
     question_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
     text: { type: String },
