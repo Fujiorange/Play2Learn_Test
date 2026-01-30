@@ -8,6 +8,10 @@ const testimonialSchema = new mongoose.Schema({
   rating: { type: Number, min: 1, max: 5, required: true },
   message: { type: String, required: true },
   approved: { type: Boolean, default: false },
+  display_on_landing: { type: Boolean, default: false },
+  user_role: { type: String, enum: ['Student', 'Parent', 'Teacher'], default: 'Student' },
+  sentiment_score: { type: Number, default: 0 },
+  sentiment_label: { type: String, enum: ['positive', 'negative', 'neutral'], default: 'neutral' },
   created_at: { type: Date, default: Date.now }
 });
 

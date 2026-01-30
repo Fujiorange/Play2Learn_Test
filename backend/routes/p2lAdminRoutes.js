@@ -11,8 +11,11 @@ const School = require('../models/School');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
+const Testimonial = require('../models/Testimonial');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const Sentiment = require('sentiment');
+const sentiment = new Sentiment();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -1188,6 +1191,160 @@ router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete landing page' 
+    });
+  }
+});
+
+// ==================== TESTIMONIAL MANAGEMENT ====================
+
+// Get all testimonials with filtering
+router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { 
+      minRating, 
+      sentiment, 
+      approved, 
+      userRole, 
+      page = 1, 
+      limit = 50 
+    } = req.query;
+
+    const query = {};
+    
+    // Apply filters
+    if (minRating) query.rating = { $gte: parseInt(minRating) };
+    if (sentiment) query.sentiment_label = sentiment;
+    if (approved !== undefined) query.approved = approved === 'true';
+    if (userRole) query.user_role = userRole;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const testimonials = await Testimonial.find(query)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Testimonial.countDocuments(query);
+
+    res.json({
+      success: true,
+      testimonials: testimonials.map(t => ({
+        id: t._id,
+        student_name: t.student_name,
+        student_email: t.student_email,
+        title: t.title,
+        rating: t.rating,
+        message: t.message,
+        approved: t.approved,
+        display_on_landing: t.display_on_landing,
+        user_role: t.user_role,
+        sentiment_score: t.sentiment_score,
+        sentiment_label: t.sentiment_label,
+        created_at: t.created_at,
+      })),
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('Get testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch testimonials' 
+    });
+  }
+});
+
+// Update testimonial approval and display status
+router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approved, display_on_landing } = req.body;
+
+    const testimonial = await Testimonial.findById(id);
+    if (!testimonial) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Testimonial not found' 
+      });
+    }
+
+    if (approved !== undefined) testimonial.approved = approved;
+    if (display_on_landing !== undefined) testimonial.display_on_landing = display_on_landing;
+
+    await testimonial.save();
+
+    res.json({
+      success: true,
+      message: 'Testimonial updated successfully',
+      testimonial: {
+        id: testimonial._id,
+        approved: testimonial.approved,
+        display_on_landing: testimonial.display_on_landing,
+      }
+    });
+  } catch (error) {
+    console.error('Update testimonial error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update testimonial' 
+    });
+  }
+});
+
+// Delete testimonial
+router.delete('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const testimonial = await Testimonial.findByIdAndDelete(id);
+    
+    if (!testimonial) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Testimonial not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Testimonial deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete testimonial error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete testimonial' 
+    });
+  }
+});
+
+// Get testimonials for landing page display
+router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const testimonials = await Testimonial.find({ 
+      approved: true, 
+      display_on_landing: true 
+    })
+      .sort({ created_at: -1 })
+      .limit(10);
+
+    res.json({
+      success: true,
+      testimonials: testimonials.map(t => ({
+        id: t._id,
+        name: t.student_name,
+        role: t.user_role,
+        title: t.title,
+        rating: t.rating,
+        quote: t.message,
+        created_at: t.created_at,
+      }))
+    });
+  } catch (error) {
+    console.error('Get landing page testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch landing page testimonials' 
     });
   }
 });

@@ -37,6 +37,8 @@ const MathSkill = require('../models/MathSkill');
 const SupportTicket = require('../models/SupportTicket');
 const Testimonial = require('../models/Testimonial');
 const Quiz = require('../models/Quiz');
+const Sentiment = require('sentiment');
+const sentiment = new Sentiment();
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -921,6 +923,13 @@ router.post("/testimonials", async (req, res) => {
       });
     }
 
+    // Perform sentiment analysis
+    const sentimentResult = sentiment.analyze(finalMessage);
+    const sentimentScore = sentimentResult.score;
+    let sentimentLabel = 'neutral';
+    if (sentimentScore > 0) sentimentLabel = 'positive';
+    else if (sentimentScore < 0) sentimentLabel = 'negative';
+
     const testimonialDoc = await Testimonial.create({
       student_id: studentId,
       student_name: displayName || student_name || req.user.name || 'Anonymous',
@@ -929,6 +938,9 @@ router.post("/testimonials", async (req, res) => {
       rating,
       message: finalMessage,
       approved: false,
+      user_role: 'Student',
+      sentiment_score: sentimentScore,
+      sentiment_label: sentimentLabel,
     });
 
     res.status(201).json({
