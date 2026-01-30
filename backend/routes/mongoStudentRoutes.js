@@ -106,6 +106,7 @@ if (!mongoose.models.SupportTicket) {
     updated_at: { type: Date, default: Date.now },
     resolved_at: { type: Date },
     admin_response: { type: String },
+    school_id: { type: String },
   });
   mongoose.model("SupportTicket", supportTicketSchema);
 }
@@ -971,15 +972,30 @@ router.post("/support-tickets", async (req, res) => {
       });
     }
 
+    // ✅ FIX: Map 'normal' to 'medium' for backward compatibility
+    const priorityMap = {
+      'normal': 'medium',
+      'low': 'low',
+      'medium': 'medium',
+      'high': 'high',
+      'urgent': 'urgent'
+    };
+
+    // ✅ Get student's schoolId for admin filtering
+    const student = await User.findById(studentId).select('schoolId');
+    const schoolId = student?.schoolId || null;
+    const finalPriority = priorityMap[req.body.priority] || 'medium';
+
     const ticket = await SupportTicket.create({
       student_id: studentId,
       student_name: student_name || req.user.name || 'Unknown',
       student_email: student_email || req.user.email || 'unknown@email.com',
+      school_id: schoolId,
       subject: finalSubject,
       category: category || 'general',
       message: finalMessage,
       status: 'open',
-      priority: req.body.priority || 'medium',
+      priority: finalPriority,
     });
 
     res.status(201).json({

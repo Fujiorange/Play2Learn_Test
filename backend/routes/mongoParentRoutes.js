@@ -92,7 +92,7 @@ const supportTicketSchema = new mongoose.Schema({
   userName: { type: String, required: true },
   userRole: { type: String, required: true },
   category: { type: String, required: true },
-  priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+  priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
   subject: { type: String, required: true },
   description: { type: String, required: true },
   status: { type: String, enum: ['open', 'in-progress', 'resolved', 'closed'], default: 'open' },
@@ -103,7 +103,7 @@ const supportTicketSchema = new mongoose.Schema({
   notes: [{ text: String, addedBy: String, addedAt: { type: Date, default: Date.now } }]
 });
 
-const SupportTicket = mongoose.models.SupportTicket || mongoose.model('SupportTicket', supportTicketSchema);
+const ParentSupportTicket = mongoose.models.ParentSupportTicket || mongoose.model('ParentSupportTicket', supportTicketSchema, 'parent_support_tickets');
 
 // ==================== TESTIMONIAL SCHEMA ====================
 const testimonialSchema = new mongoose.Schema({
@@ -460,16 +460,26 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
       });
     }
 
+
+    // ✅ FIX: Map 'normal' to 'medium' for backward compatibility
+    const priorityMap = {
+      'normal': 'medium',
+      'low': 'low',
+      'medium': 'medium',
+      'high': 'high',
+      'urgent': 'urgent'
+    };
+    const finalPriority = priorityMap[priority] || 'medium';
     const ticketId = `TICKET-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
 
-    const newTicket = new SupportTicket({
+    const newTicket = new ParentSupportTicket({
       ticketId,
       userId: parent._id,
       userEmail: parent.email,
       userName: parent.name,
       userRole: 'Parent',
       category,
-      priority: priority || 'medium',
+      priority: finalPriority,
       subject,
       description,
       status: 'open',
@@ -497,7 +507,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
 
 router.get('/support-tickets', authenticateParent, async (req, res) => {
   try {
-    const tickets = await SupportTicket.find({
+    const tickets = await ParentSupportTicket.find({
       userId: req.user.userId
     }).sort({ createdAt: -1 });
 
@@ -521,7 +531,7 @@ router.get('/support-tickets/:ticketId', authenticateParent, async (req, res) =>
   try {
     const { ticketId } = req.params;
 
-    const ticket = await SupportTicket.findOne({
+    const ticket = await ParentSupportTicket.findOne({
       ticketId,
       userId: req.user.userId
     });
@@ -915,6 +925,40 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     // Calculate overall progress (simple percentage based on profile level)
     const overallProgress = Math.round((currentLevel / 10) * 100);
 
+
+    // ✅ NEW: Fetch student's earned badges
+    const db = mongoose.connection.db;
+    const studentEmail = student.email;
+    
+    // Get student's earned badges from student_badges collection
+    const earnedBadges = await db.collection('student_badges')
+      .find({ student_email: studentEmail })
+      .toArray();
+    
+    console.log('🏆 Found', earnedBadges.length, 'earned badges for', studentEmail);
+    
+    // Get full badge details by looking up badge_id in badges collection
+    const achievements = [];
+    
+    for (const earnedBadge of earnedBadges) {
+      try {
+        const badgeDetails = await db.collection('badges')
+          .findOne({ _id: earnedBadge.badge_id });
+        
+        if (badgeDetails) {
+          achievements.push({
+            icon: badgeDetails.icon || '🏆',
+            name: badgeDetails.name || 'Achievement',
+            description: badgeDetails.description,
+            earnedAt: earnedBadge.earned_at
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error fetching badge details:', error);
+      }
+    }
+    
+    console.log('✅ Formatted', achievements.length, 'achievements for parent view');
     console.log('✅ Sending progress data with', recentActivities.length, 'activities');
 
     res.json({
@@ -930,7 +974,7 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
         currentLevel: currentLevel,
         totalPoints: totalPoints,
         streak: streak,
-        achievements: [],
+        achievements: achievements,
         recentActivities: recentActivities,
         message: recentActivities.length === 0 ? 'Progress data will be available once student completes quizzes' : undefined
       }
