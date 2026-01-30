@@ -1085,4 +1085,270 @@ router.get("/testimonials", async (req, res) => {
   }
 });
 
+// ==================== REWARD SHOP ENDPOINTS ====================
+
+// Get available shop items
+router.get("/shop", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const shopItems = await db.collection('shop_items')
+      .find({ isActive: true })
+      .sort({ category: 1, cost: 1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      items: shopItems
+    });
+  } catch (error) {
+    console.error("❌ Get shop items error:", error);
+    res.status(500).json({ success: false, error: "Failed to load shop items" });
+  }
+});
+
+// Purchase a shop item
+router.post("/shop/:itemId/purchase", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const userEmail = req.user.email;
+
+    // Get user to find student_id
+    const user = await db.collection('users').findOne({ email: userEmail });
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    // Get math profile (this is where points are stored!)
+    const mathProfile = await db.collection('mathprofiles').findOne({ 
+      student_id: user._id 
+    });
+    if (!mathProfile) {
+      return res.status(404).json({ success: false, error: "Student profile not found" });
+    }
+
+    // Get shop item
+    const item = await db.collection('shop_items').findOne({ 
+      _id: new mongoose.Types.ObjectId(itemId) 
+    });
+    if (!item) {
+      return res.status(404).json({ success: false, error: "Item not found" });
+    }
+
+    if (!item.isActive) {
+      return res.status(400).json({ success: false, error: "Item is no longer available" });
+    }
+
+    // Check if already purchased
+    const existingPurchase = await db.collection('student_purchases').findOne({
+      student_email: userEmail,
+      item_id: itemId
+    });
+    if (existingPurchase) {
+      return res.status(400).json({ success: false, error: "You already own this item" });
+    }
+
+    // Check if student has enough points
+    const currentPoints = mathProfile.total_points || 0;
+    if (currentPoints < item.cost) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Not enough points. You need ${item.cost - currentPoints} more points.` 
+      });
+    }
+
+    // Check stock
+    if (item.stock === 0) {
+      return res.status(400).json({ success: false, error: "Item is out of stock" });
+    }
+
+    // Deduct points from math profile
+    await db.collection('mathprofiles').updateOne(
+      { student_id: user._id },
+      { 
+        $inc: { total_points: -item.cost },
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    // Record purchase
+    const purchase = {
+      student_id: user._id,
+      student_email: userEmail,
+      item_id: itemId,
+      item_name: item.name,
+      item_icon: item.icon,
+      cost: item.cost,
+      category: item.category,
+      purchased_at: new Date(),
+      is_active: true
+    };
+    await db.collection('student_purchases').insertOne(purchase);
+
+    // Update shop item stock and purchase count
+    const updates = { 
+      purchaseCount: (item.purchaseCount || 0) + 1 
+    };
+    if (item.stock !== -1) {
+      updates.stock = item.stock - 1;
+    }
+    await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId) },
+      { $set: updates }
+    );
+
+    const remainingPoints = currentPoints - item.cost;
+    console.log(`✅ Purchase successful: ${userEmail} bought ${item.name} for ${item.cost} points. Remaining: ${remainingPoints}`);
+
+    res.json({
+      success: true,
+      message: `Successfully purchased ${item.name}!`,
+      pointsRemaining: remainingPoints,
+      purchase
+    });
+  } catch (error) {
+    console.error("❌ Purchase error:", error);
+    res.status(500).json({ success: false, error: "Failed to complete purchase" });
+  }
+});
+
+// Get student's purchases
+router.get("/shop/purchases", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const userEmail = req.user.email;
+
+    const purchases = await db.collection('student_purchases')
+      .find({ student_email: userEmail })
+      .sort({ purchased_at: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      purchases
+    });
+  } catch (error) {
+    console.error("❌ Get purchases error:", error);
+    res.status(500).json({ success: false, error: "Failed to load purchases" });
+  }
+});
+
+// ==================== BADGE ENDPOINTS ====================
+
+// Get all badges with earned status
+router.get("/badges", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const userEmail = req.user.email;
+
+    // Get all active badges
+    const badges = await db.collection('badges')
+      .find({ isActive: true })
+      .sort({ rarity: 1, criteriaValue: 1 })
+      .toArray();
+
+    // Get student's earned badges
+    const earnedBadges = await db.collection('student_badges')
+      .find({ student_email: userEmail })
+      .toArray();
+
+    res.json({
+      success: true,
+      badges,
+      earnedBadges
+    });
+  } catch (error) {
+    console.error("❌ Get badges error:", error);
+    res.status(500).json({ success: false, error: "Failed to load badges" });
+  }
+});
+
+// Get badge progress for current student
+router.get("/badges/progress", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const userEmail = req.user.email;
+
+    // Get user to find student_id
+    const user = await db.collection('users').findOne({ email: userEmail });
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    // Get math profile data (this is where the actual data is!)
+    const mathProfile = await db.collection('mathprofiles').findOne({ 
+      student_id: user._id 
+    });
+
+    // Get quiz attempts (excluding placement quizzes)
+    const quizAttempts = await db.collection('quizattempts')
+      .find({ 
+        student_email: userEmail,
+        is_placement: { $ne: true }
+      })
+      .toArray();
+
+    // Calculate progress for different criteria
+    const progress = {
+      quizzes_completed: quizAttempts.length,
+      login_streak: mathProfile?.streak || 0,
+      perfect_scores: quizAttempts.filter(q => q.score === 100).length,
+      high_scores: quizAttempts.filter(q => q.score >= 90).length,
+      points_earned: mathProfile?.total_points || 0
+    };
+
+    console.log(`📊 Badge progress for ${userEmail}:`, progress);
+
+    // Check and auto-award badges
+    const badges = await db.collection('badges').find({ isActive: true }).toArray();
+    const earnedBadges = await db.collection('student_badges')
+      .find({ student_email: userEmail })
+      .toArray();
+    const earnedBadgeIds = new Set(earnedBadges.map(b => b.badge_id.toString()));
+
+    for (const badge of badges) {
+      // Skip if already earned
+      if (earnedBadgeIds.has(badge._id.toString())) continue;
+
+      // Check if criteria met
+      const currentValue = progress[badge.criteriaType] || 0;
+      if (currentValue >= badge.criteriaValue) {
+        // Award badge
+        const newBadge = {
+          student_id: user._id,
+          student_email: userEmail,
+          badge_id: badge._id,
+          badge_name: badge.name,
+          badge_icon: badge.icon,
+          rarity: badge.rarity,
+          earned_at: new Date(),
+          criteria_met: {
+            type: badge.criteriaType,
+            value: currentValue,
+            required: badge.criteriaValue
+          }
+        };
+        await db.collection('student_badges').insertOne(newBadge);
+
+        // Update badge earned count
+        await db.collection('badges').updateOne(
+          { _id: badge._id },
+          { $inc: { earnedCount: 1 } }
+        );
+
+        console.log(`🏆 Badge awarded: ${badge.name} to ${userEmail}`);
+        earnedBadgeIds.add(badge._id.toString());
+      }
+    }
+
+    res.json({
+      success: true,
+      progress
+    });
+  } catch (error) {
+    console.error("❌ Get badge progress error:", error);
+    res.status(500).json({ success: false, error: "Failed to load badge progress" });
+  }
+});
+
 module.exports = router;

@@ -61,6 +61,10 @@ import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
 // ⭐ NEW IMPORT - Student Announcements
 import StudentViewAnnouncements from './components/Student/ViewAnnouncements';
 
+// â­ NEW IMPORTS - Student Rewards System
+import StudentViewRewardShop from './components/Student/ViewRewardShop';
+import StudentViewBadges from './components/Student/ViewBadges';
+
 // Parent Components
 import ParentDashboard from './components/Parents/ParentDashboard';
 import ParentViewProfile from './components/Parents/ViewProfile';
@@ -151,6 +155,10 @@ function App() {
 
           {/* ⭐ NEW ROUTE - Student Announcements */}
           <Route path="/student/announcements" element={<StudentViewAnnouncements />} />
+
+          {/* â­ NEW ROUTES - Student Rewards System */}
+          <Route path="/student/shop" element={<StudentViewRewardShop />} />
+          <Route path="/student/badges" element={<StudentViewBadges />} />
 
           {/* ========== QUIZ ROUTES ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />

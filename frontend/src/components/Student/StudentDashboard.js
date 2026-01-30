@@ -211,6 +211,22 @@ export default function StudentDashboard() {
       icon: '📩',
       action: () => navigate('/student/support/tickets'),
     },
+    // 1️⃣1️⃣ Reward Shop
+    {
+      id: 'shop',
+      title: 'Reward Shop',
+      description: 'Spend your points on cool rewards',
+      icon: '🛒',
+      action: () => navigate('/student/shop'),
+    },
+    // 1️⃣2️⃣ My Badges
+    {
+      id: 'badges',
+      title: 'My Badges',
+      description: 'View your earned achievement badges',
+      icon: '🏆',
+      action: () => navigate('/student/badges'),
+    },
   ];
 
   const statCards = [
