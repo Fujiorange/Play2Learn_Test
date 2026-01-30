@@ -555,6 +555,7 @@ router.post('/testimonials', authMiddleware, async (req, res) => {
 
     const { rating, message, title, displayName } = req.body;
     
+    // Validation
     if (!rating || !message) {
       return res.status(400).json({ 
         success: false, 
@@ -566,6 +567,29 @@ router.post('/testimonials', authMiddleware, async (req, res) => {
       return res.status(400).json({ 
         success: false, 
         error: "Rating must be between 1 and 5" 
+      });
+    }
+
+    // Message length validation
+    if (message.trim().length < 20) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Message must be at least 20 characters long" 
+      });
+    }
+
+    if (message.length > 2000) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Message must not exceed 2000 characters" 
+      });
+    }
+
+    // Display name validation
+    if (displayName && displayName.trim().length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Display name cannot be empty" 
       });
     }
 

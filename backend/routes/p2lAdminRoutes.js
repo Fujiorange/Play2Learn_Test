@@ -1197,6 +1197,37 @@ router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
 
 // ==================== TESTIMONIAL MANAGEMENT ====================
 
+// Get testimonials for landing page display (MUST be before /:id route)
+router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const testimonials = await Testimonial.find({ 
+      approved: true, 
+      display_on_landing: true 
+    })
+      .sort({ created_at: -1 })
+      .limit(10);
+
+    res.json({
+      success: true,
+      testimonials: testimonials.map(t => ({
+        id: t._id,
+        name: t.student_name,
+        role: t.user_role,
+        title: t.title,
+        rating: t.rating,
+        quote: t.message,
+        created_at: t.created_at,
+      }))
+    });
+  } catch (error) {
+    console.error('Get landing page testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch landing page testimonials' 
+    });
+  }
+});
+
 // Get all testimonials with filtering
 router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
   try {
@@ -1269,8 +1300,24 @@ router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    if (approved !== undefined) testimonial.approved = approved;
-    if (display_on_landing !== undefined) testimonial.display_on_landing = display_on_landing;
+    if (approved !== undefined) {
+      testimonial.approved = approved;
+      // If unapproving, automatically remove from landing page
+      if (!approved) {
+        testimonial.display_on_landing = false;
+      }
+    }
+    
+    // Only allow setting display_on_landing to true if testimonial is approved
+    if (display_on_landing !== undefined) {
+      if (display_on_landing && !testimonial.approved) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot display unapproved testimonials on landing page'
+        });
+      }
+      testimonial.display_on_landing = display_on_landing;
+    }
 
     await testimonial.save();
 
@@ -1314,37 +1361,6 @@ router.delete('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete testimonial' 
-    });
-  }
-});
-
-// Get testimonials for landing page display
-router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const testimonials = await Testimonial.find({ 
-      approved: true, 
-      display_on_landing: true 
-    })
-      .sort({ created_at: -1 })
-      .limit(10);
-
-    res.json({
-      success: true,
-      testimonials: testimonials.map(t => ({
-        id: t._id,
-        name: t.student_name,
-        role: t.user_role,
-        title: t.title,
-        rating: t.rating,
-        quote: t.message,
-        created_at: t.created_at,
-      }))
-    });
-  } catch (error) {
-    console.error('Get landing page testimonials error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch landing page testimonials' 
     });
   }
 });

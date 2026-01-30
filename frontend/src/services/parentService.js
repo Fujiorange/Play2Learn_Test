@@ -7,8 +7,6 @@ const API_URL =
     ? 'http://localhost:5000/api'
     : `${window.location.origin}/api`);
 
-console.log('🌐 Parent Service API_URL:', API_URL);
-
 const parentService = {
   // ==================== TESTIMONIALS ====================
   async createTestimonial(testimonialData) {

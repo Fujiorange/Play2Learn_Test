@@ -16,10 +16,12 @@ function LandingPageManager() {
   const [editingIndex, setEditingIndex] = useState(null);
   const [viewMode, setViewMode] = useState('edit'); // 'edit' or 'preview'
   const [testimonials, setTestimonials] = useState([]);
+  const [loadingTestimonials, setLoadingTestimonials] = useState(false);
+  const [testimonialError, setTestimonialError] = useState('');
   const [testimonialFilters, setTestimonialFilters] = useState({
-    minRating: 4,
+    minRating: '',
     sentiment: '',
-    approved: 'false',
+    approved: '',
     userRole: ''
   });
   const [formData, setFormData] = useState({
@@ -48,22 +50,34 @@ function LandingPageManager() {
   };
 
   const fetchTestimonials = async () => {
+    setLoadingTestimonials(true);
+    setTestimonialError('');
     try {
       const response = await getTestimonials(testimonialFilters);
       if (response.success) {
         setTestimonials(response.testimonials || []);
+      } else {
+        setTestimonialError(response.error || 'Failed to load testimonials');
       }
     } catch (error) {
       console.error('Failed to fetch testimonials:', error);
+      setTestimonialError('Failed to load testimonials. Please try again.');
+    } finally {
+      setLoadingTestimonials(false);
     }
   };
 
   const handleTestimonialApproval = async (id, approved, displayOnLanding) => {
     try {
-      await updateTestimonial(id, { approved, display_on_landing: displayOnLanding });
-      fetchTestimonials(); // Refresh list
+      const result = await updateTestimonial(id, { approved, display_on_landing: displayOnLanding });
+      if (result.success) {
+        fetchTestimonials(); // Refresh list
+      } else {
+        alert(result.error || 'Failed to update testimonial');
+      }
     } catch (error) {
       console.error('Failed to update testimonial:', error);
+      alert('Failed to update testimonial. Please try again.');
     }
   };
 
@@ -584,9 +598,31 @@ function LandingPageManager() {
                 borderRadius: '8px',
                 padding: '12px'
               }}>
-                {testimonials.length === 0 ? (
+                {testimonialError && (
+                  <div style={{ 
+                    padding: '16px', 
+                    background: '#fee2e2', 
+                    color: '#991b1b', 
+                    borderRadius: '8px', 
+                    marginBottom: '12px',
+                    border: '1px solid #f87171'
+                  }}>
+                    ⚠️ {testimonialError}
+                  </div>
+                )}
+                {loadingTestimonials ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+                    <p>Loading testimonials...</p>
+                  </div>
+                ) : testimonials.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
                     <p>Click "Load Testimonials" to view and manage testimonials.</p>
+                    {Object.values(testimonialFilters).some(v => v) && (
+                      <p style={{ fontSize: '14px', marginTop: '8px' }}>
+                        💡 Try adjusting your filters if no testimonials are found.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   testimonials.map((testimonial) => (
