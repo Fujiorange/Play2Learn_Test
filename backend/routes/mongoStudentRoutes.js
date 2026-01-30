@@ -3,6 +3,8 @@
 // ✅ Field names corrected for compatibility
 // ✅ Daily limit set to 2 quizzes (matching frontend)
 // ✅ Placement quizzes excluded from all statistics
+// ✅ Quiz model points to quiz_attempts collection (CRITICAL FIX!)
+// ✅ Profile 1 counter reset added (Line 725-728)
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -64,11 +66,15 @@ if (!mongoose.models.Quiz) {
         is_correct: Boolean,
       },
     ],
+    answers: [Number], // Support old schema with "answers" array
     score: { type: Number, default: 0 },
     total_questions: { type: Number, default: 15 },
     percentage: { type: Number, default: 0 },
     points_earned: { type: Number, default: 0 },
     completed_at: { type: Date, default: Date.now },
+    created_at: { type: Date, default: Date.now }, // Support old schema
+  }, {
+    collection: 'quiz_attempts' // ⭐ CRITICAL FIX: Query the correct collection!
   });
   mongoose.model("Quiz", quizSchema);
 }
@@ -177,6 +183,28 @@ function computeEffectiveStreak(mathProfile) {
   if (diffDays <= 1) return { effective: storedStreak, shouldPersistReset: false };
 
   return { effective: 0, shouldPersistReset: storedStreak !== 0 };
+}
+
+// ==================== SCHEMA COMPATIBILITY HELPER ====================
+/**
+ * Check if a quiz is completed - handles BOTH old and new schemas
+ * OLD: quiz.answers array (used before Jan 30, 2026)
+ * NEW: quiz.questions array with student_answer (used after Jan 30, 2026)
+ */
+function isQuizCompleted(quiz) {
+  // NEW format: quiz.questions with nested student_answer
+  if (quiz.questions && quiz.questions.length > 0) {
+    return quiz.questions.some(q => 
+      q.student_answer !== null && q.student_answer !== undefined
+    );
+  }
+  
+  // OLD format: quiz.answers array (your Jan 17 quizzes)
+  if (quiz.answers && quiz.answers.length > 0) {
+    return true;
+  }
+  
+  return false;
 }
 
 // ==================== PROFILE CONFIG ====================
@@ -353,11 +381,7 @@ router.get("/dashboard", async (req, res) => {
     });
 
     // Filter: Only count quizzes that have been submitted (have student answers)
-    const completedQuizzes = allQuizzes.filter(quiz => {
-      return quiz.questions && quiz.questions.some(q => 
-        q.student_answer !== null && q.student_answer !== undefined
-      );
-    }).length;
+    const completedQuizzes = allQuizzes.filter(isQuizCompleted).length;
 
     const user = await User.findById(studentId);
     const { effective: effectiveStreak } = computeEffectiveStreak(mathProfile);
@@ -721,6 +745,9 @@ router.post("/quiz/submit", async (req, res) => {
         mathProfile.consecutive_fails = 0;
         profileChanged = true;
         changeType = "demote";
+      } else if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile === 1) {
+        // ⭐ NEW FIX: At Profile 1 (lowest), reset counter but stay at Profile 1
+        mathProfile.consecutive_fails = 0;
       }
     } else {
       mathProfile.consecutive_fails = 0;
@@ -772,19 +799,15 @@ router.get("/math-progress", async (req, res) => {
     }).sort({ completed_at: -1 });
 
     // Filter: Only include quizzes that have been submitted (have student answers)
-    const quizzes = allQuizzes.filter(quiz => {
-      return quiz.questions && quiz.questions.some(q => 
-        q.student_answer !== null && q.student_answer !== undefined
-      );
-    });
+    const quizzes = allQuizzes.filter(isQuizCompleted);
 
     const totalQuizzes = quizzes.length;
     const averageScore =
       totalQuizzes > 0
         ? Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes)
         : 0;
+    const totalPoints = mathProfile?.total_points || 0;
 
-    const totalPoints = quizzes.reduce((sum, q) => sum + (q.points_earned || 0), 0);
 
     res.json({
       success: true,
@@ -822,11 +845,7 @@ router.get("/quiz-results", async (req, res) => {
     }).sort({ completed_at: -1 });
 
     // Filter: Only include quizzes that have been submitted (have student answers)
-    const quizzes = allQuizzes.filter(quiz => {
-      return quiz.questions && quiz.questions.some(q => 
-        q.student_answer !== null && q.student_answer !== undefined
-      );
-    });
+    const quizzes = allQuizzes.filter(isQuizCompleted);
 
     res.json({
       success: true,
@@ -858,11 +877,7 @@ router.get("/quiz-history", async (req, res) => {
     }).sort({ completed_at: -1 });
 
     // Filter: Only include quizzes that have been submitted (have student answers)
-    const quizzes = allQuizzes.filter(quiz => {
-      return quiz.questions && quiz.questions.some(q => 
-        q.student_answer !== null && q.student_answer !== undefined
-      );
-    });
+    const quizzes = allQuizzes.filter(isQuizCompleted);
 
     res.json({
       success: true,
@@ -1085,6 +1100,7 @@ router.get("/testimonials", async (req, res) => {
   }
 });
 
+
 // ==================== REWARD SHOP ENDPOINTS ====================
 
 // Get available shop items
@@ -1111,18 +1127,11 @@ router.post("/shop/:itemId/purchase", async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const { itemId } = req.params;
+    const studentId = req.user.userId;
     const userEmail = req.user.email;
 
-    // Get user to find student_id
-    const user = await db.collection('users').findOne({ email: userEmail });
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User not found" });
-    }
-
     // Get math profile (this is where points are stored!)
-    const mathProfile = await db.collection('mathprofiles').findOne({ 
-      student_id: user._id 
-    });
+    const mathProfile = await MathProfile.findOne({ student_id: studentId });
     if (!mathProfile) {
       return res.status(404).json({ success: false, error: "Student profile not found" });
     }
@@ -1163,17 +1172,13 @@ router.post("/shop/:itemId/purchase", async (req, res) => {
     }
 
     // Deduct points from math profile
-    await db.collection('mathprofiles').updateOne(
-      { student_id: user._id },
-      { 
-        $inc: { total_points: -item.cost },
-        $set: { updatedAt: new Date() }
-      }
-    );
+    mathProfile.total_points -= item.cost;
+    mathProfile.updatedAt = new Date();
+    await mathProfile.save();
 
     // Record purchase
     const purchase = {
-      student_id: user._id,
+      student_id: studentId,
       student_email: userEmail,
       item_id: itemId,
       item_name: item.name,
@@ -1266,40 +1271,47 @@ router.get("/badges", async (req, res) => {
 // Get badge progress for current student
 router.get("/badges/progress", async (req, res) => {
   try {
-    const db = mongoose.connection.db;
+    const studentId = req.user.userId;
     const userEmail = req.user.email;
 
-    // Get user to find student_id
-    const user = await db.collection('users').findOne({ email: userEmail });
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User not found" });
-    }
+    // Get math profile data
+    const mathProfile = await MathProfile.findOne({ student_id: studentId });
 
-    // Get math profile data (this is where the actual data is!)
-    const mathProfile = await db.collection('mathprofiles').findOne({ 
-      student_id: user._id 
+    console.log(`📊 Math Profile for ${userEmail}:`, mathProfile);
+
+    // ✅ FIX: Use Quiz model with SAME logic as Dashboard/Progress
+    const allQuizzes = await Quiz.find({ 
+      student_id: studentId,
+      quiz_type: "regular" 
     });
 
-    // Get quiz attempts (excluding placement quizzes)
-    const quizAttempts = await db.collection('quizattempts')
-      .find({ 
-        student_email: userEmail,
-        is_placement: { $ne: true }
-      })
-      .toArray();
+    // Filter: Only count quizzes that have been submitted (have student answers)
+    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
+
+    console.log(`📝 Found ${completedQuizzes.length} completed quizzes for ${userEmail}`);
+    
+    // Log quiz scores for debugging
+    if (completedQuizzes.length > 0) {
+      console.log(`Quiz scores:`, completedQuizzes.map(q => ({
+        score: q.score,
+        percentage: q.percentage,
+        date: q.completed_at
+      })));
+    }
 
     // Calculate progress for different criteria
     const progress = {
-      quizzes_completed: quizAttempts.length,
+      quizzes_completed: completedQuizzes.length,
       login_streak: mathProfile?.streak || 0,
-      perfect_scores: quizAttempts.filter(q => q.score === 100).length,
-      high_scores: quizAttempts.filter(q => q.score >= 90).length,
+      perfect_scores: completedQuizzes.filter(q => q.score === 15).length, // 15/15 = 100%
+      high_scores: completedQuizzes.filter(q => q.percentage >= 90).length,
       points_earned: mathProfile?.total_points || 0
     };
 
     console.log(`📊 Badge progress for ${userEmail}:`, progress);
 
     // Check and auto-award badges
+    const db = mongoose.connection.db;
     const badges = await db.collection('badges').find({ isActive: true }).toArray();
     const earnedBadges = await db.collection('student_badges')
       .find({ student_email: userEmail })
@@ -1315,7 +1327,7 @@ router.get("/badges/progress", async (req, res) => {
       if (currentValue >= badge.criteriaValue) {
         // Award badge
         const newBadge = {
-          student_id: user._id,
+          student_id: studentId,
           student_email: userEmail,
           badge_id: badge._id,
           badge_name: badge.name,
