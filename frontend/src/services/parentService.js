@@ -1,22 +1,3 @@
-// src/services/parentService.js
-// Parent Service for MongoDB Operations
-
-const API_URL =
-  process.env.REACT_APP_API_URL ||
-  (window.location.hostname === 'localhost'
-    ? 'http://localhost:5000/api'
-    : `${window.location.origin}/api`);
-
-const parentService = {
-  // ==================== TESTIMONIALS ====================
-  async createTestimonial(testimonialData) {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/mongo/parent/testimonials`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
 // frontend/src/services/parentService.js - WITH SKILL MATRIX METHOD
 // ✅ UPDATED: Added getChildSkills(studentId) method
 // ✅ UPDATED: Added createTestimonial(formData) method for WriteTestimonial.js
@@ -310,41 +291,8 @@ class ParentService {
       console.error('createTestimonial error:', error);
       return { success: false, error: 'Failed to submit testimonial' };
     }
-  },
-
-  async getTestimonials() {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/mongo/parent/testimonials`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch testimonials');
-      return await response.json();
-    } catch (error) {
-      console.error('getTestimonials error:', error);
-      return { success: false, error: 'Failed to load testimonials' };
-    }
   }
-};
 
-export default parentService;
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit testimonial');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error submitting testimonial:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
 
   async getTestimonials() {
     try {

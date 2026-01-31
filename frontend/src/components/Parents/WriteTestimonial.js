@@ -140,9 +140,6 @@ export default function WriteTestimonial() {
     checkboxContainer: { display: 'flex', alignItems: 'center', gap: '8px' },
     checkbox: { width: '20px', height: '20px', cursor: 'pointer' },
     checkboxLabel: { fontSize: '14px', color: '#374151' },
-    submitButton: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', transition: 'transform 0.2s' },
-    successMessage: { textAlign: 'center', padding: '40px', background: 'white', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
-    errorMessage: { padding: '12px', background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171', borderRadius: '8px', marginBottom: '16px' },
     textarea: { width: '100%', padding: '12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', fontFamily: 'inherit', minHeight: '200px', resize: 'vertical' },
     ratingContainer: { display: 'flex', gap: '8px', marginTop: '8px' },
     star: { fontSize: '36px', cursor: 'pointer', transition: 'transform 0.2s', userSelect: 'none' },
@@ -191,21 +188,11 @@ export default function WriteTestimonial() {
                 {[1, 2, 3, 4, 5].map((star) => (
                   <span key={star} style={{...styles.star, color: (hoverRating || rating) >= star ? '#fbbf24' : '#e5e7eb', transform: (hoverRating || rating) >= star ? 'scale(1.1)' : 'scale(1)'}} onClick={() => !submitting && setRating(star)} onMouseEnter={() => !submitting && setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}>
                     ★
-        {message.text && (
-          <div style={{
-            ...styles.message, 
-            ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)
-          }}>
-            {message.text}
-          </div>
-        )}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-        <div style={styles.infoBox}>
-          <strong>ℹ️ Note:</strong> Your testimonial will be reviewed by our team before being published on the website.
-        </div>
-
-        <div style={styles.formCard}>
-          <form onSubmit={handleSubmit}>
             <div style={styles.formGroup}>
               <label style={styles.label}>Your Rating *</label>
               <div style={styles.ratingContainer}>
@@ -260,6 +247,9 @@ export default function WriteTestimonial() {
 
             <button type="submit" style={{...styles.submitButton, opacity: submitting ? 0.7 : 1}} disabled={submitting} onMouseEnter={(e) => !submitting && (e.target.style.transform = 'translateY(-2px)')} onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}>
               {submitting ? 'Submitting...' : 'Submit Testimonial'}
+            </button>
+
+            <div style={styles.formGroup}>
               <label style={styles.label}>Title *</label>
               <input 
                 type="text" 

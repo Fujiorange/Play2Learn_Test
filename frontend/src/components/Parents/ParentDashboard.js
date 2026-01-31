@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import parentService from '../../services/parentService';
 import ChildSelector from '../../components/ChildSelector';
-import AnnouncementBanner from '../shared/AnnouncementBanner';
 
 export default function ParentDashboard() {
   const navigate = useNavigate();
