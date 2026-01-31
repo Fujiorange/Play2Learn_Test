@@ -251,10 +251,13 @@
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #ddd;
+  /* flex-wrap allows the "View Temp Password" button to take full width 
+     while Edit/Delete buttons stay on the same line */
   flex-wrap: wrap;
 }
 
 .btn-view-temp-password {
+  /* Takes full width of container, pushes Edit/Delete to next line */
   flex: 1 1 100%;
   background: #ffc107;
   color: #333;

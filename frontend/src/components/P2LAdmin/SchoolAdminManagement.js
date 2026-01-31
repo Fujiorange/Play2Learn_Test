@@ -138,13 +138,13 @@ function SchoolAdminManagement() {
       return;
     }
     
-    const confirm = window.confirm(
+    const userConfirmed = window.confirm(
       `⚠️ Warning: This temporary password can only be viewed once!\n\n` +
       `Once you view it, make sure to save it securely. After viewing, ` +
       `it will be removed from the system.\n\nClick OK to view the password.`
     );
     
-    if (confirm) {
+    if (userConfirmed) {
       const tempPasswordData = tempPasswords[adminId];
       alert(
         `Temporary Password for ${tempPasswordData.name}:\n\n` +
