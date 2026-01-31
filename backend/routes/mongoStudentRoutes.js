@@ -167,7 +167,8 @@ router.get("/math-profile", async (req, res) => {
     const last = new Date(mp.last_reset_date || 0); last.setHours(0,0,0,0);
     if (today > last) { mp.quizzes_today = 0; mp.last_reset_date = new Date(); await mp.save(); }
     const { effective } = computeEffectiveStreak(mp);
-    res.json({ success: true, profile: { current_profile: mp.current_profile, placement_completed: mp.placement_completed, total_points: mp.total_points, streak: effective, quizzes_today: mp.quizzes_today } });
+    // Return as mathProfile to match frontend expectation
+    res.json({ success: true, mathProfile: { current_profile: mp.current_profile, placement_completed: mp.placement_completed, total_points: mp.total_points, streak: effective, quizzes_today: mp.quizzes_today } });
   } catch (e) { res.status(500).json({ success: false, error: "Failed" }); }
 });
 

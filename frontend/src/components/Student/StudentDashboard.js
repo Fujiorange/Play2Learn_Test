@@ -7,13 +7,13 @@ import AnnouncementBanner from '../shared/AnnouncementBanner';
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [hoveredStat, setHoveredStat] = useState(null);
 
   useEffect(() => {
-    // Check authentication and load user data
     const loadUserData = async () => {
       if (!authService.isAuthenticated()) {
         navigate('/login');
@@ -24,31 +24,45 @@ export default function StudentDashboard() {
         // Get user from localStorage first (fast)
         const currentUser = authService.getCurrentUser();
         setUser(currentUser);
+        // Set initial permissions from localStorage user (might be stale)
+        if (currentUser?.permissions) {
+          setPermissions(currentUser.permissions);
+        }
 
-        // Then fetch fresh data from server
+        // Then fetch fresh data from server (includes updated permissions)
         const result = await authService.getCurrentUserFromServer();
         if (result.success) {
           setUser(result.user);
+          // Load permissions from user object - use what's in DB
+          const userPerms = result.user.permissions;
+          console.log('🔐 Permissions from server:', userPerms);
+          
+          if (userPerms && Object.keys(userPerms).length > 0) {
+            // User has permissions set - use them directly
+            setPermissions(userPerms);
+          } else {
+            // No permissions set - default to all allowed
+            setPermissions({
+              canAccessPoints: true,
+              canAccessBadges: true,
+              canAccessShop: true,
+              canAccessLeaderboard: true,
+              canTakeQuizzes: true,
+              canViewProgress: true,
+              canCreateTickets: true
+            });
+          }
         }
 
-        // ✅ FIXED: Load dashboard data from MongoDB
+        // Load dashboard data from MongoDB
         const dashData = await studentService.getDashboard();
         console.log('📊 Dashboard data loaded:', dashData);
 
         if (dashData.success) {
-          // Accept both shapes:
-          // - Preferred backend: dashData.dashboard (totalPoints, completedQuizzes, currentProfile)
-          // - Compat layer: dashData.data (points, quizzesTaken, level)
           const dashboardInfo = dashData.dashboard || dashData.data || {};
-
           const points = dashboardInfo.totalPoints ?? dashboardInfo.points ?? 0;
-
-          const completedQuizzes =
-            dashboardInfo.completedQuizzes ?? dashboardInfo.quizzesTaken ?? 0;
-
-          const level =
-            dashboardInfo.level ?? dashboardInfo.currentProfile ?? 1;
-
+          const completedQuizzes = dashboardInfo.completedQuizzes ?? dashboardInfo.quizzesTaken ?? 0;
+          const level = dashboardInfo.level ?? dashboardInfo.currentProfile ?? 1;
           const gradeLevel = dashboardInfo.gradeLevel ?? 'Primary 1';
 
           setDashboardData({
@@ -60,30 +74,17 @@ export default function StudentDashboard() {
             completedQuizzes,
             grade_level: gradeLevel,
           });
-          console.log('✅ Dashboard data set successfully');
         } else {
-          console.error('❌ Failed to load dashboard:', dashData.error);
-          // Set default values
           setDashboardData({
-            points: 0,
-            level: 1,
-            levelProgress: 0,
-            achievements: 0,
-            rank: '#-',
-            completedQuizzes: 0,
-            grade_level: 'Primary 1',
+            points: 0, level: 1, levelProgress: 0, achievements: 0,
+            rank: '#-', completedQuizzes: 0, grade_level: 'Primary 1',
           });
         }
       } catch (error) {
         console.error('Error loading dashboard:', error);
         setDashboardData({
-          points: 0,
-          level: 1,
-          levelProgress: 0,
-          achievements: 0,
-          rank: '#-',
-          completedQuizzes: 0,
-          grade_level: 'Primary 1',
+          points: 0, level: 1, levelProgress: 0, achievements: 0,
+          rank: '#-', completedQuizzes: 0, grade_level: 'Primary 1',
         });
       } finally {
         setLoading(false);
@@ -92,6 +93,12 @@ export default function StudentDashboard() {
 
     loadUserData();
   }, [navigate]);
+
+  // Check if a feature is allowed
+  const isAllowed = (permissionKey) => {
+    if (!permissions) return true; // Default allow if permissions not loaded
+    return permissions[permissionKey] !== false;
+  };
 
   if (loading) {
     return (
@@ -102,11 +109,11 @@ export default function StudentDashboard() {
     );
   }
 
-  if (!user || !dashboardData) {
+  if (!dashboardData) {
     return (
       <div style={styles.errorContainer}>
         <h2>Unable to load dashboard</h2>
-        <p>Please try refreshing the page.</p>
+        <p>Please try refreshing the page</p>
         <button style={styles.button} onClick={() => window.location.reload()}>
           Refresh
         </button>
@@ -114,13 +121,15 @@ export default function StudentDashboard() {
     );
   }
 
-  const menuItems = [
+  // Menu items with permission requirements
+  const allMenuItems = [
     {
       id: 'quiz',
       title: 'Attempt Quiz',
       description: 'Take a quiz to earn points & level up',
       icon: '🎯',
       action: () => navigate('/student/quiz/attempt'),
+      permission: 'canTakeQuizzes',
     },
     {
       id: 'skills',
@@ -128,6 +137,7 @@ export default function StudentDashboard() {
       description: 'See your unlocked math skills',
       icon: '📊',
       action: () => navigate('/student/skills'),
+      permission: 'canViewProgress',
     },
     {
       id: 'progress',
@@ -135,6 +145,7 @@ export default function StudentDashboard() {
       description: 'View your learning progress and stats',
       icon: '📈',
       action: () => navigate('/student/progress'),
+      permission: 'canViewProgress',
     },
     {
       id: 'leaderboard',
@@ -142,6 +153,7 @@ export default function StudentDashboard() {
       description: 'See how you rank against classmates',
       icon: '🏆',
       action: () => navigate('/student/leaderboard'),
+      permission: 'canAccessLeaderboard',
     },
     {
       id: 'profile',
@@ -149,6 +161,7 @@ export default function StudentDashboard() {
       description: 'View and update your profile',
       icon: '👤',
       action: () => navigate('/student/profile'),
+      permission: null, // Always allowed
     },
     {
       id: 'results',
@@ -156,6 +169,7 @@ export default function StudentDashboard() {
       description: 'Review your quiz results and history',
       icon: '📝',
       action: () => navigate('/student/results'),
+      permission: 'canViewProgress',
     },
     {
       id: 'testimonial',
@@ -163,6 +177,7 @@ export default function StudentDashboard() {
       description: 'Share feedback about your experience',
       icon: '💬',
       action: () => navigate('/student/testimonial'),
+      permission: null, // Always allowed
     },
     {
       id: 'support',
@@ -170,6 +185,7 @@ export default function StudentDashboard() {
       description: 'Need help? Contact support',
       icon: '🛠️',
       action: () => navigate('/student/support'),
+      permission: 'canCreateTickets',
     },
     {
       id: 'trackTicket',
@@ -177,6 +193,7 @@ export default function StudentDashboard() {
       description: 'View your submitted support requests',
       icon: '📩',
       action: () => navigate('/student/support/tickets'),
+      permission: 'canCreateTickets',
     },
     {
       id: 'badges',
@@ -184,79 +201,86 @@ export default function StudentDashboard() {
       description: 'View earned badges and spend points',
       icon: '🏆',
       action: () => navigate('/student/badges'),
+      permission: 'canAccessBadges',
     },
   ];
+
+  // Filter menu items based on permissions
+  const menuItems = allMenuItems.map(item => ({
+    ...item,
+    disabled: item.permission && !isAllowed(item.permission)
+  }));
 
   const statCards = [
     {
       id: 'points',
       title: 'Total Points',
-      value: dashboardData.points,
+      value: isAllowed('canAccessPoints') ? dashboardData.points : '🔒',
       icon: '⭐',
     },
     {
       id: 'level',
       title: 'Current Level',
       value: dashboardData.level,
-      icon: '🎯',
-    },
-    {
-      id: 'achievements',
-      title: 'Achievements',
-      value: dashboardData.achievements,
-      icon: '🏅',
-    },
-    {
-      id: 'rank',
-      title: 'Class Rank',
-      value: dashboardData.rank,
-      icon: '🏆',
+      icon: '🎮',
     },
     {
       id: 'quizzes',
       title: 'Completed Quizzes',
       value: dashboardData.completedQuizzes,
-      icon: '📝',
+      icon: '✅',
     },
   ];
 
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      navigate('/login');
+    }
+  };
+
+  const handleMenuClick = (item) => {
+    if (item.disabled) {
+      alert(`${item.title} has been disabled by your school administrator.`);
+      return;
+    }
+    item.action();
+  };
+
   return (
     <div style={styles.container}>
+      {/* Announcement Banner */}
+      <AnnouncementBanner userRole="student" />
+      
+      {/* Header */}
       <header style={styles.header}>
-        <div style={styles.logoArea}>
-          <div style={styles.logo}>P</div>
-          <h1 style={styles.logoText}>Play2Learn</h1>
-        </div>
-        <div style={styles.userArea}>
-          <div style={styles.userInfo}>
-            <span style={styles.userName}>{user.name || 'Student'}</span>
-            <span style={styles.userRole}>{user.role || 'Student'}</span>
+        <div style={styles.headerContent}>
+          <div style={styles.logoSection}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>Play2Learn</span>
           </div>
-          <button
-            style={styles.logoutButton}
-            onClick={() => {
-              authService.logout();
-              navigate('/login');
-            }}
-          >
-            Logout
-          </button>
+          <div style={styles.userSection}>
+            <span style={styles.welcomeText}>
+              Welcome, <strong>{user?.name || 'Student'}</strong>!
+            </span>
+            <span style={styles.gradeTag}>{dashboardData.grade_level}</span>
+            <button onClick={handleLogout} style={styles.logoutButton}>
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <main style={styles.main}>
-        {/* Announcements Banner */}
-        <AnnouncementBanner userRole="student" />
-
-        <div style={styles.welcomeCard}>
-          <h2 style={styles.welcomeTitle}>
-            Welcome back, {user.name?.split(' ')[0] || 'Student'}! 🎮
-          </h2>
-          <p style={styles.gradeLevel}>{dashboardData.grade_level}</p>
-          <div style={styles.progressContainer}>
-            <div style={styles.progressText}>
-              Level {dashboardData.level} - {dashboardData.levelProgress.toFixed(0)}
-              % to Level {dashboardData.level + 1}
+        {/* Stats Section */}
+        <section style={styles.statsSection}>
+          <div style={styles.levelCard}>
+            <div style={styles.levelInfo}>
+              Level {dashboardData.level} - {dashboardData.levelProgress.toFixed(0)}%
             </div>
             <div style={styles.progressBar}>
               <div
@@ -264,50 +288,61 @@ export default function StudentDashboard() {
                   ...styles.progressFill,
                   width: `${dashboardData.levelProgress}%`,
                 }}
-              ></div>
+              />
             </div>
           </div>
-        </div>
-
-        <div style={styles.statsGrid}>
-          {statCards.map((stat) => (
-            <div
-              key={stat.id}
-              style={{
-                ...styles.statCard,
-                ...(hoveredStat === stat.id ? styles.cardHover : {}),
-              }}
-              onMouseEnter={() => setHoveredStat(stat.id)}
-              onMouseLeave={() => setHoveredStat(null)}
-            >
-              <div style={styles.statIcon}>{stat.icon}</div>
-              <div style={styles.statTitle}>{stat.title}</div>
-              <div style={styles.statValue}>{stat.value}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={styles.menuGrid}>
-          {menuItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                ...styles.menuItem,
-                ...(hoveredItem === item.id ? styles.cardHover : {}),
-              }}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-              onClick={item.action}
-            >
-              <div style={styles.menuIcon}>{item.icon}</div>
-              <div style={styles.menuContent}>
-                <h3 style={styles.menuTitle}>{item.title}</h3>
-                <p style={styles.menuDescription}>{item.description}</p>
+          <div style={styles.statCardsRow}>
+            {statCards.map((stat) => (
+              <div
+                key={stat.id}
+                style={{
+                  ...styles.statCard,
+                  ...(hoveredStat === stat.id ? styles.statCardHover : {}),
+                }}
+                onMouseEnter={() => setHoveredStat(stat.id)}
+                onMouseLeave={() => setHoveredStat(null)}
+              >
+                <span style={styles.statIcon}>{stat.icon}</span>
+                <span style={styles.statValue}>{stat.value}</span>
+                <span style={styles.statTitle}>{stat.title}</span>
               </div>
-              <div style={styles.arrow}>→</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Menu Grid */}
+        <section style={styles.menuSection}>
+          <h2 style={styles.sectionTitle}>What would you like to do?</h2>
+          <div style={styles.menuGrid}>
+            {menuItems.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => handleMenuClick(item)}
+                onMouseEnter={() => setHoveredItem(item.id)}
+                onMouseLeave={() => setHoveredItem(null)}
+                style={{
+                  ...styles.menuCard,
+                  ...(hoveredItem === item.id && !item.disabled ? styles.menuCardHover : {}),
+                  ...(item.disabled ? styles.menuCardDisabled : {}),
+                }}
+              >
+                <span style={styles.menuIcon}>{item.disabled ? '🔒' : item.icon}</span>
+                <h3 style={{
+                  ...styles.menuTitle,
+                  ...(item.disabled ? styles.menuTitleDisabled : {})
+                }}>
+                  {item.title}
+                </h3>
+                <p style={{
+                  ...styles.menuDescription,
+                  ...(item.disabled ? styles.menuDescriptionDisabled : {})
+                }}>
+                  {item.disabled ? 'This feature has been disabled' : item.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );
@@ -316,148 +351,227 @@ export default function StudentDashboard() {
 const styles = {
   container: {
     minHeight: '100vh',
-    backgroundColor: '#f3f4f6',
-    fontFamily: 'Arial, sans-serif',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: '15px 30px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-  },
-  logoArea: { display: 'flex', alignItems: 'center', gap: '10px' },
-  logo: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '10px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold',
-    fontSize: '18px',
-  },
-  logoText: { margin: 0, fontSize: '20px', color: '#111827' },
-  userArea: { display: 'flex', alignItems: 'center', gap: '15px' },
-  userInfo: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end' },
-  userName: { fontWeight: 'bold', color: '#111827' },
-  userRole: { fontSize: '12px', color: '#6b7280' },
-  logoutButton: {
-    backgroundColor: '#ef4444',
-    color: '#fff',
-    border: 'none',
-    padding: '8px 14px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-  },
-  main: { padding: '30px', maxWidth: '1200px', margin: '0 auto' },
-  welcomeCard: {
-    backgroundColor: '#10b981',
-    color: '#fff',
-    borderRadius: '16px',
-    padding: '25px',
-    marginBottom: '25px',
-    boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
-  },
-  welcomeTitle: { margin: 0, fontSize: '28px', fontWeight: 'bold' },
-  gradeLevel: { marginTop: '8px', marginBottom: '10px', opacity: 0.95 },
-  progressContainer: { marginTop: '10px' },
-  progressText: { fontSize: '14px', marginBottom: '8px' },
-  progressBar: {
-    height: '10px',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderRadius: '999px',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#fff',
-    borderRadius: '999px',
-    transition: 'width 0.3s ease',
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '15px',
-    marginBottom: '25px',
-  },
-  statCard: {
-    backgroundColor: '#fff',
-    borderRadius: '14px',
-    padding: '18px',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-    textAlign: 'center',
-    cursor: 'default',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-  },
-  statIcon: { fontSize: '26px', marginBottom: '8px' },
-  statTitle: { color: '#6b7280', fontSize: '13px' },
-  statValue: { fontSize: '26px', fontWeight: 'bold', marginTop: '6px' },
-  menuGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: '16px',
-  },
-  menuItem: {
-    backgroundColor: '#fff',
-    borderRadius: '14px',
-    padding: '18px',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    cursor: 'pointer',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-  },
-  menuIcon: { fontSize: '26px', marginRight: '12px' },
-  menuContent: { flex: 1 },
-  menuTitle: { margin: 0, color: '#111827' },
-  menuDescription: { margin: '6px 0 0', color: '#6b7280', fontSize: '13px' },
-  arrow: { fontSize: '18px', color: '#9ca3af' },
-  cardHover: {
-    transform: 'translateY(-2px)',
-    boxShadow: '0 8px 18px rgba(0,0,0,0.10)',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   },
   loadingContainer: {
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   },
   loadingSpinner: {
-    width: '45px',
-    height: '45px',
+    width: '50px',
+    height: '50px',
+    border: '4px solid rgba(255, 255, 255, 0.3)',
+    borderTop: '4px solid white',
     borderRadius: '50%',
-    border: '4px solid #e5e7eb',
-    borderTop: '4px solid #10b981',
     animation: 'spin 1s linear infinite',
   },
-  loadingText: { marginTop: '15px', color: '#6b7280' },
+  loadingText: {
+    marginTop: '20px',
+    color: 'white',
+    fontSize: '18px',
+  },
   errorContainer: {
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    color: '#111827',
+    justifyContent: 'center',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+  },
+  header: {
+    background: 'rgba(255, 255, 255, 0.95)',
+    padding: '16px 0',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+  },
+  headerContent: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: '0 24px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logoSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  logoIcon: {
+    width: '40px',
+    height: '40px',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    borderRadius: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: '20px',
+  },
+  logoText: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#333',
+  },
+  userSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+  welcomeText: {
+    fontSize: '16px',
+    color: '#555',
+  },
+  gradeTag: {
+    padding: '4px 12px',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    borderRadius: '20px',
+    fontSize: '14px',
+    fontWeight: '600',
+  },
+  logoutButton: {
+    padding: '8px 16px',
+    background: '#f3f4f6',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#555',
+    transition: 'all 0.2s',
+  },
+  main: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: '32px 24px',
+  },
+  statsSection: {
+    marginBottom: '32px',
+  },
+  levelCard: {
+    background: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: '16px',
+    padding: '20px 24px',
+    marginBottom: '20px',
+  },
+  levelInfo: {
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: '12px',
+  },
+  progressBar: {
+    height: '12px',
+    background: '#e5e7eb',
+    borderRadius: '6px',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+    borderRadius: '6px',
+    transition: 'width 0.5s ease',
+  },
+  statCardsRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: '16px',
+  },
+  statCard: {
+    background: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: '16px',
     padding: '20px',
     textAlign: 'center',
+    cursor: 'pointer',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+  statCardHover: {
+    transform: 'translateY(-4px)',
+    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
+  },
+  statIcon: {
+    fontSize: '32px',
+    display: 'block',
+    marginBottom: '8px',
+  },
+  statValue: {
+    fontSize: '28px',
+    fontWeight: '700',
+    color: '#333',
+    display: 'block',
+  },
+  statTitle: {
+    fontSize: '14px',
+    color: '#666',
+    marginTop: '4px',
+    display: 'block',
+  },
+  menuSection: {
+    marginTop: '16px',
+  },
+  sectionTitle: {
+    color: 'white',
+    fontSize: '24px',
+    fontWeight: '600',
+    marginBottom: '20px',
+  },
+  menuGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: '20px',
+  },
+  menuCard: {
+    background: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: '16px',
+    padding: '24px',
+    cursor: 'pointer',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+  menuCardHover: {
+    transform: 'translateY(-4px)',
+    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
+  },
+  menuCardDisabled: {
+    background: 'rgba(200, 200, 200, 0.7)',
+    cursor: 'not-allowed',
+    opacity: 0.7,
+  },
+  menuIcon: {
+    fontSize: '36px',
+    display: 'block',
+    marginBottom: '12px',
+  },
+  menuTitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: '8px',
+  },
+  menuTitleDisabled: {
+    color: '#888',
+  },
+  menuDescription: {
+    fontSize: '14px',
+    color: '#666',
+    lineHeight: '1.4',
+  },
+  menuDescriptionDisabled: {
+    color: '#999',
   },
   button: {
-    marginTop: '14px',
-    padding: '10px 16px',
-    borderRadius: '10px',
+    padding: '12px 24px',
+    background: 'white',
     border: 'none',
-    backgroundColor: '#10b981',
-    color: '#fff',
+    borderRadius: '8px',
     cursor: 'pointer',
-    fontWeight: 'bold',
+    fontSize: '16px',
+    fontWeight: '600',
+    marginTop: '16px',
   },
 };

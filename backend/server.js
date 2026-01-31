@@ -1,4 +1,4 @@
-// backend/server.js - Play2Learn Backend - FIXED
+// backend/server.js - Play2Learn Backend - FIXED v16
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
@@ -8,8 +8,6 @@ require('dotenv').config();
 
 const app = express();
 const path = require('path');
-
-
 
 // ==================== CORS CONFIGURATION ====================
 const corsOptions = {
@@ -50,7 +48,6 @@ console.log('🚀 Starting Play2Learn Server...');
 console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔗 MongoDB:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
 
-// Mongoose 9.1.3 connection (no options needed)
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('✅ MongoDB Connected Successfully!');
@@ -77,7 +74,6 @@ mongoose.connect(MONGODB_URI)
 // ==================== JWT CONFIGURATION ====================
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
-// Validate JWT_SECRET in production
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-this-in-production') {
     console.error('❌ ERROR: JWT_SECRET must be set in production environment!');
@@ -85,6 +81,7 @@ if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   }
 }
+
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -111,15 +108,6 @@ function authenticateToken(req, res, next) {
   });
 }
 
-if (process.env.NODE_ENV === 'production') {
-  // Serve static frontend files
-  app.use(express.static(path.join(__dirname, '../frontend/build')));
-  
-  // Serve index.html for all unknown routes
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
-  });
-}
 // ==================== REQUEST LOGGING ====================
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString().split('T')[1]} - ${req.method} ${req.path}`);
@@ -127,7 +115,6 @@ app.use((req, res, next) => {
 });
 
 // ==================== MODEL IMPORTS (MUST BE BEFORE ROUTES!) ====================
-// ✅ CRITICAL FIX: Load User model BEFORE loading routes
 try {
   const User = require('./models/User');
   console.log('✅ User model loaded');
@@ -142,17 +129,33 @@ try {
   const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
   const mongoTeacherRoutes = require('./routes/mongoTeacherRoutes');
   const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
+  const mongoParentRoutes = require('./routes/mongoParentRoutes');
   
+  // Auth routes (no authentication needed for login/register)
   app.use('/api/mongo/auth', mongoAuthRoutes);
   app.use('/api/auth', mongoAuthRoutes); // Backward compatibility
+  
+  // Protected routes (require authentication)
   app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
   app.use('/api/mongo/teacher', authenticateToken, mongoTeacherRoutes);
+  app.use('/api/mongo/parent', authenticateToken, mongoParentRoutes);  // ✅ FIXED: Added authenticateToken
   app.use('/api/mongo/school-admin', schoolAdminRoutes);
   
   console.log('✅ Routes loaded successfully');
+  console.log('   📍 /api/mongo/auth - Auth routes');
+  console.log('   📍 /api/mongo/student - Student routes (protected)');
+  console.log('   📍 /api/mongo/teacher - Teacher routes (protected)');
+  console.log('   📍 /api/mongo/parent - Parent routes (protected)');
+  console.log('   📍 /api/mongo/school-admin - School Admin routes');
 } catch (error) {
   console.error('❌ Error loading routes:', error.message);
+  console.error('   Stack:', error.stack);
   console.log('⚠️  Some routes may not be available');
+}
+
+// ==================== STATIC FILES (Production) ====================
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
 }
 
 // ==================== TEST ENDPOINTS ====================
@@ -197,11 +200,20 @@ app.get('/', (req, res) => {
       health: '/api/health',
       auth: '/api/auth/*',
       student: '/api/mongo/student/*',
+      teacher: '/api/mongo/teacher/*',
+      parent: '/api/mongo/parent/*',
       admin: '/api/mongo/school-admin/*'
     },
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
+
+// ==================== CATCH-ALL FOR SPA (Production) ====================
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
 
 // ==================== ERROR HANDLERS ====================
 app.use((req, res) => {
@@ -224,9 +236,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
-  console.log('╔══════════════════════════════════════════════╗');
+  console.log('╔═══════════════════════════════════════════════╗');
   console.log('║          🚀 Play2Learn Server               ║');
-  console.log(`║          📍 Port: ${PORT}                       ║`);
+  console.log(`║          🔌 Port: ${PORT}                       ║`);
   console.log(`║          🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://play2learn-test.onrender.com' : `http://localhost:${PORT}`} ║`);
   console.log('║          🗄️  Database: ' + 
     (mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected') + 
@@ -234,7 +246,7 @@ const server = app.listen(PORT, () => {
   console.log('║          🔐 JWT: ' + 
     (process.env.JWT_SECRET ? '✅ Set' : '❌ Using default') + 
     '                   ║');
-  console.log('╚══════════════════════════════════════════════╝');
+  console.log('╚═══════════════════════════════════════════════╝');
 });
 
 // Graceful shutdown

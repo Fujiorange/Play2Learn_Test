@@ -123,6 +123,7 @@ router.post('/login', async (req, res) => {
         subject: user.subject,
         emailVerified: user.emailVerified,
         accountActive: user.accountActive,
+        permissions: user.permissions || null,  // Include permissions!
       },
     });
   } catch (error) {
@@ -157,6 +158,7 @@ router.get('/me', async (req, res) => {
         subject: user.subject,
         emailVerified: user.emailVerified,
         accountActive: user.accountActive,
+        permissions: user.permissions || null,  // Include permissions!
       },
     });
   } catch (error) {
