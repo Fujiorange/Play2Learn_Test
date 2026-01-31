@@ -76,6 +76,8 @@ function LandingPageManager() {
     if (testimonialsLoadedRef.current) {
       fetchTestimonials();
     }
+    // Intentionally not including fetchTestimonials in deps since it would cause infinite loop
+    // The function uses testimonialFilters which is already tracked in the dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testimonialFilters]);
 
