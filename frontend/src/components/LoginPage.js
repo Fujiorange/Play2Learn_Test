@@ -11,26 +11,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Normalize role to handle all variations - matches Yi Hong's format
-  const normalizeRole = (role) => {
-    if (!role) return role;
-    const lower = role.toLowerCase().trim();
-    
-    // Platform admin variations
-    if (lower.includes('platform') || lower === 'p2ladmin' || lower === 'p2l-admin') return 'platform-admin';
-    
-    // School admin variations - check for any form
-    if (lower.includes('school') && lower.includes('admin')) return 'school-admin';
-    if (lower === 'schooladmin' || lower === 'school-admin') return 'school-admin';
-    
-    // Others
-    if (lower.includes('teacher')) return 'teacher';
-    if (lower.includes('student')) return 'student';
-    if (lower.includes('parent')) return 'parent';
-    
-    return lower;
-  };
-
   const handleSubmit = async () => {
     setError('');
 
@@ -50,33 +30,26 @@ export default function LoginPage() {
 
       if (result.success) {
         console.log('✅ Login successful!');
-        console.log('👤 User role (raw):', result.user.role);
+        console.log('👤 User role:', result.user.role);
         
-        // Get role and convert to lowercase for comparison
-        const rawRole = (result.user.role || '').toLowerCase();
+        // Redirect based on user role (case-insensitive)
+        const rawRole = (result.user.role || "").toLowerCase();
         
-        console.log('🔀 Role lowercase:', rawRole);
+        console.log('🔀 Navigating to:', rawRole);
         
-        // Check for each role type - handle ALL variations
-        if (rawRole.includes('platform') || rawRole === 'p2ladmin' || rawRole === 'p2l-admin') {
-          console.log('➡️ Redirecting to platform-admin');
+        if (rawRole.includes('platform') || rawRole.includes('p2l')) {
           navigate('/platform-admin');
         } else if (rawRole.includes('school') && rawRole.includes('admin')) {
-          // This catches: "school admin", "school-admin", "schooladmin", "School Admin"
-          console.log('➡️ Redirecting to school-admin');
           navigate('/school-admin');
-        } else if (rawRole.includes('teacher')) {
-          console.log('➡️ Redirecting to teacher');
+        } else if (rawRole === 'teacher') {
           navigate('/teacher');
-        } else if (rawRole.includes('student')) {
-          console.log('➡️ Redirecting to student');
+        } else if (rawRole === 'student') {
           navigate('/student');
-        } else if (rawRole.includes('parent')) {
-          console.log('➡️ Redirecting to parent');
+        } else if (rawRole === 'parent') {
           navigate('/parent');
         } else {
           console.log('⚠️ Unknown role:', rawRole);
-          setError('Unknown user role: ' + result.user.role);
+          navigate('/login');
         }
       } else {
         console.log('❌ Login failed:', result.error);
@@ -90,62 +63,73 @@ export default function LoginPage() {
     }
   };
 
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !loading) {
+      handleSubmit();
+    }
+  };
+
   const styles = {
     container: {
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       padding: '20px',
+      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
     },
     card: {
+      display: 'flex',
       background: 'white',
-      borderRadius: '16px',
-      padding: '40px',
+      borderRadius: '20px',
+      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
+      overflow: 'hidden',
+      maxWidth: '1100px',
       width: '100%',
-      maxWidth: '420px',
-      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+    },
+    loginSection: {
+      flex: '1',
+      padding: '60px 50px',
+      maxWidth: '500px',
     },
     logo: {
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
       gap: '12px',
-      marginBottom: '32px',
+      marginBottom: '40px',
     },
     logoIcon: {
-      width: '50px',
-      height: '50px',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      borderRadius: '12px',
+      width: '40px',
+      height: '40px',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      borderRadius: '10px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: 'white',
-      fontSize: '24px',
       fontWeight: 'bold',
+      fontSize: '18px',
     },
     logoText: {
-      fontSize: '28px',
-      fontWeight: '700',
+      fontSize: '20px',
+      fontWeight: '600',
       color: '#1f2937',
     },
     title: {
-      fontSize: '24px',
-      fontWeight: '700',
+      fontSize: '32px',
       color: '#1f2937',
-      textAlign: 'center',
-      marginBottom: '8px',
+      marginBottom: '12px',
+      fontWeight: '700',
+      margin: '0 0 12px 0',
     },
     subtitle: {
-      fontSize: '14px',
       color: '#6b7280',
-      textAlign: 'center',
-      marginBottom: '32px',
+      fontSize: '15px',
+      marginBottom: '40px',
+      lineHeight: '1.5',
     },
-    inputGroup: {
-      marginBottom: '20px',
+    formGroup: {
+      marginBottom: '24px',
     },
     label: {
       display: 'block',
@@ -158,152 +142,307 @@ export default function LoginPage() {
       width: '100%',
       padding: '12px 16px',
       border: '2px solid #e5e7eb',
-      borderRadius: '8px',
+      borderRadius: '10px',
       fontSize: '15px',
-      transition: 'border-color 0.2s',
+      transition: 'all 0.3s',
+      background: '#f9fafb',
+      color: '#1f2937',
       boxSizing: 'border-box',
       fontFamily: 'inherit',
     },
-    select: {
-      width: '100%',
-      padding: '12px 16px',
-      border: '2px solid #e5e7eb',
-      borderRadius: '8px',
-      fontSize: '15px',
+    inputFocus: {
+      outline: 'none',
+      borderColor: '#10b981',
       background: 'white',
-      cursor: 'pointer',
-      fontFamily: 'inherit',
     },
-    passwordContainer: {
+    passwordWrapper: {
       position: 'relative',
     },
-    showPassword: {
+    passwordToggle: {
       position: 'absolute',
-      right: '12px',
+      right: '16px',
       top: '50%',
       transform: 'translateY(-50%)',
       background: 'none',
       border: 'none',
-      color: '#6b7280',
       cursor: 'pointer',
-      fontSize: '14px',
+      color: '#9ca3af',
+      fontSize: '18px',
+      padding: '0',
+    },
+    select: {
+      width: '100%',
+      padding: '12px 40px 12px 16px',
+      border: '2px solid #e5e7eb',
+      borderRadius: '10px',
+      fontSize: '15px',
+      transition: 'all 0.3s',
+      background: '#f9fafb',
+      color: '#1f2937',
+      cursor: 'pointer',
+      appearance: 'none',
+      backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E\")",
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: 'right 16px center',
+      boxSizing: 'border-box',
+      fontFamily: 'inherit',
     },
     button: {
       width: '100%',
       padding: '14px',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       color: 'white',
       border: 'none',
-      borderRadius: '8px',
+      borderRadius: '10px',
       fontSize: '16px',
       fontWeight: '600',
       cursor: 'pointer',
-      transition: 'transform 0.2s, box-shadow 0.2s',
-      marginTop: '8px',
+      transition: 'all 0.3s',
+      marginTop: '10px',
+      fontFamily: 'inherit',
+      opacity: loading ? 0.7 : 1,
     },
-    buttonDisabled: {
-      opacity: 0.7,
-      cursor: 'not-allowed',
-    },
-    error: {
-      background: '#fef2f2',
-      border: '1px solid #fecaca',
-      color: '#dc2626',
+    errorMessage: {
+      marginTop: '15px',
       padding: '12px 16px',
-      borderRadius: '8px',
+      background: '#fef2f2',
+      border: '2px solid #fecaca',
+      borderRadius: '10px',
+      color: '#dc2626',
       fontSize: '14px',
-      marginBottom: '20px',
-      textAlign: 'center',
+      fontWeight: '500',
     },
-    links: {
-      textAlign: 'center',
-      marginTop: '24px',
+    registerLink: {
+      marginTop: '20px',
       fontSize: '14px',
       color: '#6b7280',
+      textAlign: 'center',
     },
-    link: {
-      color: '#667eea',
-      textDecoration: 'none',
+    helpSection: {
+      marginTop: '25px',
+      padding: '20px',
+      background: '#f0f9ff',
+      borderRadius: '12px',
+      border: '2px solid #bfdbfe',
+    },
+    helpTitle: {
+      fontSize: '15px',
+      color: '#1e40af',
+      margin: '0 0 12px 0',
       fontWeight: '600',
     },
+    helpText: {
+      fontSize: '13px',
+      color: '#1e40af',
+      margin: '6px 0',
+      lineHeight: '1.5',
+    },
+    link: {
+      color: '#10b981',
+      fontWeight: '600',
+      textDecoration: 'none',
+      cursor: 'pointer',
+    },
+    infoSection: {
+      flex: '1',
+      background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+      padding: '60px 50px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+    },
+    infoTitle: {
+      fontSize: '28px',
+      color: '#1f2937',
+      marginBottom: '30px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      fontWeight: '700',
+      margin: '0 0 30px 0',
+    },
+    feature: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '12px',
+      marginBottom: '20px',
+      fontSize: '15px',
+      color: '#374151',
+      lineHeight: '1.6',
+    },
+    star: {
+      fontSize: '18px',
+      flexShrink: '0',
+      marginTop: '2px',
+    },
   };
+
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [roleFocused, setRoleFocused] = useState(false);
+  const [buttonHovered, setButtonHovered] = useState(false);
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <div style={styles.logo}>
-          <div style={styles.logoIcon}>P</div>
-          <span style={styles.logoText}>Play2Learn</span>
-        </div>
+        <div style={styles.loginSection}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <div style={styles.logoText}>Play2Learn</div>
+          </div>
 
-        <h1 style={styles.title}>Welcome Back!</h1>
-        <p style={styles.subtitle}>Sign in to continue your learning journey</p>
+          <h1 style={styles.title}>Welcome back!</h1>
+          <p style={styles.subtitle}>
+            Sign in to continue your personalised learning journey.
+          </p>
 
-        {error && <div style={styles.error}>⚠️ {error}</div>}
+          <div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyPress={handleKeyPress}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+                placeholder="you@example.com"
+                disabled={loading}
+                style={{
+                  ...styles.input,
+                  ...(emailFocused ? styles.inputFocus : {}),
+                }}
+              />
+            </div>
 
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Email Address</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
-            style={styles.input}
-          />
-        </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Password</label>
+              <div style={styles.passwordWrapper}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  placeholder="Enter your password"
+                  disabled={loading}
+                  style={{
+                    ...styles.input,
+                    ...(passwordFocused ? styles.inputFocus : {}),
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={styles.passwordToggle}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  disabled={loading}
+                >
+                  {showPassword ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
 
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Password</label>
-          <div style={styles.passwordContainer}>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              style={styles.input}
-            />
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Login As</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                onFocus={() => setRoleFocused(true)}
+                onBlur={() => setRoleFocused(false)}
+                disabled={loading}
+                style={{
+                  ...styles.select,
+                  ...(roleFocused ? styles.inputFocus : {}),
+                }}
+              >
+                <option value="">Select your role</option>
+                <option value="student">Student</option>
+                <option value="parent">Parent</option>
+                <option value="teacher">Teacher</option>
+                <option value="school-admin">School Admin</option>
+                <option value="platform-admin">Platform Admin</option>
+              </select>
+            </div>
+
             <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={styles.showPassword}
+              onClick={handleSubmit}
+              onMouseEnter={() => setButtonHovered(true)}
+              onMouseLeave={() => setButtonHovered(false)}
+              disabled={loading}
+              style={{
+                ...styles.button,
+                transform: buttonHovered && !loading ? 'translateY(-2px)' : 'translateY(0)',
+                boxShadow: buttonHovered && !loading ? '0 8px 20px rgba(16, 185, 129, 0.3)' : '0 0 0 rgba(16, 185, 129, 0)',
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
             >
-              {showPassword ? '🙈' : '👁️'}
+              {loading ? 'Logging in...' : 'Log In'}
             </button>
+
+            {error && (
+              <div style={styles.errorMessage}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Forgot Password Help */}
+            <div style={styles.helpSection}>
+              <p style={styles.helpTitle}>
+                🔐 Forgot your password?
+              </p>
+              <p style={styles.helpText}>
+                <strong>Teachers, Students, Parents:</strong> Contact your School Administrator
+              </p>
+              <p style={styles.helpText}>
+                <strong>School Admins:</strong> Contact Platform Support
+              </p>
+            </div>
+
+            <p style={styles.registerLink}>
+              Don't have an account?{' '}
+              <Link to="/register" style={styles.link}>Sign up</Link>
+            </p>
           </div>
         </div>
 
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>I am a...</label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            style={styles.select}
-          >
-            <option value="">Select your role</option>
-            <option value="student">Student</option>
-            <option value="teacher">Teacher</option>
-            <option value="parent">Parent</option>
-            <option value="school-admin">School Admin</option>
-            <option value="platform-admin">Platform Admin</option>
-          </select>
-        </div>
+        <div style={styles.infoSection}>
+          <h2 style={styles.infoTitle}>
+            Level up your classroom 🎓
+          </h2>
 
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          style={{
-            ...styles.button,
-            ...(loading ? styles.buttonDisabled : {}),
-          }}
-        >
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
+          <div>
+            <div style={styles.feature}>
+              <span style={styles.star}>⭐</span>
+              <span>Track progress in real time</span>
+            </div>
 
-        <div style={styles.links}>
-          Don't have an account?{' '}
-          <Link to="/register" style={styles.link}>
-            Register here
-          </Link>
+            <div style={styles.feature}>
+              <span style={styles.star}>⭐</span>
+              <span>Gamified quests for English, Math & Science</span>
+            </div>
+
+            <div style={styles.feature}>
+              <span style={styles.star}>⭐</span>
+              <span>Rewards that keep students motivated</span>
+            </div>
+
+            <div style={styles.feature}>
+              <span style={styles.star}>⭐</span>
+              <span>Parents, teachers & admins on one platform</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

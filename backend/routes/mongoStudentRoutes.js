@@ -420,12 +420,21 @@ router.get("/announcements", async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const now = new Date();
-    const anns = await db.collection('announcements').find({
+    
+    // Get student's schoolId
+    const student = await db.collection('users').findOne({ _id: toObjectId(req.user.userId) });
+    const schoolId = student?.schoolId || student?.school_id;
+    
+    // Build filter with school isolation
+    const filter = {
       $and: [
         { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
         { $or: [{ audience: 'all' }, { audience: 'student' }, { audience: 'students' }, { audience: { $exists: false } }] }
       ]
-    }).sort({ pinned: -1, createdAt: -1 }).limit(10).toArray();
+    };
+    if (schoolId) filter.schoolId = schoolId;
+    
+    const anns = await db.collection('announcements').find(filter).sort({ pinned: -1, createdAt: -1 }).limit(10).toArray();
     res.json({ success: true, announcements: anns });
   } catch (e) { res.status(500).json({ success: false, error: "Failed" }); }
 });
@@ -456,3 +465,42 @@ router.get("/support-tickets", async (req, res) => {
 });
 
 module.exports = router;
+
+// Announcements for shared AnnouncementBanner component (authenticated)
+router.get("/announcements/banner", async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const now = new Date();
+    
+    // Get student's schoolId from their user record
+    const student = await db.collection('users').findOne({ _id: toObjectId(req.user.userId) });
+    const schoolId = student?.schoolId || student?.school_id;
+    
+    console.log('📢 Loading announcements for student schoolId:', schoolId);
+    
+    // Build filter
+    const filter = {
+      $and: [
+        { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
+        { $or: [{ audience: 'all' }, { audience: 'student' }, { audience: 'students' }, { audience: { $exists: false } }] }
+      ]
+    };
+    
+    // STRICT school filter
+    if (schoolId) {
+      filter.schoolId = schoolId;
+    }
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(10)
+      .toArray();
+    
+    console.log('📢 Found', announcements.length, 'announcements');
+    res.json({ success: true, announcements });
+  } catch (e) {
+    console.error('Banner announcements error:', e);
+    res.status(500).json({ success: false, error: "Failed" });
+  }
+});

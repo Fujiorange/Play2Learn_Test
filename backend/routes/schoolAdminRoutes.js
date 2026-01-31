@@ -689,3 +689,47 @@ router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), asyn
 });
 
 module.exports = router;
+
+// ============ PUBLIC ANNOUNCEMENTS (for shared AnnouncementBanner component) ============
+router.get('/announcements/public', async (req, res) => {
+  try {
+    const db = getDb();
+    const { audience, schoolId } = req.query;
+    const now = new Date();
+    
+    // Build filter
+    const filter = {
+      $and: [
+        { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] }
+      ]
+    };
+    
+    // Filter by audience if provided
+    if (audience && audience !== 'all') {
+      filter.$and.push({
+        $or: [
+          { audience: 'all' },
+          { audience: audience },
+          { audience: audience + 's' }, // student -> students
+          { audience: { $exists: false } }
+        ]
+      });
+    }
+    
+    // Filter by schoolId if provided
+    if (schoolId) {
+      filter.schoolId = schoolId;
+    }
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(10)
+      .toArray();
+    
+    res.json({ success: true, announcements });
+  } catch (e) {
+    console.error('Public announcements error:', e);
+    res.status(500).json({ success: false, error: 'Failed' });
+  }
+});

@@ -443,13 +443,20 @@ router.get("/announcements", async (req, res) => {
     const db = mongoose.connection.db;
     const now = new Date();
     
+    // Get teacher's schoolId
+    const teacher = await db.collection('users').findOne({ _id: toObjectId(req.user.userId) });
+    const schoolId = teacher?.schoolId || teacher?.school_id;
+    
+    const filter = {
+      $and: [
+        { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
+        { $or: [{ audience: 'all' }, { audience: 'teacher' }, { audience: 'teachers' }, { audience: { $exists: false } }] }
+      ]
+    };
+    if (schoolId) filter.schoolId = schoolId;
+    
     const announcements = await db.collection('announcements')
-      .find({
-        $and: [
-          { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
-          { $or: [{ audience: 'all' }, { audience: 'teacher' }, { audience: 'teachers' }, { audience: { $exists: false } }] }
-        ]
-      })
+      .find(filter)
       .sort({ pinned: -1, createdAt: -1 })
       .limit(10)
       .toArray();

@@ -22,9 +22,18 @@ function normalizeRole(role) {
 router.post('/register', async (req, res) => {
   try {
     const {
-      name, email, password, role, schoolId,
-      class: studentClass, gradeLevel, username, subject,
-      contact, gender, date_of_birth,
+      name,
+      email,
+      password,
+      role,
+      schoolId,
+      class: studentClass,
+      gradeLevel,
+      username,
+      subject,
+      contact,
+      gender,
+      date_of_birth,
     } = req.body;
 
     if (!name || !email || !password || !role) {
@@ -32,20 +41,31 @@ router.post('/register', async (req, res) => {
     }
 
     const normalizedRole = normalizeRole(role);
+
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) return res.status(400).json({ success: false, error: 'Email already registered' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
-      name, email: email.toLowerCase(), password: hashedPassword, role: normalizedRole,
-      schoolId: schoolId || null, class: studentClass || null, gradeLevel: gradeLevel || null,
-      username: username || null, subject: subject || null, contact: contact || null,
-      gender: gender || null, date_of_birth: date_of_birth ? new Date(date_of_birth) : null,
-      emailVerified: true, accountActive: true,
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: normalizedRole,
+      schoolId: schoolId || null,
+      class: studentClass || null,
+      gradeLevel: gradeLevel || null,
+      username: username || null,
+      subject: subject || null,
+      contact: contact || null,
+      gender: gender || null,
+      date_of_birth: date_of_birth ? new Date(date_of_birth) : null,
+      emailVerified: true,
+      accountActive: true,
     });
 
     await newUser.save();
+
     return res.json({ success: true, message: 'Registration successful' });
   } catch (error) {
     console.error('Registration error:', error);
@@ -63,16 +83,7 @@ router.post('/login', async (req, res) => {
     const user = await db.collection('users').findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
-    // ========== FIX #1: CHECK IF ACCOUNT IS DISABLED ==========
-    if (user.accountActive === false) {
-      console.log(`🚫 Login blocked - account disabled: ${email}`);
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Your account has been disabled. Please contact your administrator.' 
-      });
-    }
-
-    // Check both 'password' and 'password_hash' fields
+    // FIXED: Check both 'password' and 'password_hash' fields
     const storedPassword = user.password || user.password_hash;
     if (!storedPassword) {
       console.error('❌ No password field found for user:', email);
@@ -82,14 +93,13 @@ router.post('/login', async (req, res) => {
     const ok = await bcrypt.compare(password, storedPassword);
     if (!ok) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
-    // Include permissions in JWT token
+    // FIXED: Include 'name' in JWT token for support tickets and other features
     const token = jwt.sign(
       { 
         userId: user._id.toString(), 
         email: user.email, 
         role: user.role,
-        name: user.name,
-        permissions: user.permissions || null
+        name: user.name
       }, 
       JWT_SECRET, 
       { expiresIn: '7d' }
@@ -133,6 +143,7 @@ router.get('/me', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Use direct MongoDB query to get ALL fields including permissions
+    // (Mongoose model might not have permissions field defined)
     const db = mongoose.connection.db;
     const userDoc = await db.collection('users').findOne(
       { _id: new mongoose.Types.ObjectId(decoded.userId) },
@@ -140,14 +151,6 @@ router.get('/me', async (req, res) => {
     );
     
     if (!userDoc) return res.status(404).json({ success: false, error: 'User not found' });
-
-    // ========== FIX #2: CHECK IF ACCOUNT IS DISABLED ==========
-    if (userDoc.accountActive === false) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Your account has been disabled.' 
-      });
-    }
 
     console.log('📤 /me returning permissions:', userDoc.permissions);
 
@@ -202,10 +205,19 @@ router.put('/update-profile', async (req, res) => {
       success: true,
       message: 'Profile updated successfully',
       user: {
-        id: user._id, name: user.name, email: user.email, role: user.role,
-        contact: user.contact, gender: user.gender, date_of_birth: user.date_of_birth,
-        profile_picture: user.profile_picture, schoolId: user.schoolId, class: user.class,
-        gradeLevel: user.gradeLevel, subject: user.subject, emailVerified: user.emailVerified,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        contact: user.contact,
+        gender: user.gender,
+        date_of_birth: user.date_of_birth,
+        profile_picture: user.profile_picture,
+        schoolId: user.schoolId,
+        class: user.class,
+        gradeLevel: user.gradeLevel,
+        subject: user.subject,
+        emailVerified: user.emailVerified,
         accountActive: user.accountActive,
       },
     });
@@ -234,10 +246,19 @@ router.put('/update-picture', async (req, res) => {
       success: true,
       message: 'Profile picture updated successfully',
       user: {
-        id: user._id, name: user.name, email: user.email, role: user.role,
-        contact: user.contact, gender: user.gender, date_of_birth: user.date_of_birth,
-        profile_picture: user.profile_picture, schoolId: user.schoolId, class: user.class,
-        gradeLevel: user.gradeLevel, subject: user.subject, emailVerified: user.emailVerified,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        contact: user.contact,
+        gender: user.gender,
+        date_of_birth: user.date_of_birth,
+        profile_picture: user.profile_picture,
+        schoolId: user.schoolId,
+        class: user.class,
+        gradeLevel: user.gradeLevel,
+        subject: user.subject,
+        emailVerified: user.emailVerified,
         accountActive: user.accountActive,
       },
     });

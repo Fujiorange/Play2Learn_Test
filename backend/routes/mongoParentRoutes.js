@@ -1,6 +1,13 @@
 // backend/routes/mongoParentRoutes.js - Parent Routes with Support Tickets
 const express = require("express");
 const mongoose = require("mongoose");
+
+// Helper to safely convert to ObjectId
+function toObjectId(id) {
+  if (!id) return null;
+  if (id instanceof mongoose.Types.ObjectId) return id;
+  try { return new mongoose.Types.ObjectId(id); } catch (e) { return null; }
+}
 const jwt = require("jsonwebtoken");
 const router = express.Router();
 
@@ -78,13 +85,20 @@ router.get("/announcements", async (req, res) => {
     const db = mongoose.connection.db;
     const now = new Date();
     
+    // Get parent's schoolId
+    const parent = await db.collection('users').findOne({ _id: toObjectId(req.user.userId) });
+    const schoolId = parent?.schoolId || parent?.school_id;
+    
+    const filter = {
+      $and: [
+        { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
+        { $or: [{ audience: 'all' }, { audience: 'parent' }, { audience: 'parents' }, { audience: { $exists: false } }] }
+      ]
+    };
+    if (schoolId) filter.schoolId = schoolId;
+    
     const announcements = await db.collection('announcements')
-      .find({
-        $and: [
-          { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
-          { $or: [{ audience: 'all' }, { audience: 'parent' }, { audience: 'parents' }, { audience: { $exists: false } }] }
-        ]
-      })
+      .find(filter)
       .sort({ pinned: -1, createdAt: -1 })
       .limit(10)
       .toArray();

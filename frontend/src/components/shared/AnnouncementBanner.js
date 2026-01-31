@@ -14,7 +14,7 @@ const priorityConfig = {
   info: { label: 'Info', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', icon: 'ℹ️' }
 };
 
-export default function AnnouncementBanner({ userRole = 'all' }) {
+export default function AnnouncementBanner({ userRole = 'student' }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dismissedIds, setDismissedIds] = useState([]);
@@ -28,12 +28,36 @@ export default function AnnouncementBanner({ userRole = 'all' }) {
 
   const loadAnnouncements = async () => {
     try {
-      // Fetch from public announcements endpoint (no auth required)
-      const response = await fetch(`${API_URL}/mongo/school-admin/announcements/public?audience=${userRole}`);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
+      // Use role-specific endpoint that gets schoolId from authenticated user
+      let endpoint;
+      switch(userRole.toLowerCase()) {
+        case 'student':
+          endpoint = `${API_URL}/mongo/student/announcements`;
+          break;
+        case 'teacher':
+          endpoint = `${API_URL}/mongo/teacher/announcements`;
+          break;
+        case 'parent':
+          endpoint = `${API_URL}/mongo/parent/announcements`;
+          break;
+        default:
+          endpoint = `${API_URL}/mongo/student/announcements`;
+      }
+      
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await response.json();
       
       if (data.success && data.announcements) {
         setAnnouncements(data.announcements);
+        console.log('📢 Loaded', data.announcements.length, 'announcements');
       }
     } catch (error) {
       console.error('Error loading announcements:', error);

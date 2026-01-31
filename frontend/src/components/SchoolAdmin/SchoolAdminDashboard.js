@@ -382,6 +382,7 @@ export default function SchoolAdminDashboard() {
                 <span>📢 Announcements</span>
                 <span style={styles.arrow}>→</span>
               </li>
+
             </ul>
           </div>
 
