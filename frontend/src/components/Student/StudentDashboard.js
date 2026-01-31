@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
+import AnnouncementBanner from '../shared/AnnouncementBanner';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -224,6 +225,10 @@ export default function StudentDashboard() {
       id: 'badges',
       title: 'My Badges',
       description: 'View your earned achievement badges',
+    {
+      id: 'badges',
+      title: 'Badges & Shop',
+      description: 'View earned badges and spend points',
       icon: '🏆',
       action: () => navigate('/student/badges'),
     },
@@ -287,6 +292,9 @@ export default function StudentDashboard() {
       </header>
 
       <main style={styles.main}>
+        {/* Announcements Banner */}
+        <AnnouncementBanner userRole="student" />
+
         <div style={styles.welcomeCard}>
           <h2 style={styles.welcomeTitle}>
             Welcome back, {user.name?.split(' ')[0] || 'Student'}! 🎮

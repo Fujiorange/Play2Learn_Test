@@ -10,13 +10,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-producti
 function normalizeRole(role) {
   if (!role) return role;
   const lower = role.toLowerCase();
-  if (lower.includes('platform')) return 'Platform Admin';
-  if (lower.includes('school')) return 'School Admin';
+  if (lower.includes('platform') || lower === 'p2ladmin') return 'p2ladmin';
+  if (lower.includes('school') || lower === 'schooladmin') return 'school-admin';
   if (lower.includes('teacher')) return 'Teacher';
   if (lower.includes('student')) return 'Student';
   if (lower.includes('parent')) return 'Parent';
-  if (lower.includes('trial student')) return 'Trial Student';
-  if (lower.includes('trial teacher')) return 'Trial Teacher';
+  if (lower.includes('trial')) return 'Trial User';
   return role;
 }
 
@@ -51,7 +50,7 @@ router.post('/register', async (req, res) => {
     const newUser = new User({
       name,
       email: email.toLowerCase(),
-      password: hashedPassword,  // ✅ Using 'password' field
+      password: hashedPassword,
       role: normalizedRole,
       schoolId: schoolId || null,
       class: studentClass || null,
@@ -82,16 +81,29 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
-    // ✅ FIXED: Now only checking 'password' field (standardized)
-    if (!user.password) {
+    // FIXED: Check both 'password' and 'password_hash' fields
+    const storedPassword = user.password || user.password_hash;
+    if (!storedPassword) {
       console.error('❌ No password field found for user:', email);
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
 
-    const ok = await bcrypt.compare(password, user.password);
+    const ok = await bcrypt.compare(password, storedPassword);
     if (!ok) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
-    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    // FIXED: Include 'name' in JWT token for support tickets and other features
+    const token = jwt.sign(
+      { 
+        userId: user._id, 
+        email: user.email, 
+        role: user.role,
+        name: user.name  // ← ADDED: Now included in token
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
+
+    console.log(`✅ Login successful: ${user.email} (${user.role})`);
 
     return res.json({
       success: true,
@@ -125,7 +137,7 @@ router.get('/me', async (req, res) => {
     if (!token) return res.status(401).json({ success: false, error: 'No token provided' });
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findById(decoded.userId).select('-password -password_hash');
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     return res.json({

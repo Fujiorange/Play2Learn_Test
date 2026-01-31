@@ -1,316 +1,121 @@
 // src/services/schoolAdminService.js
-// School Admin Service for MongoDB Operations
+// School Admin Service for MongoDB Operations - COMPLETE VERSION
 
 const API_URL = process.env.REACT_APP_API_URL || 
   (window.location.hostname === 'localhost' 
     ? 'http://localhost:5000/api'
     : `${window.location.origin}/api`);
 
-console.log('🌐 School Admin Service API_URL:', API_URL);
-
 const schoolAdminService = {
-  // Get auth token
   getToken() {
     return localStorage.getItem('token');
   },
 
-  // ==================== DASHBOARD ====================
-  async getDashboardStats() {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
+  async apiCall(endpoint, options = {}) {
+    const token = this.getToken();
+    if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/school-admin/dashboard-stats`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+    try {
+      const response = await fetch(`${API_URL}/mongo/school-admin${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...options.headers
+        },
+        ...options
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard stats');
-      }
-
-      return await response.json();
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Request failed');
+      return data;
     } catch (error) {
-      console.error('getDashboardStats error:', error);
-      return { success: false, error: 'Failed to load dashboard stats' };
+      console.error(`API error (${endpoint}):`, error);
+      return { success: false, error: error.message };
     }
   },
 
-  // ==================== USER MANAGEMENT ====================
+  // DASHBOARD
+  async getDashboardStats() { return this.apiCall('/dashboard-stats'); },
+
+  // USERS
   async getUsers(filters = {}) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      let url = `${API_URL}/mongo/school-admin/users`;
-      if (filters.gradeLevel || filters.subject) {
-        const params = new URLSearchParams();
-        if (filters.gradeLevel) params.append('gradeLevel', filters.gradeLevel);
-        if (filters.subject) params.append('subject', filters.subject);
-        url += `?${params.toString()}`;
-      }
-
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('getUsers error:', error);
-      return { success: false, error: 'Failed to load users' };
-    }
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => v && params.append(k, v));
+    return this.apiCall(`/users${params.toString() ? '?' + params : ''}`);
   },
+  async createUser(data) { return this.apiCall('/users', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateUser(id, data) { return this.apiCall(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deleteUser(id) { return this.apiCall(`/users/${id}`, { method: 'DELETE' }); },
+  async updateUserStatus(id, accountActive) { return this.apiCall(`/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ accountActive }) }); },
+  async resetUserPassword(id) { return this.apiCall(`/users/${id}/reset-password`, { method: 'POST' }); },
 
-  async createUser(userData) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
+  // CLASSES
+  async getClasses() { return this.apiCall('/classes'); },
+  async createClass(data) { return this.apiCall('/classes', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateClass(id, data) { return this.apiCall(`/classes/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deleteClass(id) { return this.apiCall(`/classes/${id}`, { method: 'DELETE' }); },
 
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/manual`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userData)
-      });
+  // BADGES
+  async getBadges() { return this.apiCall('/badges'); },
+  async createBadge(data) { return this.apiCall('/badges', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateBadge(id, data) { return this.apiCall(`/badges/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deleteBadge(id) { return this.apiCall(`/badges/${id}`, { method: 'DELETE' }); },
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create user');
-      }
+  // POINT RULES
+  async getPointRules() { return this.apiCall('/point-rules'); },
+  async createPointRule(data) { return this.apiCall('/point-rules', { method: 'POST', body: JSON.stringify(data) }); },
+  async updatePointRule(id, data) { return this.apiCall(`/point-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deletePointRule(id) { return this.apiCall(`/point-rules/${id}`, { method: 'DELETE' }); },
+  async adjustStudentPoints(id, amount, reason) { return this.apiCall(`/students/${id}/adjust-points`, { method: 'POST', body: JSON.stringify({ amount, reason }) }); },
 
-      return await response.json();
-    } catch (error) {
-      console.error('createUser error:', error);
-      return { success: false, error: error.message || 'Failed to create user' };
-    }
+  // SHOP ITEMS
+  async getShopItems() { return this.apiCall('/shop-items'); },
+  async createShopItem(data) { return this.apiCall('/shop-items', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateShopItem(id, data) { return this.apiCall(`/shop-items/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deleteShopItem(id) { return this.apiCall(`/shop-items/${id}`, { method: 'DELETE' }); },
+
+  // ANNOUNCEMENTS
+  async getAnnouncements() { return this.apiCall('/announcements'); },
+  async createAnnouncement(data) { return this.apiCall('/announcements', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateAnnouncement(id, data) { return this.apiCall(`/announcements/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deleteAnnouncement(id) { return this.apiCall(`/announcements/${id}`, { method: 'DELETE' }); },
+
+  // MAINTENANCE
+  async getMaintenanceMessages() { return this.apiCall('/maintenance'); },
+  async createMaintenanceMessage(data) { return this.apiCall('/maintenance', { method: 'POST', body: JSON.stringify(data) }); },
+  async updateMaintenanceMessage(id, data) { return this.apiCall(`/maintenance/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  async deleteMaintenanceMessage(id) { return this.apiCall(`/maintenance/${id}`, { method: 'DELETE' }); },
+
+  // SUPPORT TICKETS
+  async getSupportTickets(filters = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => v && params.append(k, v));
+    return this.apiCall(`/support-tickets${params.toString() ? '?' + params : ''}`);
   },
+  async updateSupportTicket(id, data) { return this.apiCall(`/support-tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
 
-  async deleteUser(userId) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
+  // ANALYTICS
+  async getAnalytics() { return this.apiCall('/analytics'); },
 
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete user');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('deleteUser error:', error);
-      return { success: false, error: error.message || 'Failed to delete user' };
-    }
-  },
-
-  async updateUserStatus(userId, isActive) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ isActive })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update user status');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('updateUserStatus error:', error);
-      return { success: false, error: error.message || 'Failed to update user status' };
-    }
-  },
-
-  async updateUserRole(userId, role) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      // Security check
-      if (role === 'school-admin') {
-        return { success: false, error: 'Cannot assign school-admin role' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/role`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ role })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update user role');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('updateUserRole error:', error);
-      return { success: false, error: error.message || 'Failed to update user role' };
-    }
-  },
-
-  async resetUserPassword(userId, newPassword) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/password`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ password: newPassword })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to reset password');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('resetUserPassword error:', error);
-      return { success: false, error: error.message || 'Failed to reset password' };
-    }
-  },
-
-  // ==================== CLASS MANAGEMENT ====================
-  async getClasses(filters = {}) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      let url = `${API_URL}/mongo/school-admin/classes`;
-      if (filters.grade || filters.subject) {
-        const params = new URLSearchParams();
-        if (filters.grade) params.append('grade', filters.grade);
-        if (filters.subject) params.append('subject', filters.subject);
-        url += `?${params.toString()}`;
-      }
-
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch classes');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('getClasses error:', error);
-      return { success: false, error: 'Failed to load classes' };
-    }
-  },
-
-  async createClass(classData) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/classes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(classData)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create class');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('createClass error:', error);
-      return { success: false, error: error.message || 'Failed to create class' };
-    }
-  },
-
-  // ==================== BULK UPLOAD ====================
+  // BULK UPLOAD
   async bulkUploadUsers(file, userType) {
+    const token = this.getToken();
+    if (!token) return { success: false, error: 'Not authenticated' };
+
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      let endpoint = '';
-      switch(userType) {
-        case 'teacher':
-          endpoint = 'bulk-import-teachers';
-          break;
-        case 'student':
-          endpoint = 'bulk-import-students';
-          break;
-        case 'parent':
-          endpoint = 'bulk-import-parents';
-          break;
-        default:
-          endpoint = 'bulk-import-students';
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/${endpoint}`, {
+      const response = await fetch(`${API_URL}/mongo/school-admin/bulk-upload/${userType}s`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload users');
-      }
-
-      return await response.json();
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Upload failed');
+      return data;
     } catch (error) {
-      console.error('bulkUploadUsers error:', error);
-      return { success: false, error: error.message || 'Failed to upload users' };
+      return { success: false, error: error.message };
     }
   }
 };

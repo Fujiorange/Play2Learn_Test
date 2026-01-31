@@ -136,6 +136,7 @@ try {
 try {
   const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
   const mongoStudentRoutes = require('./routes/mongoStudentRoutes');
+  const mongoTeacherRoutes = require('./routes/mongoTeacherRoutes');
   const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
   const mongoParentRoutes = require('./routes/mongoParentRoutes'); // ✅ ADDED
   
@@ -144,6 +145,8 @@ try {
   app.use('/api/mongo/student', authenticateToken, mongoStudentRoutes);
   app.use('/school-admin', schoolAdminRoutes);
   app.use('/api/mongo/parent', mongoParentRoutes); // ✅ ADDED - Parent routes
+  app.use('/api/mongo/teacher', authenticateToken, mongoTeacherRoutes);
+  app.use('/api/mongo/school-admin', schoolAdminRoutes);
   
   console.log('✅ Routes loaded successfully');
   console.log('✅ Parent routes: /api/mongo/parent/*'); // ✅ ADDED

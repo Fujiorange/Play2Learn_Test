@@ -589,6 +589,132 @@ const studentService = {
   getSkills() {
     return this.getMathSkills();
   },
+
+  // ==================== BADGES & ACHIEVEMENTS ====================
+  async getMyBadges() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/badges`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch badges');
+      return await response.json();
+    } catch (error) {
+      console.error('getMyBadges error:', error);
+      return { success: false, error: 'Failed to load badges' };
+    }
+  },
+
+  async getAllBadges() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/badges/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch all badges');
+      return await response.json();
+    } catch (error) {
+      console.error('getAllBadges error:', error);
+      return { success: false, error: 'Failed to load all badges' };
+    }
+  },
+
+  // ==================== POINTS & SHOP ====================
+  async getPoints() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/points`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch points');
+      return await response.json();
+    } catch (error) {
+      console.error('getPoints error:', error);
+      return { success: false, error: 'Failed to load points' };
+    }
+  },
+
+  async getPointHistory() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/points/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch point history');
+      return await response.json();
+    } catch (error) {
+      console.error('getPointHistory error:', error);
+      return { success: false, error: 'Failed to load point history' };
+    }
+  },
+
+  async getShopItems() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/shop`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch shop items');
+      return await response.json();
+    } catch (error) {
+      console.error('getShopItems error:', error);
+      return { success: false, error: 'Failed to load shop items' };
+    }
+  },
+
+  async purchaseItem(itemId) {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/shop/purchase`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemId }),
+      });
+
+      const json = await response.json();
+      return json;
+    } catch (error) {
+      console.error('purchaseItem error:', error);
+      return { success: false, error: 'Failed to purchase item' };
+    }
+  },
+
+  async getMyPurchases() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(`${API_URL}/mongo/student/shop/purchases`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch purchases');
+      return await response.json();
+    } catch (error) {
+      console.error('getMyPurchases error:', error);
+      return { success: false, error: 'Failed to load purchases' };
+    }
+  },
 };
 
 export default studentService;
