@@ -31,17 +31,23 @@ export default function StudentDashboard() {
 
         // Then fetch fresh data from server (includes updated permissions)
         const result = await authService.getCurrentUserFromServer();
+        console.log('📥 Full server response:', result);
+        
         if (result.success) {
           setUser(result.user);
           // Load permissions from user object - use what's in DB
           const userPerms = result.user.permissions;
-          console.log('🔐 Permissions from server:', userPerms);
+          console.log('🔐 Raw permissions from server:', userPerms);
+          console.log('🔐 Permissions type:', typeof userPerms);
+          console.log('🔐 Permissions keys:', userPerms ? Object.keys(userPerms) : 'none');
           
-          if (userPerms && Object.keys(userPerms).length > 0) {
+          if (userPerms && typeof userPerms === 'object' && Object.keys(userPerms).length > 0) {
             // User has permissions set - use them directly
+            console.log('✅ Using permissions from database:', userPerms);
             setPermissions(userPerms);
           } else {
             // No permissions set - default to all allowed
+            console.log('⚠️ No permissions found, using defaults (all true)');
             setPermissions({
               canAccessPoints: true,
               canAccessBadges: true,
@@ -52,6 +58,8 @@ export default function StudentDashboard() {
               canCreateTickets: true
             });
           }
+        } else {
+          console.log('❌ Failed to get user from server:', result.error);
         }
 
         // Load dashboard data from MongoDB

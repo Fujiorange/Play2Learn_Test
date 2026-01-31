@@ -131,15 +131,30 @@ router.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper to safely convert to ObjectId
+const toObjectId = (id) => {
+  if (!id) return null;
+  if (id instanceof mongoose.Types.ObjectId) return id;
+  try {
+    return new mongoose.Types.ObjectId(id);
+  } catch (e) {
+    return null;
+  }
+};
+
 const canModifyUser = async (db, userId) => {
   try {
-    const objectId = new mongoose.Types.ObjectId(userId);
+    const objectId = toObjectId(userId);
+    if (!objectId) {
+      return { allowed: false, error: 'Invalid user ID format', user: null };
+    }
     const user = await db.collection('users').findOne({ _id: objectId });
     if (!user) return { allowed: false, error: 'User not found', user: null };
-    const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin'];
+    const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin', 'platform admin'];
     if (protectedRoles.includes(user.role?.toLowerCase())) return { allowed: false, error: 'Cannot modify admin', user };
     return { allowed: true, user };
   } catch (e) {
+    console.error('canModifyUser error:', e);
     return { allowed: false, error: 'Invalid user ID', user: null };
   }
 };
@@ -154,7 +169,10 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
     const updates = { ...req.body, updatedAt: new Date() };
     delete updates._id; delete updates.password; delete updates.role;
     
-    await db.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    
+    await db.collection('users').updateOne({ _id: objectId }, { $set: updates });
     
     // SYNC to students collection
     if (check.user.role?.toLowerCase() === 'student') {
@@ -163,13 +181,14 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
       if (updates.name !== undefined) studentUpdates.name = updates.name;
       if (updates.gradeLevel !== undefined) studentUpdates.grade_level = updates.gradeLevel;
       await db.collection('students').updateOne(
-        { $or: [{ user_id: new mongoose.Types.ObjectId(req.params.id) }, { email: check.user.email }] },
+        { $or: [{ user_id: objectId }, { email: check.user.email }] },
         { $set: studentUpdates }
       );
     }
     
     res.json({ success: true, message: 'User updated' });
   } catch (error) {
+    console.error('Update user error:', error);
     res.status(500).json({ success: false, error: 'Failed to update user' });
   }
 });
@@ -179,9 +198,15 @@ router.patch('/users/:id/status', authenticateToken, async (req, res) => {
     const db = getDb();
     const check = await canModifyUser(db, req.params.id);
     if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
-    await db.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: { accountActive: req.body.accountActive, updatedAt: new Date() } });
+    
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    
+    await db.collection('users').updateOne({ _id: objectId }, { $set: { accountActive: req.body.accountActive, updatedAt: new Date() } });
+    console.log(`👤 User ${check.user.email} status changed to ${req.body.accountActive ? 'active' : 'disabled'}`);
     res.json({ success: true });
   } catch (error) {
+    console.error('Update status error:', error);
     res.status(500).json({ success: false, error: 'Failed to update status' });
   }
 });
@@ -191,11 +216,16 @@ router.post('/users/:id/reset-password', authenticateToken, async (req, res) => 
     const db = getDb();
     const check = await canModifyUser(db, req.params.id);
     if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
+    
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    
     const tempPassword = generateTempPassword(check.user.role || 'user');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    await db.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: { password: hashedPassword } });
+    await db.collection('users').updateOne({ _id: objectId }, { $set: { password: hashedPassword } });
     res.json({ success: true, tempPassword });
   } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ success: false, error: 'Failed to reset password' });
   }
 });
@@ -205,13 +235,18 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
     const db = getDb();
     const check = await canModifyUser(db, req.params.id);
     if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
-    await db.collection('users').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    
+    await db.collection('users').deleteOne({ _id: objectId });
     if (check.user.role?.toLowerCase() === 'student') {
-      await db.collection('students').deleteOne({ $or: [{ user_id: new mongoose.Types.ObjectId(req.params.id) }, { email: check.user.email }] });
+      await db.collection('students').deleteOne({ $or: [{ user_id: objectId }, { email: check.user.email }] });
     }
     console.log('✅ User deleted:', check.user.email);
     res.json({ success: true });
   } catch (error) {
+    console.error('Delete user error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete user' });
   }
 });

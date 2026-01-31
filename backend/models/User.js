@@ -9,7 +9,8 @@ const userSchema = new mongoose.Schema({
 
   role: {
     type: String,
-    enum: ['Platform Admin', 'School Admin', 'Teacher', 'Student', 'Parent', 'Trial Student', 'Trial Teacher'],
+    enum: ['Platform Admin', 'School Admin', 'Teacher', 'Student', 'Parent', 'Trial Student', 'Trial Teacher', 
+           'p2ladmin', 'p2l-admin', 'school-admin', 'teacher', 'student', 'parent'],  // Added lowercase variants
     required: true,
   },
 
@@ -17,7 +18,7 @@ const userSchema = new mongoose.Schema({
 
   // ✅ dynamic profile fields
   contact: { type: String, default: null },
-  gender: { type: String, enum: ['male', 'female', 'other', 'prefer-not-to-say'], default: null },
+  gender: { type: String, enum: ['male', 'female', 'other', 'prefer-not-to-say', null], default: null },
   date_of_birth: { type: Date, default: null },
 
   // ✅ profile picture persisted in DB (URL or dataURL)
@@ -30,6 +31,7 @@ const userSchema = new mongoose.Schema({
 
   // Teacher-specific
   subject: { type: String, default: null },
+  classes: [{ type: String }],  // Array of class names teacher is assigned to
 
   // Parent-specific
   linkedStudents: [
@@ -38,6 +40,17 @@ const userSchema = new mongoose.Schema({
       relationship: String,
     },
   ],
+
+  // ✅ PERMISSIONS - NEW!
+  permissions: {
+    canAccessPoints: { type: Boolean, default: true },
+    canAccessBadges: { type: Boolean, default: true },
+    canAccessShop: { type: Boolean, default: true },
+    canAccessLeaderboard: { type: Boolean, default: true },
+    canTakeQuizzes: { type: Boolean, default: true },
+    canViewProgress: { type: Boolean, default: true },
+    canCreateTickets: { type: Boolean, default: true },
+  },
 
   emailVerified: { type: Boolean, default: false },
   accountActive: { type: Boolean, default: true },
@@ -48,6 +61,8 @@ const userSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+}, { 
+  strict: false  // Allow additional fields not in schema (flexibility)
 });
 
 userSchema.pre('save', function preSave(next) {
