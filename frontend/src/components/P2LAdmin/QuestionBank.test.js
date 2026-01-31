@@ -7,12 +7,15 @@ import * as p2lAdminService from '../../services/p2lAdminService';
 jest.mock('../../services/p2lAdminService', () => ({
   getQuestions: jest.fn(() => Promise.resolve({ 
     data: [
-      { _id: '1', text: 'Question 1', answer: 'A', difficulty: 1, subject: 'Math', choices: [] },
-      { _id: '2', text: 'Question 2', answer: 'B', difficulty: 2, subject: 'Science', choices: [] }
+      { _id: '1', text: 'Question 1', answer: 'A', difficulty: 1, subject: 'Math', topic: 'Addition', choices: [] },
+      { _id: '2', text: 'Question 2', answer: 'B', difficulty: 2, subject: 'Science', topic: 'Physics', choices: [] }
     ] 
   })),
   getQuestionSubjects: jest.fn(() => Promise.resolve({ 
     data: ['Math', 'Science', 'English'] 
+  })),
+  getQuestionTopics: jest.fn(() => Promise.resolve({ 
+    data: ['Addition', 'Physics', 'Grammar'] 
   })),
   createQuestion: jest.fn(),
   updateQuestion: jest.fn(),
@@ -59,6 +62,31 @@ describe('QuestionBank', () => {
     
     await waitFor(() => {
       expect(p2lAdminService.getQuestionSubjects).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('fetches topics only once on mount', async () => {
+    render(
+      <BrowserRouter>
+        <QuestionBank />
+      </BrowserRouter>
+    );
+    
+    await waitFor(() => {
+      expect(p2lAdminService.getQuestionTopics).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('renders topic dropdown filter', async () => {
+    render(
+      <BrowserRouter>
+        <QuestionBank />
+      </BrowserRouter>
+    );
+    
+    await waitFor(() => {
+      const topicLabel = screen.getByText('Topic:');
+      expect(topicLabel).toBeInTheDocument();
     });
   });
 
@@ -172,7 +200,29 @@ describe('QuestionBank', () => {
     
     // Verify getQuestions was called with new filter
     await waitFor(() => {
-      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '1', subject: '' });
+      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '1', subject: '', topic: '' });
+    });
+  });
+
+  it('filters questions by topic', async () => {
+    render(
+      <BrowserRouter>
+        <QuestionBank />
+      </BrowserRouter>
+    );
+    
+    // Wait for component to load
+    await waitFor(() => {
+      expect(screen.getByText('Topic:')).toBeInTheDocument();
+    });
+    
+    // Change topic filter
+    const topicSelect = screen.getByLabelText('Topic:');
+    fireEvent.change(topicSelect, { target: { value: 'Addition' } });
+    
+    // Verify getQuestions was called with topic filter
+    await waitFor(() => {
+      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '', subject: '', topic: 'Addition' });
     });
   });
 });

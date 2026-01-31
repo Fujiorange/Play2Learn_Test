@@ -222,6 +222,10 @@ export const getQuestionSubjects = async () => {
   return apiCall('/api/p2ladmin/questions-subjects');
 };
 
+export const getQuestionTopics = async () => {
+  return apiCall('/api/p2ladmin/questions-topics');
+};
+
 export const bulkDeleteQuestions = async (ids) => {
   return apiCall('/api/p2ladmin/questions/bulk-delete', {
     method: 'POST',

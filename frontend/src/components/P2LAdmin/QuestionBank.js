@@ -1,7 +1,7 @@
 // Question Bank Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, bulkDeleteQuestions } from '../../services/p2lAdminService';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, bulkDeleteQuestions } from '../../services/p2lAdminService';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -9,8 +9,9 @@ function QuestionBank() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [filters, setFilters] = useState({ difficulty: '', subject: '' });
+  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '' });
   const [subjects, setSubjects] = useState([]);
+  const [topics, setTopics] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
@@ -32,6 +33,7 @@ function QuestionBank() {
 
   useEffect(() => {
     fetchSubjects();
+    fetchTopics();
   }, []);
 
   const fetchQuestions = async () => {
@@ -54,6 +56,15 @@ function QuestionBank() {
       setSubjects(response.data || []);
     } catch (error) {
       console.error('Failed to fetch subjects:', error);
+    }
+  };
+
+  const fetchTopics = async () => {
+    try {
+      const response = await getQuestionTopics();
+      setTopics(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch topics:', error);
     }
   };
 
@@ -305,7 +316,22 @@ function QuestionBank() {
           </select>
         </div>
 
-        <button onClick={() => setFilters({ difficulty: '', subject: '' })} className="btn-clear">
+        <div className="filter-group">
+          <label>Topic:</label>
+          <select 
+            value={filters.topic}
+            onChange={(e) => setFilters({ ...filters, topic: e.target.value })}
+          >
+            <option value="">All</option>
+            {topics.map((topic) => (
+              <option key={topic} value={topic}>
+                {topic}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '' })} className="btn-clear">
           Clear Filters
         </button>
         

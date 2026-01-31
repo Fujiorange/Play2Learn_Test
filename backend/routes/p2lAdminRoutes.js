@@ -705,6 +705,23 @@ router.get('/questions-subjects', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Get unique topics
+router.get('/questions-topics', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const topics = await Question.distinct('topic');
+    res.json({
+      success: true,
+      data: topics.filter(t => t && t.trim()).sort() // Filter out empty/null values and sort alphabetically
+    });
+  } catch (error) {
+    console.error('Get topics error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch topics' 
+    });
+  }
+});
+
 // Get question statistics (counts by difficulty)
 router.get('/questions-stats', authenticateP2LAdmin, async (req, res) => {
   try {
