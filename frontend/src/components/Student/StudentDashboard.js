@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
+import AnnouncementBanner from '../shared/AnnouncementBanner';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -280,6 +281,7 @@ export default function StudentDashboard() {
 
   return (
     <div style={styles.container}>
+      <AnnouncementBanner userRole={user.role} />
       <header style={styles.header}>
         <div style={styles.logoArea}>
           <div style={styles.logo}>P</div>

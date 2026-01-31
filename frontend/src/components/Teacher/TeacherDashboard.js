@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import AnnouncementBanner from '../shared/AnnouncementBanner';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -333,6 +334,7 @@ export default function TeacherDashboard() {
 
   return (
     <div style={styles.container}>
+      <AnnouncementBanner userRole={user.role} />
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerContent}>
