@@ -471,11 +471,11 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
           continue;
         }
 
-        // Use fixed default password Admin@123
-        const defaultPassword = 'Admin@123';
+        // Generate unique random temporary password for security
+        const tempPassword = generateTempPassword('school');
         
         // Hash password
-        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
         
         // Create school admin
         const admin = new User({
@@ -494,7 +494,7 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
         
         // Send welcome email with credentials
         try {
-          await sendSchoolAdminWelcomeEmail(admin, defaultPassword, school.organization_name);
+          await sendSchoolAdminWelcomeEmail(admin, tempPassword, school.organization_name);
         } catch (emailError) {
           console.error('Email sending error:', emailError);
           // Continue even if email fails - admin is still created
@@ -504,7 +504,7 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
           email: admin.email,
           name: admin.name,
           success: true,
-          tempPassword: defaultPassword  // Return default password
+          tempPassword: tempPassword  // Return unique temporary password
         });
       } catch (error) {
         console.error('Error creating admin:', error);

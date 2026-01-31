@@ -12,6 +12,7 @@ function SchoolAdminManagement() {
   const [loading, setLoading] = useState(true);
   const [adminForms, setAdminForms] = useState([{ name: '', email: '', contact: '' }]);
   const [createdAdmins, setCreatedAdmins] = useState([]);
+  const [visiblePasswords, setVisiblePasswords] = useState({});
 
   useEffect(() => {
     fetchSchools();
@@ -69,6 +70,7 @@ function SchoolAdminManagement() {
     try {
       const response = await createSchoolAdmins(selectedSchool, adminForms);
       setCreatedAdmins(response.created || []);
+      setVisiblePasswords({}); // Reset password visibility
       setShowForm(false);
       setAdminForms([{ name: '', email: '', contact: '' }]);
       fetchSchoolAdmins(selectedSchool);
@@ -76,6 +78,13 @@ function SchoolAdminManagement() {
       console.error('Failed to create school admins:', error);
       alert(error.message || 'Failed to create school admins');
     }
+  };
+
+  const togglePasswordVisibility = (index) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
   };
 
   const cancelForm = () => {
@@ -228,9 +237,22 @@ function SchoolAdminManagement() {
                     <p><strong>{admin.name}</strong></p>
                     <p>Email: {admin.email}</p>
                     {admin.success && admin.tempPassword && (
-                      <p className="temp-password">
-                        Password: <code>{admin.tempPassword}</code>
-                      </p>
+                      <div className="password-container">
+                        <p className="temp-password">
+                          Password: 
+                          <code style={{ marginLeft: '8px' }}>
+                            {visiblePasswords[index] ? admin.tempPassword : '••••••••'}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => togglePasswordVisibility(index)}
+                            className="toggle-password-btn"
+                            title={visiblePasswords[index] ? 'Hide password' : 'Show password'}
+                          >
+                            {visiblePasswords[index] ? '👁️' : '👁️‍🗨️'}
+                          </button>
+                        </p>
+                      </div>
                     )}
                     {!admin.success && <p className="error-msg">{admin.error}</p>}
                   </div>

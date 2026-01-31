@@ -204,3 +204,33 @@
     grid-template-columns: 1fr;
   }
 }
+
+.password-container {
+  margin-top: 8px;
+}
+
+.temp-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-password-btn {
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+.toggle-password-btn:hover {
+  background: #f0f0f0;
+  border-color: #667eea;
+}
+
+.toggle-password-btn:active {
+  transform: scale(0.95);
+}
