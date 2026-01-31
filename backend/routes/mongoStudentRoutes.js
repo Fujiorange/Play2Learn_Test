@@ -794,6 +794,7 @@ router.post("/quiz/submit", async (req, res) => {
         profileChanged = true;
         changeType = "demote";
       } else if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile === 1) {
+        // At lowest profile, reset fail counter without demotion
         mathProfile.consecutive_fails = 0;
       }
     } else {
