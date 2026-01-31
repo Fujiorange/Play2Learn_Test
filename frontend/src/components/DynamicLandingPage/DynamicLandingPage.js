@@ -74,12 +74,12 @@ const DynamicLandingPage = () => {
             <div className="container">
               <h2 className="section-title">{block.title || 'Features'}</h2>
               {features.length > 0 ? (
-                <div className="features-grid">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginTop: '24px' }}>
                   {features.map((feature, fIdx) => (
-                    <div key={fIdx} className="feature-card">
-                      <div className="feature-icon">{feature.icon || '🎯'}</div>
-                      <h3>{feature.title}</h3>
-                      <p>{feature.description}</p>
+                    <div key={fIdx} style={{ padding: '24px', background: '#f9fafb', borderRadius: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>{feature.icon || '🎯'}</div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#111827' }}>{feature.title}</h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5' }}>{feature.description}</p>
                     </div>
                   ))}
                 </div>
@@ -99,48 +99,44 @@ const DynamicLandingPage = () => {
           <section key={index} id="about" className="section about dynamic-about">
             <div className="container">
               <h2 className="section-title">{block.title || 'About Us'}</h2>
-              <div className="about-content">
-                <div className="about-text">
-                  <div className="mission-vision">
-                    {customData.mission && (
-                      <div className="mv-item">
-                        <h3>🎯 Our Mission</h3>
-                        <p>{customData.mission}</p>
-                      </div>
-                    )}
-                    {customData.vision && (
-                      <div className="mv-item">
-                        <h3>👁️ Our Vision</h3>
-                        <p>{customData.vision}</p>
-                      </div>
-                    )}
-                    {goals.length > 0 && (
-                      <div className="mv-item">
-                        <h3>🎯 Our Goals</h3>
-                        <ul>
-                          {goals.map((goal, gIdx) => (
-                            <li key={gIdx}>{goal}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {stats.length > 0 && (
-                  <div className="about-stats">
-                    {stats.map((stat, sIdx) => (
-                      <div key={sIdx} className="stat">
-                        <h3>{stat.value}</h3>
-                        <p>{stat.label}</p>
-                      </div>
-                    ))}
+              <div className="about-content" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+                {customData.mission && (
+                  <div style={{ padding: '16px', background: '#f0fdf4', borderRadius: '8px' }}>
+                    <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>🎯 Mission</h3>
+                    <p>{customData.mission}</p>
                   </div>
                 )}
-                {!customData.mission && !customData.vision && goals.length === 0 && stats.length === 0 && (
-                  <p>{block.content || ''}</p>
+                {customData.vision && (
+                  <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '8px' }}>
+                    <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>👁️ Vision</h3>
+                    <p>{customData.vision}</p>
+                  </div>
                 )}
-                {block.image_url && <img src={block.image_url} alt={block.title || 'About section'} />}
               </div>
+              {goals.length > 0 && (
+                <div style={{ marginTop: '24px' }}>
+                  <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Goals</h3>
+                  <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px', listStyle: 'none', padding: 0 }}>
+                    {goals.map((goal, gIdx) => (
+                      <li key={gIdx} style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px' }}>✓ {goal}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {stats.length > 0 && (
+                <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+                  {stats.map((stat, sIdx) => (
+                    <div key={sIdx} style={{ textAlign: 'center', padding: '16px', background: '#e0e7ff', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#4338ca' }}>{stat.value}</div>
+                      <div style={{ fontSize: '14px', color: '#6b7280' }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!customData.mission && !customData.vision && goals.length === 0 && stats.length === 0 && (
+                <p>{block.content || ''}</p>
+              )}
+              {block.image_url && <img src={block.image_url} alt={block.title || 'About section'} />}
             </div>
           </section>
         );
@@ -152,20 +148,55 @@ const DynamicLandingPage = () => {
             <div className="container">
               <h2 className="section-title">{block.title || 'Roadmap'}</h2>
               {steps.length > 0 ? (
-                <div className="roadmap-timeline">
+                <div style={{ marginTop: '32px', position: 'relative', paddingLeft: '40px' }}>
                   {steps.map((step, sIdx) => (
-                    <div key={sIdx} className="timeline-item">
-                      <div className="timeline-marker">{step.step}</div>
-                      <div className="timeline-content">
-                        <h3>{step.title}</h3>
-                        <p>{step.description}</p>
-                        {step.duration && <span className="timeline-duration">{step.duration}</span>}
+                    <div key={sIdx} style={{ 
+                      marginBottom: '32px', 
+                      position: 'relative',
+                      paddingLeft: '40px',
+                      borderLeft: sIdx < steps.length - 1 ? '2px solid #e5e7eb' : 'none'
+                    }}>
+                      <div style={{ 
+                        position: 'absolute', 
+                        left: '-20px', 
+                        top: '0',
+                        width: '40px', 
+                        height: '40px', 
+                        background: '#3b82f6', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: '700',
+                        fontSize: '16px',
+                        border: '3px solid white',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}>
+                        {step.step || sIdx + 1}
                       </div>
+                      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#111827' }}>{step.title}</h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.5' }}>{step.description}</p>
+                      {step.duration && (
+                        <span style={{ 
+                          display: 'inline-block', 
+                          padding: '4px 12px', 
+                          background: '#dbeafe', 
+                          color: '#1e40af', 
+                          borderRadius: '12px', 
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}>
+                          ⏱️ {step.duration}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p>{block.content || ''}</p>
+                <p style={{ textAlign: 'center', color: '#6b7280', marginTop: '24px' }}>
+                  {block.content || 'Roadmap steps will appear here'}
+                </p>
               )}
             </div>
           </section>
@@ -177,7 +208,7 @@ const DynamicLandingPage = () => {
           <section key={index} id="testimonials" className="section testimonials dynamic-testimonials">
             <div className="container">
               <h2 className="section-title">{block.title || 'Testimonials'}</h2>
-              {block.content && <p>{block.content}</p>}
+              <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '24px' }}>{block.content}</p>
               {testimonials.length > 0 ? (
                 <div className="testimonials-grid">
                   {testimonials.map((testimonial, tIdx) => (
@@ -199,7 +230,14 @@ const DynamicLandingPage = () => {
                     </div>
                   ))}
                 </div>
-              ) : null}
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', background: '#f9fafb', borderRadius: '8px' }}>
+                  <p style={{ color: '#6b7280' }}>
+                    💡 Testimonials are managed dynamically from student and parent submissions.
+                    <br/>Use the filter system above to approve and display testimonials on the landing page.
+                  </p>
+                </div>
+              )}
             </div>
           </section>
         );
@@ -212,31 +250,60 @@ const DynamicLandingPage = () => {
               <h2 className="section-title">{block.title || 'Pricing'}</h2>
               {block.content && <p className="pricing-subtitle">{block.content}</p>}
               {plans.length > 0 ? (
-                <div className="pricing-grid">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginTop: '32px' }}>
                   {plans.map((plan, pIdx) => (
-                    <div key={pIdx} className={`pricing-card ${plan.popular ? 'popular' : ''}`}>
-                      {plan.popular && <div className="popular-badge">Most Popular</div>}
-                      <div className="plan-header">
-                        <h3>{plan.name}</h3>
-                        <p>{plan.description}</p>
+                    <div key={pIdx} style={{ 
+                      padding: '32px 24px', 
+                      background: plan.popular ? '#eff6ff' : '#f9fafb', 
+                      borderRadius: '12px',
+                      border: plan.popular ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                      position: 'relative'
+                    }}>
+                      {plan.popular && (
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '-12px', 
+                          left: '50%', 
+                          transform: 'translateX(-50%)', 
+                          background: '#3b82f6', 
+                          color: 'white', 
+                          padding: '4px 16px', 
+                          borderRadius: '12px', 
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}>
+                          Most Popular
+                        </div>
+                      )}
+                      <h3 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px', color: '#111827' }}>{plan.name}</h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px' }}>{plan.description}</p>
+                      <div style={{ marginBottom: '16px' }}>
+                        <span style={{ fontSize: '36px', fontWeight: '800', color: '#111827' }}>${plan.price?.monthly || 0}</span>
+                        <span style={{ fontSize: '16px', color: '#6b7280' }}>/month</span>
+                        {plan.price?.yearly && (() => {
+                          const savings = plan.price.monthly * 12 - plan.price.yearly;
+                          return (
+                            <div style={{ fontSize: '14px', color: '#059669', marginTop: '4px' }}>
+                              {savings > 0 ? (
+                                <>or ${plan.price.yearly}/year (save ${savings.toFixed(0)})</>
+                              ) : (
+                                <>or ${plan.price.yearly}/year</>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
-                      <div className="plan-price">
-                        <span className="price-amount">${plan.price?.monthly || 0}</span>
-                        <span className="price-period">/month</span>
-                        {plan.price?.yearly && (
-                          <div className="price-yearly">
-                            or ${plan.price.yearly}/year
-                          </div>
-                        )}
-                      </div>
-                      <div className="plan-capacity">
-                        <p>Up to {plan.teachers} teachers</p>
-                        <p>Up to {plan.students} students</p>
+                      <div style={{ padding: '12px', background: 'white', borderRadius: '8px', marginBottom: '16px' }}>
+                        <div style={{ fontSize: '14px', color: '#374151' }}>Up to {plan.teachers} teachers</div>
+                        <div style={{ fontSize: '14px', color: '#374151', marginTop: '4px' }}>Up to {plan.students} students</div>
                       </div>
                       {plan.features && plan.features.length > 0 && (
-                        <ul className="plan-features">
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                           {plan.features.map((feature, fIdx) => (
-                            <li key={fIdx}>{feature}</li>
+                            <li key={fIdx} style={{ fontSize: '14px', color: '#374151', marginBottom: '8px', paddingLeft: '24px', position: 'relative' }}>
+                              <span style={{ position: 'absolute', left: 0, color: '#10b981' }}>✓</span>
+                              {feature}
+                            </li>
                           ))}
                         </ul>
                       )}
@@ -255,42 +322,35 @@ const DynamicLandingPage = () => {
           <section key={index} id="contact" className="section contact dynamic-contact">
             <div className="container">
               <h2 className="section-title">{block.title || 'Contact Us'}</h2>
-              <div className="contact-content">
-                {contactMethods.length > 0 && (
-                  <div className="contact-info">
-                    <h3>Get in Touch</h3>
-                    <div className="contact-methods">
-                      {contactMethods.map((method, mIdx) => (
-                        <div key={mIdx} className="contact-method">
-                          <div className="contact-icon">{method.icon}</div>
-                          <div className="contact-details">
-                            <h4>{method.title}</h4>
-                            {method.details && method.details.map((detail, dIdx) => (
-                              <p key={dIdx}>{detail}</p>
-                            ))}
-                          </div>
-                        </div>
+              {contactMethods.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+                  {contactMethods.map((method, mIdx) => (
+                    <div key={mIdx} style={{ padding: '20px', background: '#f9fafb', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '48px', marginBottom: '12px' }}>{method.icon}</div>
+                      <h3 style={{ fontSize: '18px', marginBottom: '8px', fontWeight: '600' }}>{method.title}</h3>
+                      {method.details && method.details.map((detail, dIdx) => (
+                        <div key={dIdx} style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>{detail}</div>
                       ))}
                     </div>
+                  ))}
+                </div>
+              )}
+              {faqs.length > 0 && (
+                <div>
+                  <h3 style={{ fontSize: '24px', marginBottom: '16px', textAlign: 'center' }}>Frequently Asked Questions</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '16px' }}>
+                    {faqs.map((faq, fIdx) => (
+                      <div key={fIdx} style={{ padding: '16px', background: '#eff6ff', borderRadius: '8px' }}>
+                        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1e40af' }}>Q: {faq.question}</h4>
+                        <p style={{ fontSize: '14px', color: '#374151' }}>A: {faq.answer}</p>
+                      </div>
+                    ))}
                   </div>
-                )}
-                {faqs.length > 0 && (
-                  <div className="support-info">
-                    <h3>Frequently Asked Questions</h3>
-                    <div className="faqs">
-                      {faqs.map((faq, fIdx) => (
-                        <div key={fIdx} className="faq-item">
-                          <h4>{faq.question}</h4>
-                          <p>{faq.answer}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {contactMethods.length === 0 && faqs.length === 0 && (
-                  <p>{block.content || ''}</p>
-                )}
-              </div>
+                </div>
+              )}
+              {contactMethods.length === 0 && faqs.length === 0 && (
+                <p>{block.content || ''}</p>
+              )}
             </div>
           </section>
         );
