@@ -17,7 +17,7 @@ export default function SchoolAdminDashboard() {
     }
 
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') {
+    if (!currentUser.role?.toLowerCase().includes('school')) {
       navigate('/login');
       return;
     }
@@ -380,15 +380,6 @@ export default function SchoolAdminDashboard() {
                 onClick={() => handleMenuClick('/school-admin/announcements')}
               >
                 <span>📢 Announcements</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'maintenance' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('maintenance')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/maintenance')}
-              >
-                <span>🔧 System Maintenance</span>
                 <span style={styles.arrow}>→</span>
               </li>
             </ul>

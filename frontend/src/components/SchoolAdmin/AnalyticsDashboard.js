@@ -14,7 +14,7 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
+    if (!currentUser.role?.toLowerCase().includes('school')) { navigate('/login'); return; }
     loadAnalytics();
   }, [navigate]);
 

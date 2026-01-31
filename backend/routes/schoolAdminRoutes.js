@@ -63,7 +63,7 @@ const getSchoolId = async (db, userId) => {
 const normalizeRole = (role) => {
   const roleMap = {
     'student': 'Student', 'teacher': 'Teacher', 'parent': 'Parent',
-    'school-admin': 'School-Admin', 'schooladmin': 'School-Admin',
+    'school-admin': 'School Admin', 'schooladmin': 'School Admin', 'school admin': 'School Admin',
     'p2ladmin': 'P2L-Admin', 'platform-admin': 'P2L-Admin'
   };
   return roleMap[role?.toLowerCase()] || role;
@@ -71,7 +71,12 @@ const normalizeRole = (role) => {
 
 function generateTempPassword(userType) {
   const crypto = require('crypto');
-  return `${userType.substring(0, 3).toUpperCase()}${new Date().getFullYear()}${crypto.randomBytes(3).toString('hex')}!`;
+  // Generate a more readable password: ROLE + random alphanumeric
+  const rolePrefix = (userType || 'User').substring(0, 3).toUpperCase();
+  const randomPart = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const password = `${rolePrefix}@${randomPart}`;
+  console.log(`🔑 Generated temp password for ${userType}: ${password}`);
+  return password;
 }
 
 // Helper to safely convert to ObjectId
@@ -89,23 +94,31 @@ const canModifyUser = async (db, userId, schoolId) => {
   try {
     const objectId = toObjectId(userId);
     if (!objectId) {
+      console.error('canModifyUser: Invalid ObjectId for userId:', userId);
       return { allowed: false, error: 'Invalid user ID format', user: null };
     }
     const user = await db.collection('users').findOne({ _id: objectId });
     if (!user) return { allowed: false, error: 'User not found', user: null };
     
-    // Check if user belongs to same school
+    // Check if user belongs to same school (only if both have schoolId)
     const userSchoolId = user.schoolId || user.school_id;
     if (schoolId && userSchoolId && userSchoolId.toString() !== schoolId.toString()) {
       return { allowed: false, error: 'User belongs to different school', user: null };
     }
     
-    const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin', 'platform admin'];
-    if (protectedRoles.includes(user.role?.toLowerCase())) return { allowed: false, error: 'Cannot modify admin', user };
+    // Protected roles - handle all variations including "School Admin" with space
+    const userRoleLower = user.role?.toLowerCase() || '';
+    const isProtected = userRoleLower.includes('p2l') || 
+                        userRoleLower.includes('platform') ||
+                        (userRoleLower.includes('school') && userRoleLower.includes('admin'));
+    
+    if (isProtected) return { allowed: false, error: 'Cannot modify admin', user };
     return { allowed: true, user };
   } catch (e) {
     console.error('canModifyUser error:', e);
-    return { allowed: false, error: 'Invalid user ID', user: null };
+    return { allowed: false, error: 'Error checking user permissions', user: null };
+  }
+};
   }
 };
 
@@ -231,11 +244,12 @@ router.post('/users', authenticateToken, async (req, res) => {
     };
     
     const result = await db.collection('users').insertOne(newUser);
+    const newUserId = result.insertedId;
     
     // If student, also create in students collection
     if (normalizedRole === 'Student') {
       await db.collection('students').insertOne({
-        user_id: result.insertedId,
+        user_id: newUserId,
         name,
         email: email.toLowerCase(),
         grade_level: gradeLevel || 'Primary 1',
@@ -250,8 +264,25 @@ router.post('/users', authenticateToken, async (req, res) => {
       });
     }
     
-    console.log('✅ User created:', email, 'for school:', schoolId);
-    res.json({ success: true, user: { ...newUser, _id: result.insertedId, tempPassword } });
+    // If teacher with assigned classes, update those classes
+    if (normalizedRole === 'Teacher' && classes && classes.length > 0) {
+      console.log('📚 Assigning teacher to classes:', classes);
+      for (const className of classes) {
+        await db.collection('classes').updateOne(
+          { name: className, schoolId: schoolId },
+          { 
+            $set: { 
+              teacherId: newUserId.toString(), 
+              teacherName: name,
+              updatedAt: new Date()
+            } 
+          }
+        );
+      }
+    }
+    
+    console.log('✅ User created:', email, 'for school:', schoolId, 'tempPassword:', tempPassword);
+    res.json({ success: true, user: { ...newUser, _id: newUserId, tempPassword } });
   } catch (error) {
     console.error('Create user error:', error);
     res.status(500).json({ success: false, error: 'Failed to create user' });

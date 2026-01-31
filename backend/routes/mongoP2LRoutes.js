@@ -156,7 +156,7 @@ router.get('/schools', authenticateAdmin, async (req, res) => {
     const db = mongoose.connection.db;
     const { status, search, page = 1, limit = 20 } = req.query;
     
-    const filter = { role: 'school-admin' };
+    const filter = { role: 'School Admin' };
     if (status) filter.approval_status = status;
     if (search) {
       filter.$or = [
@@ -192,7 +192,7 @@ router.get('/schools', authenticateAdmin, async (req, res) => {
 
         const schoolAdminsCount = await db.collection('users').countDocuments({
           school_id: admin._id,
-          role: 'school-admin'
+          role: 'School Admin'
         });
 
         return {
@@ -265,7 +265,7 @@ router.post('/schools/profile', authenticateAdmin, async (req, res) => {
     // Check if admin exists and is a school-admin
     const admin = await db.collection('users').findOne({ 
       _id: adminId,
-      role: 'school-admin' 
+      role: 'School Admin' 
     });
 
     if (!admin) {
@@ -362,7 +362,7 @@ router.delete('/schools/:id', authenticateAdmin, async (req, res) => {
     // Check if school exists
     const schoolAdmin = await db.collection('users').findOne({ 
       _id: schoolId,
-      role: 'school-admin' 
+      role: 'School Admin' 
     });
 
     if (!schoolAdmin) {
@@ -424,7 +424,7 @@ router.get('/schools/:id/admins', authenticateAdmin, async (req, res) => {
     
     const schoolAdmins = await db.collection('users').find({
       school_id: schoolId,
-      role: 'school-admin'
+      role: 'School Admin'
     }).toArray();
 
     // Enrich with admin profiles
@@ -443,7 +443,7 @@ router.get('/schools/:id/admins', authenticateAdmin, async (req, res) => {
           name: admin.name,
           email: admin.email,
           contact: admin.contact,
-          role: 'school-admin',
+          role: 'School Admin',
           permissions: permissions?.permissions || ['basic'],
           is_active: admin.is_active,
           created_at: admin.created_at,
@@ -482,7 +482,7 @@ router.post('/schools/:id/admins', authenticateAdmin, async (req, res) => {
     // Check if school exists
     const school = await db.collection('users').findOne({
       _id: schoolId,
-      role: 'school-admin'
+      role: 'School Admin'
     });
 
     if (!school) {
@@ -508,7 +508,7 @@ router.post('/schools/:id/admins', authenticateAdmin, async (req, res) => {
       email,
       password_hash: passwordHash,
       contact: contact || '',
-      role: 'school-admin',
+      role: 'School Admin',
       school_id: schoolId,
       organization_name: school.organization_name,
       organization_type: 'school',
@@ -583,7 +583,7 @@ router.post('/licenses/assign', authenticateAdmin, async (req, res) => {
     // Check if school exists
     const school = await db.collection('users').findOne({
       _id: schoolId,
-      role: 'school-admin'
+      role: 'School Admin'
     });
 
     if (!school) {

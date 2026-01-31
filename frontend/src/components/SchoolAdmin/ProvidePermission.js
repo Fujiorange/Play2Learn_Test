@@ -31,7 +31,7 @@ export default function ProvidePermission() {
       return;
     }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role?.toLowerCase() !== 'school-admin') {
+    if (!currentUser.role?.toLowerCase().includes('school')) {
       navigate('/login');
       return;
     }
@@ -65,11 +65,9 @@ export default function ProvidePermission() {
   });
 
   const handleEditClick = (user) => {
-    console.log('✏️ Editing user:', user.email, 'ID:', user._id || user.id);
-    console.log('✏️ Current permissions from API:', user.permissions);
     setEditingUser(user);
     // Load existing permissions or set defaults
-    const initialPerms = user.permissions || {
+    setPermissions(user.permissions || {
       canAccessPoints: true,
       canAccessBadges: true,
       canAccessShop: true,
@@ -77,14 +75,11 @@ export default function ProvidePermission() {
       canTakeQuizzes: true,
       canViewProgress: true,
       canCreateTickets: true
-    };
-    console.log('✏️ Setting initial permissions:', initialPerms);
-    setPermissions(initialPerms);
+    });
     setMessage({ type: '', text: '' });
   };
 
   const handlePermissionToggle = (key) => {
-    console.log('🔄 Toggling:', key, 'from', permissions[key], 'to', !permissions[key]);
     setPermissions(prev => ({
       ...prev,
       [key]: !prev[key]
@@ -92,14 +87,11 @@ export default function ProvidePermission() {
   };
 
   const handleSave = async () => {
-    console.log('💾 SAVING permissions:', permissions);
-    console.log('💾 For user ID:', editingUser._id || editingUser.id);
     setSaving(true);
     try {
       const result = await schoolAdminService.updateUser(editingUser._id || editingUser.id, {
         permissions
       });
-      console.log('💾 Save result:', result);
 
       if (result.success) {
         setUsers(users.map(u => 
@@ -114,7 +106,6 @@ export default function ProvidePermission() {
         setMessage({ type: 'error', text: result.error || 'Failed to update permissions' });
       }
     } catch (err) {
-      console.error('💾 Save error:', err);
       setMessage({ type: 'error', text: 'Failed to update permissions' });
     } finally {
       setSaving(false);
@@ -139,74 +130,6 @@ export default function ProvidePermission() {
       loadUsers();
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to bulk update' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // NEW: Enable ALL permissions for all filtered users
-  const handleEnableAllPermissions = async () => {
-    const targetUsers = filterRole === 'all' ? 'all users' : filterRole + 's';
-    if (!window.confirm(`Enable ALL permissions for ${targetUsers}? This will give full access to ${filteredUsers.length} user(s).`)) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      let successCount = 0;
-      const allEnabled = {
-        canAccessPoints: true,
-        canAccessBadges: true,
-        canAccessShop: true,
-        canAccessLeaderboard: true,
-        canTakeQuizzes: true,
-        canViewProgress: true,
-        canCreateTickets: true,
-      };
-
-      for (const user of filteredUsers) {
-        const result = await schoolAdminService.updateUser(user._id || user.id, { permissions: allEnabled });
-        if (result.success) successCount++;
-      }
-      
-      setMessage({ type: 'success', text: `✅ Enabled ALL permissions for ${successCount} users` });
-      loadUsers();
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to enable all permissions' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // NEW: Disable ALL permissions for all filtered users
-  const handleDisableAllPermissions = async () => {
-    const targetUsers = filterRole === 'all' ? 'all users' : filterRole + 's';
-    if (!window.confirm(`⚠️ DISABLE ALL permissions for ${targetUsers}? This will remove access to ALL features for ${filteredUsers.length} user(s).`)) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      let successCount = 0;
-      const allDisabled = {
-        canAccessPoints: false,
-        canAccessBadges: false,
-        canAccessShop: false,
-        canAccessLeaderboard: false,
-        canTakeQuizzes: false,
-        canViewProgress: false,
-        canCreateTickets: false,
-      };
-
-      for (const user of filteredUsers) {
-        const result = await schoolAdminService.updateUser(user._id || user.id, { permissions: allDisabled });
-        if (result.success) successCount++;
-      }
-      
-      setMessage({ type: 'success', text: `🔒 Disabled ALL permissions for ${successCount} users` });
-      loadUsers();
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to disable all permissions' });
     } finally {
       setSaving(false);
     }
@@ -290,47 +213,6 @@ export default function ProvidePermission() {
         {/* Bulk Actions Card */}
         <div style={styles.card}>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>⚡ Quick Actions</h3>
-          
-          {/* MAIN BULK ACTIONS */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-            <button 
-              onClick={handleEnableAllPermissions}
-              style={{ 
-                padding: '12px 24px', 
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '8px', 
-                cursor: saving ? 'not-allowed' : 'pointer', 
-                fontSize: '14px', 
-                fontWeight: '600',
-                opacity: saving ? 0.7 : 1
-              }}
-              disabled={saving}
-            >
-              ✅ Enable ALL Permissions for {filterRole === 'all' ? 'All Users' : filterRole + 's'}
-            </button>
-            <button 
-              onClick={handleDisableAllPermissions}
-              style={{ 
-                padding: '12px 24px', 
-                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '8px', 
-                cursor: saving ? 'not-allowed' : 'pointer', 
-                fontSize: '14px', 
-                fontWeight: '600',
-                opacity: saving ? 0.7 : 1
-              }}
-              disabled={saving}
-            >
-              🔒 Disable ALL Permissions for {filterRole === 'all' ? 'All Users' : filterRole + 's'}
-            </button>
-          </div>
-
-          {/* Individual feature toggles */}
-          <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>Or toggle individual features:</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             <button 
               onClick={() => handleBulkPermission('canAccessShop', false)}

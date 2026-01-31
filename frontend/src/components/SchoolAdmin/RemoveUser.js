@@ -19,7 +19,7 @@ export default function RemoveUser() {
     }
 
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') {
+    if (!currentUser.role?.toLowerCase().includes('school')) {
       navigate('/login');
       return;
     }
@@ -38,7 +38,7 @@ export default function RemoveUser() {
 
       if (result.success) {
         // Filter out school-admin users (they shouldn't be deletable)
-        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin');
+        const filteredUsers = (result.users || []).filter(u => !u.role?.toLowerCase().includes('school'));
         setUsers(filteredUsers);
       } else {
         console.error('Failed to load users:', result.error);

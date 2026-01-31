@@ -18,7 +18,7 @@ export default function ResetPassword() {
     }
 
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') {
+    if (!currentUser.role?.toLowerCase().includes('school')) {
       navigate('/login');
       return;
     }
@@ -33,7 +33,9 @@ export default function ResetPassword() {
       if (result.success) {
         // Filter out admin users
         const filteredUsers = (result.users || []).filter(u => 
-          !['school-admin', 'p2ladmin', 'p2l-admin'].includes(u.role?.toLowerCase())
+          !u.role?.toLowerCase().includes('school') && 
+          !u.role?.toLowerCase().includes('p2l') &&
+          !u.role?.toLowerCase().includes('platform')
         );
         setUsers(filteredUsers);
       } else {
@@ -52,27 +54,34 @@ export default function ResetPassword() {
   );
 
   const handleReset = async (user) => {
-    // FIX: Use _id or id
+    // Use _id or id - handle both formats
     const userId = user._id || user.id;
     if (!userId) {
       setMessage({ type: 'error', text: 'Invalid user ID' });
       return;
     }
 
-    if (!window.confirm(`Reset password for ${user.name}? A temporary password will be generated.`)) {
+    if (!window.confirm(`Reset password for ${user.name}?\n\nA new temporary password will be generated.`)) {
       return;
     }
 
     setResetting(userId);
     try {
+      console.log('🔑 Resetting password for user:', userId);
       const result = await schoolAdminService.resetUserPassword(userId);
 
-      if (result.success) {
+      if (result.success && result.tempPassword) {
         setMessage({ 
           type: 'success', 
-          text: `Password reset for ${user.name}. Temporary password: ${result.tempPassword}` 
+          text: `Password reset for ${user.name}. New password: ${result.tempPassword}` 
+        });
+      } else if (result.success) {
+        setMessage({ 
+          type: 'success', 
+          text: `Password reset for ${user.name}` 
         });
       } else {
+        console.error('Reset failed:', result.error);
         setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
       }
     } catch (err) {
@@ -99,9 +108,9 @@ export default function ResetPassword() {
     table: { width: '100%', borderCollapse: 'collapse' },
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
-    resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
-    resetButtonDisabled: { padding: '6px 12px', background: '#d1d5db', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'not-allowed' },
-    message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
+    resetButton: { padding: '8px 16px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
+    resetButtonDisabled: { padding: '8px 16px', background: '#d1d5db', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'not-allowed' },
+    message: { marginBottom: '20px', padding: '16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
@@ -133,7 +142,7 @@ export default function ResetPassword() {
 
       <main style={styles.main}>
         <h1 style={styles.pageTitle}>Reset User Password</h1>
-        <p style={styles.pageSubtitle}>Click reset to generate a temporary password for any user.</p>
+        <p style={styles.pageSubtitle}>Click reset to generate a new temporary password for any user.</p>
 
         <div style={styles.card}>
           {message.text && (
@@ -181,7 +190,7 @@ export default function ResetPassword() {
                             onClick={() => handleReset(user)}
                             disabled={resetting === userId}
                           >
-                            {resetting === userId ? 'Resetting...' : 'Reset Password'}
+                            {resetting === userId ? 'Resetting...' : '🔑 Reset Password'}
                           </button>
                         </td>
                       </tr>

@@ -249,7 +249,7 @@ export default function KnowledgeBase() {
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') { navigate('/login'); return; }
+    if (!currentUser.role?.toLowerCase().includes('school')) { navigate('/login'); return; }
     
     setTimeout(() => {
       setSelectedCategory(knowledgeBase.categories[0]);

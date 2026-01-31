@@ -52,23 +52,30 @@ export default function LoginPage() {
         console.log('✅ Login successful!');
         console.log('👤 User role (raw):', result.user.role);
         
-        // Normalize the role to handle variations like "School Admin" vs "school-admin"
-        const userRole = normalizeRole(result.user.role);
+        // Get role and convert to lowercase for comparison
+        const rawRole = (result.user.role || '').toLowerCase();
         
-        console.log('🔀 Navigating to (normalized):', userRole);
+        console.log('🔀 Role lowercase:', rawRole);
         
-        if (userRole === 'platform-admin' || userRole === 'p2ladmin') {
+        // Check for each role type - handle ALL variations
+        if (rawRole.includes('platform') || rawRole === 'p2ladmin' || rawRole === 'p2l-admin') {
+          console.log('➡️ Redirecting to platform-admin');
           navigate('/platform-admin');
-        } else if (userRole === 'school-admin') {
+        } else if (rawRole.includes('school') && rawRole.includes('admin')) {
+          // This catches: "school admin", "school-admin", "schooladmin", "School Admin"
+          console.log('➡️ Redirecting to school-admin');
           navigate('/school-admin');
-        } else if (userRole === 'teacher') {
+        } else if (rawRole.includes('teacher')) {
+          console.log('➡️ Redirecting to teacher');
           navigate('/teacher');
-        } else if (userRole === 'student') {
+        } else if (rawRole.includes('student')) {
+          console.log('➡️ Redirecting to student');
           navigate('/student');
-        } else if (userRole === 'parent') {
+        } else if (rawRole.includes('parent')) {
+          console.log('➡️ Redirecting to parent');
           navigate('/parent');
         } else {
-          console.log('⚠️ Unknown role:', userRole);
+          console.log('⚠️ Unknown role:', rawRole);
           setError('Unknown user role: ' + result.user.role);
         }
       } else {
