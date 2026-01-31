@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: process.env.EMAIL_PORT,
+  secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
@@ -67,7 +68,7 @@ async function sendStudentCredentialsToParent(student, tempPassword, parentEmail
             </ol>
             
             <center>
-              <a href="http://localhost:3000/login" class="button">Go to Login Page</a>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Go to Login Page</a>
             </center>
           </div>
           <div class="footer">
@@ -127,7 +128,7 @@ async function sendTeacherWelcomeEmail(teacher, tempPassword, schoolName) {
             </div>
             
             <center>
-              <a href="http://localhost:3000/login" class="button">Login Now</a>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Login Now</a>
             </center>
           </div>
           <div class="footer">
@@ -186,7 +187,7 @@ async function sendParentWelcomeEmail(parent, tempPassword, studentName, schoolN
             </div>
             
             <center>
-              <a href="http://localhost:3000/login" class="button">View Progress Now</a>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">View Progress Now</a>
             </center>
           </div>
           <div class="footer">
@@ -208,8 +209,81 @@ async function sendParentWelcomeEmail(parent, tempPassword, studentName, schoolN
   }
 }
 
+// Send welcome email to school admin
+async function sendSchoolAdminWelcomeEmail(admin, tempPassword, schoolName) {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM,
+    to: admin.email,
+    subject: 'School Admin Account Created - Play2Learn 🎓',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #7C3AED; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+          .credentials { background: white; padding: 20px; border-left: 4px solid #7C3AED; margin: 20px 0; }
+          .button { display: inline-block; background: #7C3AED; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>School Admin Account Created!</h1>
+          </div>
+          <div class="content">
+            <p>Hi <strong>${admin.name}</strong>,</p>
+            
+            <p>Your School Admin account for <strong>${schoolName}</strong> has been created successfully!</p>
+            
+            <p>As a school administrator, you can:</p>
+            <ul>
+              <li>Create and manage teacher accounts</li>
+              <li>Create and manage student accounts</li>
+              <li>Monitor school performance and statistics</li>
+              <li>Manage classes and assignments</li>
+            </ul>
+            
+            <div class="credentials">
+              <h3>Your Login Credentials:</h3>
+              <p><strong>📧 Email:</strong> ${admin.email}</p>
+              <p><strong>🔑 Temporary Password:</strong> ${tempPassword}</p>
+              <p style="color: #EF4444; margin-top: 10px;"><strong>⚠️ Important:</strong> Please change your password after first login.</p>
+            </div>
+            
+            <center>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Login to Dashboard</a>
+            </center>
+            
+            <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+              Note: You are limited to the number of teachers and students based on your school's license plan.
+            </p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message from Play2Learn.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ School admin welcome email sent to ${admin.email}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Failed to send email to ${admin.email}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   sendTeacherWelcomeEmail,
   sendParentWelcomeEmail,
   sendStudentCredentialsToParent,
+  sendSchoolAdminWelcomeEmail,
 };

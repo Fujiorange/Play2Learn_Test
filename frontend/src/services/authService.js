@@ -16,12 +16,12 @@ class AuthService {
     }
   }
 
-  async login(email, password, role) {
+  async login(email, password) {
     try {
       const res = await fetch(`${API_URL}/mongo/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (data.success) {
@@ -113,6 +113,33 @@ class AuthService {
       return data;
     } catch {
       return { success: false, error: 'Failed to get user data' };
+    }
+  }
+
+  async changePassword(oldPassword, newPassword) {
+    try {
+      const token = this.getToken();
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const res = await fetch(`${API_URL}/mongo/auth/change-password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+      const data = await res.json();
+      
+      // If password change is successful, update user to clear requirePasswordChange flag
+      if (data.success) {
+        const user = this.getCurrentUser();
+        if (user) {
+          user.requirePasswordChange = false;
+          localStorage.setItem('user', JSON.stringify(user));
+        }
+      }
+      
+      return data;
+    } catch {
+      return { success: false, error: 'Failed to change password' };
     }
   }
 }

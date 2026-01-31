@@ -1,137 +1,148 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
-import schoolAdminService from '../../services/schoolAdminService';
 import './SchoolAdmin.css';
 
-const rarityConfig = {
-  common: { label: 'Common', color: '#6b7280', bg: '#f3f4f6' },
-  rare: { label: 'Rare', color: '#3b82f6', bg: '#eff6ff' },
-  epic: { label: 'Epic', color: '#8b5cf6', bg: '#f5f3ff' },
-  legendary: { label: 'Legendary', color: '#f59e0b', bg: '#fffbeb' }
-};
-
-const criteriaTypes = [
-  { value: 'quizzes_completed', label: 'Quizzes Completed' },
-  { value: 'login_streak', label: 'Login Streak (days)' },
-  { value: 'perfect_scores', label: 'Perfect Scores' },
-  { value: 'high_scores', label: 'High Scores (90%+)' },
-  { value: 'points_earned', label: 'Total Points Earned' }
+// Default badges that auto-unlock based on student activity
+const defaultBadges = [
+  { id: 'badge_1', name: 'First Steps', description: 'Complete your first quiz', icon: '🌟', criteriaType: 'quiz_count', criteriaValue: 1, rarity: 'Common', isActive: true, earnedCount: 12, createdAt: new Date('2026-01-01') },
+  { id: 'badge_2', name: 'Streak Master', description: 'Login 7 days in a row', icon: '🔥', criteriaType: 'login_streak', criteriaValue: 7, rarity: 'Rare', isActive: true, earnedCount: 5, createdAt: new Date('2026-01-01') },
+  { id: 'badge_3', name: 'Perfect Score', description: 'Score 100% on any quiz', icon: '💯', criteriaType: 'perfect_score', criteriaValue: 1, rarity: 'Epic', isActive: true, earnedCount: 3, createdAt: new Date('2026-01-01') },
+  { id: 'badge_4', name: 'High Achiever', description: 'Score 90% or higher on 5 quizzes', icon: '📈', criteriaType: 'high_score_count', criteriaValue: 5, rarity: 'Rare', isActive: true, earnedCount: 7, createdAt: new Date('2026-01-01') },
+  { id: 'badge_5', name: 'Fast Learner', description: 'Complete 10 quizzes', icon: '🚀', criteriaType: 'quiz_count', criteriaValue: 10, rarity: 'Common', isActive: true, earnedCount: 8, createdAt: new Date('2026-01-01') },
+  { id: 'badge_6', name: 'Math Champion', description: 'Score 90% or higher on 10 quizzes', icon: '👑', criteriaType: 'high_score_count', criteriaValue: 10, rarity: 'Legendary', isActive: true, earnedCount: 1, createdAt: new Date('2026-01-01') }
 ];
 
-const iconOptions = ['🏆', '⭐', '🌟', '🔥', '💯', '🚀', '👑', '💎', '🎯', '📈', '🎓', '🏅', '🥇', '🎖️', '✨'];
+const criteriaTypes = [
+  { value: 'quiz_count', label: 'Quizzes Completed', description: 'Student completes X quizzes' },
+  { value: 'login_streak', label: 'Login Streak', description: 'Student logs in X days in a row' },
+  { value: 'perfect_score', label: 'Perfect Scores', description: 'Student scores 100% on X quizzes' },
+  { value: 'high_score_count', label: 'High Scores (90%+)', description: 'Student scores 90%+ on X quizzes' },
+  { value: 'total_points', label: 'Total Points Earned', description: 'Student earns X total points' },
+  { value: 'assignment_count', label: 'Assignments Completed', description: 'Student completes X assignments' }
+];
+
+const rarityLevels = ['Common', 'Rare', 'Epic', 'Legendary'];
+const badgeIcons = ['🌟', '🔥', '💯', '📈', '🚀', '👑', '🏆', '💎', '⭐', '🎯', '🎓', '📚', '✨', '🥇', '🥈', '🥉', '🎖️', '🏅'];
 
 export default function BadgeManagement() {
   const navigate = useNavigate();
   const [badges, setBadges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [showModal, setShowModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [formData, setFormData] = useState({
-    name: '', description: '', icon: '🏆', criteriaType: 'quizzes_completed', criteriaValue: 1, rarity: 'common', isActive: true
+    name: '', description: '', icon: '🌟', criteriaType: 'quiz_count', criteriaValue: 1, rarity: 'Common', isActive: true
   });
 
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
+    if (currentUser.role !== 'school-admin') { navigate('/login'); return; }
     loadBadges();
   }, [navigate]);
 
   const loadBadges = async () => {
+    setLoading(true);
     try {
-      const result = await schoolAdminService.getBadges();
-      if (result.success) {
-        setBadges(result.badges || []);
-      } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to load badges' });
-      }
+      // TODO: Replace with real API call when backend is ready
+      // const result = await schoolAdminService.getBadges();
+      // if (result.success) setBadges(result.badges);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setBadges(defaultBadges);
     } catch (error) {
       console.error('Error loading badges:', error);
+      setMessage({ type: 'error', text: 'Failed to load badges' });
     } finally {
       setLoading(false);
     }
   };
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', icon: '🏆', criteriaType: 'quizzes_completed', criteriaValue: 1, rarity: 'common', isActive: true });
-    setEditingId(null);
+    setFormData({ name: '', description: '', icon: '🌟', criteriaType: 'quiz_count', criteriaValue: 1, rarity: 'Common', isActive: true });
   };
 
-  const openCreateModal = () => { resetForm(); setShowModal(true); };
-
-  const openEditModal = (badge) => {
-    setEditingId(badge._id);
-    setFormData({
-      name: badge.name,
-      description: badge.description,
-      icon: badge.icon,
-      criteriaType: badge.criteriaType,
-      criteriaValue: badge.criteriaValue,
-      rarity: badge.rarity,
-      isActive: badge.isActive
-    });
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
+  const handleCreateBadge = async () => {
     if (!formData.name || !formData.description) {
-      setMessage({ type: 'error', text: 'Please fill in name and description' });
+      setMessage({ type: 'error', text: 'Please fill in all required fields' });
       return;
     }
-
     try {
-      let result;
-      if (editingId) {
-        result = await schoolAdminService.updateBadge(editingId, formData);
-      } else {
-        result = await schoolAdminService.createBadge(formData);
-      }
-
-      if (result.success) {
-        setMessage({ type: 'success', text: editingId ? 'Badge updated!' : 'Badge created!' });
-        setShowModal(false);
-        resetForm();
-        loadBadges();
-      } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to save badge' });
-      }
+      // TODO: const result = await schoolAdminService.createBadge(formData);
+      const newBadge = { id: `badge_${Date.now()}`, ...formData, earnedCount: 0, createdAt: new Date() };
+      setBadges([...badges, newBadge]);
+      setMessage({ type: 'success', text: `Badge "${formData.name}" created successfully!` });
+      setShowCreateModal(false);
+      resetForm();
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to save badge' });
+      setMessage({ type: 'error', text: 'Failed to create badge' });
     }
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleDelete = async () => {
-    try {
-      const result = await schoolAdminService.deleteBadge(selectedBadge._id);
-      if (result.success) {
-        setMessage({ type: 'success', text: 'Badge deleted!' });
-        loadBadges();
-      } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to delete' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete badge' });
+  const handleEditBadge = async () => {
+    if (!formData.name || !formData.description) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields' });
+      return;
     }
-    setShowDeleteModal(false);
-    setSelectedBadge(null);
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-  };
-
-  const toggleBadgeStatus = async (badge) => {
     try {
-      await schoolAdminService.updateBadge(badge._id, { isActive: !badge.isActive });
-      setMessage({ type: 'success', text: `Badge ${badge.isActive ? 'disabled' : 'enabled'}!` });
-      loadBadges();
+      // TODO: await schoolAdminService.updateBadge(selectedBadge.id, formData);
+      setBadges(badges.map(b => b.id === selectedBadge.id ? { ...b, ...formData } : b));
+      setMessage({ type: 'success', text: `Badge "${formData.name}" updated successfully!` });
+      setShowEditModal(false);
+      setSelectedBadge(null);
+      resetForm();
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update badge' });
     }
+  };
+
+  const handleDeleteBadge = async () => {
+    try {
+      // TODO: await schoolAdminService.deleteBadge(selectedBadge.id);
+      setBadges(badges.filter(b => b.id !== selectedBadge.id));
+      setMessage({ type: 'success', text: `Badge "${selectedBadge.name}" deleted successfully!` });
+      setShowDeleteModal(false);
+      setSelectedBadge(null);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete badge' });
+    }
+  };
+
+  const handleToggleActive = (badge) => {
+    setBadges(badges.map(b => b.id === badge.id ? { ...b, isActive: !b.isActive } : b));
+    setMessage({ type: 'success', text: `Badge "${badge.name}" ${badge.isActive ? 'disabled' : 'enabled'} successfully!` });
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
+
+  const openEditModal = (badge) => {
+    setSelectedBadge(badge);
+    setFormData({ name: badge.name, description: badge.description, icon: badge.icon, criteriaType: badge.criteriaType, criteriaValue: badge.criteriaValue, rarity: badge.rarity, isActive: badge.isActive });
+    setShowEditModal(true);
+  };
+
+  const openDeleteModal = (badge) => {
+    setSelectedBadge(badge);
+    setShowDeleteModal(true);
+  };
+
+  const getRarityClass = (rarity) => {
+    switch (rarity) {
+      case 'Common': return 'badge-rarity-common';
+      case 'Rare': return 'badge-rarity-rare';
+      case 'Epic': return 'badge-rarity-epic';
+      case 'Legendary': return 'badge-rarity-legendary';
+      default: return 'badge-rarity-common';
+    }
+  };
+
+  const totalEarned = badges.reduce((sum, b) => sum + b.earnedCount, 0);
+  const activeBadges = badges.filter(b => b.isActive).length;
 
   if (loading) {
     return <div className="sa-loading"><div className="sa-loading-text">Loading badges...</div></div>;
@@ -139,6 +150,7 @@ export default function BadgeManagement() {
 
   return (
     <div className="sa-container">
+      {/* Header */}
       <header className="sa-header">
         <div className="sa-header-content">
           <div className="sa-logo">
@@ -150,127 +162,102 @@ export default function BadgeManagement() {
       </header>
 
       <main className="sa-main-wide">
+        {/* Page Header */}
         <div className="badge-page-header">
           <div>
             <h1 className="sa-page-title">🏆 Badge Management</h1>
-            <p className="sa-page-subtitle">Create and manage achievement badges (Stored in Database)</p>
+            <p className="sa-page-subtitle">Create and manage badges that students can earn automatically</p>
           </div>
-          <button className="sa-button-primary" onClick={openCreateModal}>+ Create Badge</button>
+          <button className="sa-button-primary" onClick={() => { resetForm(); setShowCreateModal(true); }}>+ Create Badge</button>
         </div>
 
+        {/* Message */}
         {message.text && (
           <div className={`sa-message ${message.type === 'success' ? 'sa-message-success' : 'sa-message-error'}`}>
             {message.type === 'success' ? '✓' : '✕'} {message.text}
           </div>
         )}
 
-        {/* Badges Grid */}
+        {/* Stats Row */}
+        <div className="sa-stats-grid">
+          <div className="sa-stat-card"><div className="sa-stat-icon">🏆</div><p className="sa-stat-label">Total Badges</p><p className="sa-stat-value">{badges.length}</p></div>
+          <div className="sa-stat-card"><div className="sa-stat-icon">✅</div><p className="sa-stat-label">Active Badges</p><p className="sa-stat-value">{activeBadges}</p></div>
+          <div className="sa-stat-card"><div className="sa-stat-icon">👥</div><p className="sa-stat-label">Total Times Earned</p><p className="sa-stat-value">{totalEarned}</p></div>
+        </div>
+
+        {/* Badge Grid */}
         {badges.length === 0 ? (
           <div className="sa-card" style={{ textAlign: 'center', padding: '60px' }}>
             <p style={{ fontSize: '48px', marginBottom: '16px' }}>🏆</p>
-            <p style={{ fontSize: '18px', fontWeight: '600', color: '#6b7280' }}>No badges created yet</p>
-            <p style={{ color: '#9ca3af' }}>Create your first badge to reward student achievements</p>
+            <p style={{ fontSize: '18px', fontWeight: '600', color: '#6b7280' }}>No badges yet</p>
+            <p style={{ color: '#9ca3af' }}>Create your first badge to get started</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-            {badges.map(badge => {
-              const rarity = rarityConfig[badge.rarity] || rarityConfig.common;
-              return (
-                <div key={badge._id} className="sa-card" style={{ opacity: badge.isActive ? 1 : 0.6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '40px' }}>{badge.icon}</div>
-                    <span className="sa-badge" style={{ background: rarity.bg, color: rarity.color }}>{rarity.label}</span>
-                  </div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{badge.name}</h3>
-                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '12px' }}>{badge.description}</p>
-                  <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
-                    <strong>Criteria:</strong> {criteriaTypes.find(c => c.value === badge.criteriaType)?.label || badge.criteriaType} ≥ {badge.criteriaValue}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>Earned: {badge.earnedCount || 0} times</span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className="sa-button-action" onClick={() => openEditModal(badge)}>Edit</button>
-                      <button className={badge.isActive ? 'sa-button-warning' : 'sa-button-enable'} onClick={() => toggleBadgeStatus(badge)}>
-                        {badge.isActive ? 'Disable' : 'Enable'}
-                      </button>
-                      <button className="sa-button-danger" style={{ padding: '6px 12px' }} onClick={() => { setSelectedBadge(badge); setShowDeleteModal(true); }}>🗑️</button>
-                    </div>
+          <div className="badge-grid">
+            {badges.map((badge) => (
+              <div key={badge.id} className={`sa-card badge-card ${!badge.isActive ? 'badge-card-disabled' : ''}`}>
+                <div className="badge-card-header">
+                  <div className="badge-icon">{badge.icon}</div>
+                  <div className="badge-info">
+                    <h3 className="badge-name">{badge.name}</h3>
+                    <p className="badge-description">{badge.description}</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="badge-meta">
+                  <span className={`sa-badge ${getRarityClass(badge.rarity)}`}>{badge.rarity}</span>
+                  <span className="sa-badge sa-badge-primary">{criteriaTypes.find(c => c.value === badge.criteriaType)?.label}: {badge.criteriaValue}</span>
+                  <span className="sa-badge sa-badge-success">👥 {badge.earnedCount} earned</span>
+                </div>
+                <div className="badge-actions">
+                  <button className={badge.isActive ? 'sa-button-disable' : 'sa-button-enable'} onClick={() => handleToggleActive(badge)}>{badge.isActive ? 'Disable' : 'Enable'}</button>
+                  <button className="sa-button-action" onClick={() => openEditModal(badge)}>Edit</button>
+                  <button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(badge)}>Delete</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>
 
-      {/* Create/Edit Modal */}
-      {showModal && (
-        <div className="sa-modal" onClick={() => setShowModal(false)}>
-          <div className="sa-modal-content" style={{ maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="sa-modal-title">{editingId ? '✏️ Edit Badge' : '🏆 Create Badge'}</h2>
-            
-            <div className="sa-form-group">
-              <label className="sa-label">Icon</label>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {iconOptions.map(icon => (
-                  <button key={icon} type="button" onClick={() => setFormData({ ...formData, icon })}
-                    style={{ fontSize: '24px', padding: '8px', border: formData.icon === icon ? '2px solid #10b981' : '2px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>
-                    {icon}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="sa-form-group">
-              <label className="sa-label">Name *</label>
-              <input type="text" className="sa-input" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Quiz Master" />
-            </div>
-
-            <div className="sa-form-group">
-              <label className="sa-label">Description *</label>
-              <textarea className="sa-textarea" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="e.g., Complete 10 quizzes" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="sa-form-group">
-                <label className="sa-label">Criteria Type</label>
-                <select className="sa-select" value={formData.criteriaType} onChange={(e) => setFormData({ ...formData, criteriaType: e.target.value })}>
-                  {criteriaTypes.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-              </div>
-              <div className="sa-form-group">
-                <label className="sa-label">Required Value</label>
-                <input type="number" className="sa-input" min="1" value={formData.criteriaValue} onChange={(e) => setFormData({ ...formData, criteriaValue: parseInt(e.target.value) || 1 })} />
-              </div>
-            </div>
-
-            <div className="sa-form-group">
-              <label className="sa-label">Rarity</label>
-              <select className="sa-select" value={formData.rarity} onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}>
-                {Object.entries(rarityConfig).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-              </select>
-            </div>
-
-            <div className="sa-modal-buttons">
-              <button className="sa-modal-button-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="sa-modal-button-confirm" onClick={handleSave}>{editingId ? 'Save Changes' : 'Create Badge'}</button>
-            </div>
+      {/* Create Badge Modal */}
+      {showCreateModal && (
+        <div className="sa-modal" onClick={() => setShowCreateModal(false)}>
+          <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="sa-modal-title">🏆 Create New Badge</h2>
+            <div className="sa-form-group"><label className="sa-label">Badge Name *</label><input type="text" className="sa-input" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Quiz Master" /></div>
+            <div className="sa-form-group"><label className="sa-label">Description *</label><textarea className="sa-textarea" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="e.g., Complete 20 quizzes" style={{ minHeight: '80px' }} /></div>
+            <div className="sa-form-group"><label className="sa-label">Icon</label><div className="icon-grid">{badgeIcons.map((icon) => (<div key={icon} className={`icon-option ${formData.icon === icon ? 'icon-option-selected' : ''}`} onClick={() => setFormData({ ...formData, icon })}>{icon}</div>))}</div></div>
+            <div className="sa-form-group"><label className="sa-label">Unlock Criteria</label><select className="sa-select" value={formData.criteriaType} onChange={(e) => setFormData({ ...formData, criteriaType: e.target.value })}>{criteriaTypes.map((type) => (<option key={type.value} value={type.value}>{type.label}</option>))}</select><p className="criteria-help">{criteriaTypes.find(c => c.value === formData.criteriaType)?.description}</p></div>
+            <div className="sa-form-group"><label className="sa-label">Criteria Value</label><input type="number" className="sa-input" min="1" value={formData.criteriaValue} onChange={(e) => setFormData({ ...formData, criteriaValue: parseInt(e.target.value) || 1 })} /></div>
+            <div className="sa-form-group"><label className="sa-label">Rarity</label><select className="sa-select" value={formData.rarity} onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}>{rarityLevels.map((level) => (<option key={level} value={level}>{level}</option>))}</select></div>
+            <div className="sa-modal-buttons"><button className="sa-modal-button-cancel" onClick={() => setShowCreateModal(false)}>Cancel</button><button className="sa-modal-button-confirm" onClick={handleCreateBadge}>Create Badge</button></div>
           </div>
         </div>
       )}
 
-      {/* Delete Modal */}
+      {/* Edit Badge Modal */}
+      {showEditModal && selectedBadge && (
+        <div className="sa-modal" onClick={() => setShowEditModal(false)}>
+          <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="sa-modal-title">✏️ Edit Badge</h2>
+            <div className="sa-form-group"><label className="sa-label">Badge Name *</label><input type="text" className="sa-input" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
+            <div className="sa-form-group"><label className="sa-label">Description *</label><textarea className="sa-textarea" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} style={{ minHeight: '80px' }} /></div>
+            <div className="sa-form-group"><label className="sa-label">Icon</label><div className="icon-grid">{badgeIcons.map((icon) => (<div key={icon} className={`icon-option ${formData.icon === icon ? 'icon-option-selected' : ''}`} onClick={() => setFormData({ ...formData, icon })}>{icon}</div>))}</div></div>
+            <div className="sa-form-group"><label className="sa-label">Unlock Criteria</label><select className="sa-select" value={formData.criteriaType} onChange={(e) => setFormData({ ...formData, criteriaType: e.target.value })}>{criteriaTypes.map((type) => (<option key={type.value} value={type.value}>{type.label}</option>))}</select><p className="criteria-help">{criteriaTypes.find(c => c.value === formData.criteriaType)?.description}</p></div>
+            <div className="sa-form-group"><label className="sa-label">Criteria Value</label><input type="number" className="sa-input" min="1" value={formData.criteriaValue} onChange={(e) => setFormData({ ...formData, criteriaValue: parseInt(e.target.value) || 1 })} /></div>
+            <div className="sa-form-group"><label className="sa-label">Rarity</label><select className="sa-select" value={formData.rarity} onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}>{rarityLevels.map((level) => (<option key={level} value={level}>{level}</option>))}</select></div>
+            <div className="sa-modal-buttons"><button className="sa-modal-button-cancel" onClick={() => setShowEditModal(false)}>Cancel</button><button className="sa-modal-button-confirm" onClick={handleEditBadge}>Save Changes</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedBadge && (
         <div className="sa-modal" onClick={() => setShowDeleteModal(false)}>
           <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
             <h2 className="sa-modal-title">🗑️ Delete Badge</h2>
-            <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-              Are you sure you want to delete <strong>"{selectedBadge.name}"</strong>?
-            </p>
-            <div className="sa-modal-buttons">
-              <button className="sa-modal-button-cancel" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-              <button className="sa-modal-button-danger" onClick={handleDelete}>Delete</button>
-            </div>
+            <p style={{ color: '#6b7280', marginBottom: '24px' }}>Are you sure you want to delete <strong>"{selectedBadge.name}"</strong>?<br /><br />This badge has been earned by <strong>{selectedBadge.earnedCount} students</strong>. This action cannot be undone.</p>
+            <div className="sa-modal-buttons"><button className="sa-modal-button-cancel" onClick={() => setShowDeleteModal(false)}>Cancel</button><button className="sa-modal-button-danger" onClick={handleDeleteBadge}>Delete Badge</button></div>
           </div>
         </div>
       )}

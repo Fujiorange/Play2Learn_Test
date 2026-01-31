@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
-import AnnouncementBanner from '../shared/AnnouncementBanner';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -142,6 +141,18 @@ export default function StudentDashboard() {
     },
     // 2️⃣ View Results
     {
+      id: 'adaptive-quiz',
+      title: 'Adaptive Quizzes',
+      description: 'Try quizzes that adapt to your skill level',
+      icon: '🎲',
+      action: () => navigate('/student/adaptive-quizzes'),
+    },
+    {
+      id: 'skills',
+      title: 'Skill Matrix',
+      description: 'See your unlocked math skills',
+      icon: '📊',
+      action: () => navigate('/student/skills'),
       id: 'results',
       title: 'View Results',
       description: 'Review your quiz results and history',
@@ -292,9 +303,6 @@ export default function StudentDashboard() {
       </header>
 
       <main style={styles.main}>
-        {/* Announcements Banner */}
-        <AnnouncementBanner userRole="student" />
-
         <div style={styles.welcomeCard}>
           <h2 style={styles.welcomeTitle}>
             Welcome back, {user.name?.split(' ')[0] || 'Student'}! 🎮

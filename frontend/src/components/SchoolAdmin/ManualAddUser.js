@@ -2,141 +2,79 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import schoolAdminService from '../../services/schoolAdminService';
-import './SchoolAdmin.css';
 
 export default function ManualAddUser() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     role: '',
     gender: '',
-    gradeLevel: 'Primary 1',
-    class: '',
-    subject: 'Mathematics',
-    classes: [],          // For teachers - multiple classes
-    linkedStudents: []    // For parents - multiple children
+    gradeLevel: 'Primary 1', 
+    subject: 'Mathematics',   
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [licenseInfo, setLicenseInfo] = useState(null);
-  const [availableClasses, setAvailableClasses] = useState([]);
-  const [availableStudents, setAvailableStudents] = useState([]);
 
   useEffect(() => {
-    if (!authService.isAuthenticated()) { navigate('/login'); return; }
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
-    loadInitialData();
+    if (currentUser.role !== 'school-admin') {
+      navigate('/login');
+      return;
+    }
   }, [navigate]);
 
-  const loadInitialData = async () => {
-    try {
-      // Load dashboard stats for license info
-      const statsResult = await schoolAdminService.getDashboardStats();
-      if (statsResult.success && statsResult.license) {
-        setLicenseInfo(statsResult.license);
-      }
-      
-      // Load available classes
-      const classesResult = await schoolAdminService.getClasses();
-      if (classesResult.success) {
-        setAvailableClasses(classesResult.classes || []);
-      }
-      
-      // Load students (for parent linking)
-      const usersResult = await schoolAdminService.getUsers({ role: 'student' });
-      if (usersResult.success) {
-        setAvailableStudents(usersResult.users || []);
-      }
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    }
-  };
-
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
     setMessage({ type: '', text: '' });
-  };
-
-  const handleClassToggle = (className) => {
-    const newClasses = formData.classes.includes(className)
-      ? formData.classes.filter(c => c !== className)
-      : [...formData.classes, className];
-    setFormData({ ...formData, classes: newClasses });
-  };
-
-  const handleStudentToggle = (studentId) => {
-    const newLinked = formData.linkedStudents.includes(studentId)
-      ? formData.linkedStudents.filter(s => s !== studentId)
-      : [...formData.linkedStudents, studentId];
-    setFormData({ ...formData, linkedStudents: newLinked });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.email || !formData.role) {
+    if (!formData.name || !formData.email || !formData.password || !formData.role) {
       setMessage({ type: 'error', text: 'Please fill in all required fields' });
       return;
-    }
-
-    // Validate teacher has classes
-    if (formData.role === 'teacher' && formData.classes.length === 0) {
-      setMessage({ type: 'error', text: 'Teacher must be assigned to at least one class' });
-      return;
-    }
-
-    // Validate parent has linked students
-    if (formData.role === 'parent' && formData.linkedStudents.length === 0) {
-      setMessage({ type: 'error', text: 'Parent must be linked to at least one student' });
-      return;
-    }
-
-    // Check license limits
-    if (licenseInfo) {
-      if (formData.role === 'teacher' && licenseInfo.currentTeachers >= licenseInfo.teacherLimit) {
-        setMessage({ type: 'error', text: `Teacher license limit reached (${licenseInfo.currentTeachers}/${licenseInfo.teacherLimit})` });
-        return;
-      }
-      if (formData.role === 'student' && licenseInfo.currentStudents >= licenseInfo.studentLimit) {
-        setMessage({ type: 'error', text: `Student license limit reached (${licenseInfo.currentStudents}/${licenseInfo.studentLimit})` });
-        return;
-      }
     }
 
     setLoading(true);
 
     try {
+      // REAL API CALL - This will hit the database!
       const result = await schoolAdminService.createUser({
         name: formData.name,
         email: formData.email,
+        password: formData.password,
         role: formData.role,
         gender: formData.gender,
-        gradeLevel: formData.gradeLevel,
-        class: formData.class,
-        subject: formData.subject,
-        classes: formData.role === 'teacher' ? formData.classes : undefined,
-        linkedStudents: formData.role === 'parent' ? formData.linkedStudents : undefined
+        gradeLevel: 'Primary 1',
+        subject: 'Mathematics'
       });
 
       if (result.success) {
-        const tempPwd = result.tempPassword ? ` Temporary password: ${result.tempPassword}` : '';
-        setMessage({ type: 'success', text: `User created successfully!${tempPwd}` });
-        
-        // Refresh license info
-        loadInitialData();
-        
+        setMessage({ type: 'success', text: 'User created successfully!' });
         setTimeout(() => {
-          setFormData({
-            name: '', email: '', role: '', gender: '', gradeLevel: 'Primary 1',
-            class: '', subject: 'Mathematics', classes: [], linkedStudents: []
+          setFormData({ 
+            name: '', 
+            email: '', 
+            password: '', 
+            role: '', 
+            gender: '', 
+            gradeLevel: 'Primary 1', 
+            subject: 'Mathematics' 
           });
-        }, 5000);
+          setMessage({ type: '', text: '' });
+        }, 2000);
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to create user' });
       }
+
     } catch (err) {
       console.error('Create user error:', err);
       setMessage({ type: 'error', text: 'Failed to create user' });
@@ -145,72 +83,111 @@ export default function ManualAddUser() {
     }
   };
 
+  const styles = {
+    container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
+    header: { background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 0' },
+    headerContent: { maxWidth: '1400px', margin: '0 auto', padding: '0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    logo: { display: 'flex', alignItems: 'center', gap: '12px' },
+    logoIcon: { width: '40px', height: '40px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' },
+    logoText: { fontSize: '20px', fontWeight: '700', color: '#1f2937' },
+    backButton: { padding: '8px 16px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
+    main: { maxWidth: '700px', margin: '0 auto', padding: '32px' },
+    pageTitle: { fontSize: '28px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' },
+    pageSubtitle: { fontSize: '15px', color: '#6b7280', marginBottom: '32px' },
+    card: { background: 'white', borderRadius: '12px', padding: '32px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    formGroup: { marginBottom: '20px' },
+    label: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' },
+    required: { color: '#ef4444', marginLeft: '3px' },
+    input: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', fontFamily: 'inherit', boxSizing: 'border-box' },
+    disabledInput: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#e5e7eb', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'not-allowed', color: '#6b757d' },
+    select: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' },
+    buttonGroup: { display: 'flex', gap: '12px', marginTop: '24px' },
+    submitButton: { flex: 1, padding: '14px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' },
+    cancelButton: { flex: 1, padding: '14px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' },
+    message: { marginTop: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
+    successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
+    errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
+    note: { fontSize: '13px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' },
+  };
+
   return (
-    <div className="sa-container">
-      <header className="sa-header">
-        <div className="sa-header-content">
-          <div className="sa-logo">
-            <div className="sa-logo-icon">P</div>
-            <span className="sa-logo-text">Play2Learn</span>
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <div style={styles.headerContent}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>Play2Learn</span>
           </div>
-          <button className="sa-button-secondary" onClick={() => navigate('/school-admin')}>← Back to Dashboard</button>
+          <button style={styles.backButton} onClick={() => navigate('/school-admin')}>
+            ← Back to Dashboard
+          </button>
         </div>
       </header>
 
-      <main className="sa-main">
-        <h1 className="sa-page-title">👤 Add New User</h1>
-        <p className="sa-page-subtitle">Create a new student, teacher, or parent account</p>
+      <main style={styles.main}>
+        <h1 style={styles.pageTitle}>Add New User</h1>
+        <p style={styles.pageSubtitle}>
+          Create a new account for students, teachers, or parents. Platform scope: Primary 1 Mathematics only.
+        </p>
 
-        {/* License Info Card */}
-        {licenseInfo && (
-          <div className="sa-card sa-mb-4" style={{ background: '#f0f9ff', borderLeft: '4px solid #3b82f6' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', color: '#1e40af' }}>📋 License: {licenseInfo.plan?.toUpperCase() || 'STARTER'}</h3>
-                <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>
-                  Teachers: {licenseInfo.currentTeachers}/{licenseInfo.teacherLimit} • 
-                  Students: {licenseInfo.currentStudents}/{licenseInfo.studentLimit}
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: licenseInfo.currentTeachers >= licenseInfo.teacherLimit ? '#dc2626' : '#16a34a' }}>
-                    {licenseInfo.teacherLimit - licenseInfo.currentTeachers}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>Teachers left</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: licenseInfo.currentStudents >= licenseInfo.studentLimit ? '#dc2626' : '#16a34a' }}>
-                    {licenseInfo.studentLimit - licenseInfo.currentStudents}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>Students left</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {message.text && (
-          <div className={`sa-message ${message.type === 'success' ? 'sa-message-success' : 'sa-message-error'}`}>
-            {message.type === 'success' ? '✓' : '✕'} {message.text}
-          </div>
-        )}
-
-        <div className="sa-card">
+        <div style={styles.card}>
           <form onSubmit={handleSubmit}>
-            <div className="sa-form-group">
-              <label className="sa-label">Full Name *</label>
-              <input type="text" name="name" className="sa-input" value={formData.name} onChange={handleChange} placeholder="Enter full name" />
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Full Name<span style={styles.required}>*</span>
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter full name"
+                disabled={loading}
+                style={styles.input}
+              />
             </div>
 
-            <div className="sa-form-group">
-              <label className="sa-label">Email *</label>
-              <input type="email" name="email" className="sa-input" value={formData.email} onChange={handleChange} placeholder="Enter email address" />
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Email<span style={styles.required}>*</span>
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="user@example.com"
+                disabled={loading}
+                style={styles.input}
+              />
             </div>
 
-            <div className="sa-form-group">
-              <label className="sa-label">Role *</label>
-              <select name="role" className="sa-select" value={formData.role} onChange={handleChange}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Password<span style={styles.required}>*</span>
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Min. 8 characters"
+                disabled={loading}
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Role<span style={styles.required}>*</span>
+              </label>
+              <select
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                disabled={loading}
+                style={styles.select}
+              >
                 <option value="">Select role</option>
                 <option value="student">Student</option>
                 <option value="teacher">Teacher</option>
@@ -218,117 +195,70 @@ export default function ManualAddUser() {
               </select>
             </div>
 
-            <div className="sa-form-group">
-              <label className="sa-label">Gender</label>
-              <select name="gender" className="sa-select" value={formData.gender} onChange={handleChange}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Gender</label>
+              <select
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                disabled={loading}
+                style={styles.select}
+              >
                 <option value="">Select gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
             </div>
 
-            {/* Student-specific fields */}
             {formData.role === 'student' && (
               <>
-                <div className="sa-form-group">
-                  <label className="sa-label">Grade Level</label>
-                  <select name="gradeLevel" className="sa-select" value={formData.gradeLevel} onChange={handleChange}>
-                    <option value="Primary 1">Primary 1</option>
-                  </select>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Grade Level</label>
+                  <input
+                    type="text"
+                    value="Primary 1"
+                    disabled
+                    style={styles.disabledInput}
+                  />
+                  <p style={styles.note}>Platform is currently scoped to Primary 1 only</p>
                 </div>
-                <div className="sa-form-group">
-                  <label className="sa-label">Class</label>
-                  <select name="class" className="sa-select" value={formData.class} onChange={handleChange}>
-                    <option value="">Select class</option>
-                    {availableClasses.map(cls => (
-                      <option key={cls._id} value={cls.name}>{cls.name}</option>
-                    ))}
-                  </select>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Subject</label>
+                  <input
+                    type="text"
+                    value="Mathematics"
+                    disabled
+                    style={styles.disabledInput}
+                  />
+                  <p style={styles.note}>Platform is currently scoped to Mathematics only</p>
                 </div>
               </>
             )}
 
-            {/* Teacher-specific fields */}
-            {formData.role === 'teacher' && (
-              <div className="sa-form-group">
-                <label className="sa-label">Assign Classes * (Select at least one)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
-                  {availableClasses.length === 0 ? (
-                    <p style={{ color: '#6b7280', fontSize: '14px' }}>No classes available. Create classes first.</p>
-                  ) : (
-                    availableClasses.map(cls => (
-                      <button
-                        key={cls._id}
-                        type="button"
-                        onClick={() => handleClassToggle(cls.name)}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          border: formData.classes.includes(cls.name) ? '2px solid #10b981' : '2px solid #e5e7eb',
-                          background: formData.classes.includes(cls.name) ? '#d1fae5' : 'white',
-                          cursor: 'pointer',
-                          fontWeight: formData.classes.includes(cls.name) ? '600' : '400'
-                        }}
-                      >
-                        {formData.classes.includes(cls.name) ? '✓ ' : ''}{cls.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-                {formData.classes.length > 0 && (
-                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#059669' }}>
-                    Selected: {formData.classes.join(', ')}
-                  </p>
-                )}
+            <div style={styles.buttonGroup}>
+              <button
+                type="button"
+                style={styles.cancelButton}
+                onClick={() => navigate('/school-admin')}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{ ...styles.submitButton, opacity: loading ? 0.7 : 1 }}
+                disabled={loading}
+              >
+                {loading ? 'Creating...' : 'Create User'}
+              </button>
+            </div>
+
+            {message.text && (
+              <div style={{ ...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage) }}>
+                {message.type === 'success' ? '✅' : '⚠️'} {message.text}
               </div>
             )}
-
-            {/* Parent-specific fields */}
-            {formData.role === 'parent' && (
-              <div className="sa-form-group">
-                <label className="sa-label">Link Children * (Select at least one)</label>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', marginTop: '8px' }}>
-                  {availableStudents.length === 0 ? (
-                    <p style={{ color: '#6b7280', fontSize: '14px', textAlign: 'center', padding: '20px' }}>No students available. Create students first.</p>
-                  ) : (
-                    availableStudents.map(student => (
-                      <div
-                        key={student._id}
-                        onClick={() => handleStudentToggle(student._id)}
-                        style={{
-                          padding: '12px',
-                          borderRadius: '8px',
-                          marginBottom: '4px',
-                          cursor: 'pointer',
-                          background: formData.linkedStudents.includes(student._id) ? '#d1fae5' : '#f9fafb',
-                          border: formData.linkedStudents.includes(student._id) ? '2px solid #10b981' : '2px solid transparent',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: '500' }}>{student.name}</div>
-                          <div style={{ fontSize: '12px', color: '#6b7280' }}>{student.email} • {student.class || 'No class'}</div>
-                        </div>
-                        {formData.linkedStudents.includes(student._id) && (
-                          <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-                {formData.linkedStudents.length > 0 && (
-                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#059669' }}>
-                    Selected: {formData.linkedStudents.length} child(ren)
-                  </p>
-                )}
-              </div>
-            )}
-
-            <button type="submit" className="sa-button-primary" style={{ width: '100%', marginTop: '16px' }} disabled={loading}>
-              {loading ? 'Creating...' : 'Create User'}
-            </button>
           </form>
         </div>
       </main>

@@ -4,18 +4,19 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-const User = mongoose.model('User');
+const User = require('../models/User');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 function normalizeRole(role) {
   if (!role) return role;
   const lower = role.toLowerCase();
-  if (lower.includes('platform') || lower === 'p2ladmin') return 'p2ladmin';
-  if (lower.includes('school') || lower === 'schooladmin') return 'school-admin';
+  if (lower.includes('platform')) return 'Platform Admin';
+  if (lower.includes('school')) return 'School Admin';
   if (lower.includes('teacher')) return 'Teacher';
   if (lower.includes('student')) return 'Student';
   if (lower.includes('parent')) return 'Parent';
-  if (lower.includes('trial')) return 'Trial User';
+  if (lower.includes('trial student')) return 'Trial Student';
+  if (lower.includes('trial teacher')) return 'Trial Teacher';
   return role;
 }
 
@@ -50,7 +51,7 @@ router.post('/register', async (req, res) => {
     const newUser = new User({
       name,
       email: email.toLowerCase(),
-      password: hashedPassword,
+      password: hashedPassword,  // ✅ Using 'password' field
       role: normalizedRole,
       schoolId: schoolId || null,
       class: studentClass || null,
@@ -81,29 +82,18 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
-    // FIXED: Check both 'password' and 'password_hash' fields
-    const storedPassword = user.password || user.password_hash;
-    if (!storedPassword) {
+    // ✅ FIXED: Now only checking 'password' field (standardized)
+    if (!user.password) {
       console.error('❌ No password field found for user:', email);
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
 
-    const ok = await bcrypt.compare(password, storedPassword);
+    const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
-    // FIXED: Include 'name' in JWT token for support tickets and other features
-    const token = jwt.sign(
-      { 
-        userId: user._id, 
-        email: user.email, 
-        role: user.role,
-        name: user.name  // ← ADDED: Now included in token
-      }, 
-      JWT_SECRET, 
-      { expiresIn: '7d' }
-    );
-
-    console.log(`✅ Login successful: ${user.email} (${user.role})`);
+    // Role is automatically determined from the database, not from user input
+    // This improves security by preventing role spoofing attempts
+    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
     return res.json({
       success: true,
@@ -123,6 +113,7 @@ router.post('/login', async (req, res) => {
         subject: user.subject,
         emailVerified: user.emailVerified,
         accountActive: user.accountActive,
+        requirePasswordChange: user.requirePasswordChange,
       },
     });
   } catch (error) {
@@ -137,7 +128,7 @@ router.get('/me', async (req, res) => {
     if (!token) return res.status(401).json({ success: false, error: 'No token provided' });
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password -password_hash');
+    const user = await User.findById(decoded.userId).select('-password');
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     return res.json({
@@ -157,6 +148,7 @@ router.get('/me', async (req, res) => {
         subject: user.subject,
         emailVerified: user.emailVerified,
         accountActive: user.accountActive,
+        requirePasswordChange: user.requirePasswordChange,
       },
     });
   } catch (error) {
@@ -249,6 +241,64 @@ router.put('/update-picture', async (req, res) => {
   } catch (error) {
     console.error('Update picture error:', error);
     return res.status(500).json({ success: false, error: 'Failed to update profile picture' });
+  }
+});
+
+router.put('/change-password', async (req, res) => {
+  try {
+    const token = (req.headers.authorization || '').split(' ')[1];
+    if (!token) return res.status(401).json({ success: false, error: 'No token provided' });
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { oldPassword, newPassword } = req.body;
+
+    // Validate required fields
+    if (!newPassword) {
+      return res.status(400).json({ success: false, error: 'New password is required' });
+    }
+
+    // Password validation
+    if (newPassword.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must be at least 8 characters long' 
+      });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    // If old password is provided, verify it (for regular password changes)
+    // If not provided, only allow if requirePasswordChange is true (first-time login)
+    if (oldPassword) {
+      const isValidOldPassword = await bcrypt.compare(oldPassword, user.password);
+      if (!isValidOldPassword) {
+        return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+      }
+    } else if (!user.requirePasswordChange) {
+      // If no old password and not required to change, reject
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Current password is required' 
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Update password and clear requirePasswordChange flag
+    user.password = hashedPassword;
+    user.requirePasswordChange = false;
+    user.updatedAt = new Date();
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to change password' });
   }
 });
 

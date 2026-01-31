@@ -1,306 +1,1369 @@
-// backend/routes/p2lAdminRoutes.js
-// ✅ FIXED: Standardized to use 'password' field instead of 'password_hash'
-// Routes for p2ladmin (platform-level admin)
-
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const csv = require('csv-parser');
+const fs = require('fs');
+const User = require('../models/User');
+const School = require('../models/School');
+const Question = require('../models/Question');
+const Quiz = require('../models/Quiz');
+const LandingPage = require('../models/LandingPage');
+const Testimonial = require('../models/Testimonial');
+const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
+const { generateTempPassword } = require('../utils/passwordGenerator');
+const Sentiment = require('sentiment');
+const sentiment = new Sentiment();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
-// Middleware to authenticate a p2ladmin JWT (token must include userId)
+// Configure multer for file uploads
+const upload = multer({ dest: 'uploads/' });
+
+// Middleware to authenticate P2L Admins
 const authenticateP2LAdmin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Access token required' });
+
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ success: false, error: 'No token provided' });
-
     const decoded = jwt.verify(token, JWT_SECRET);
-    const db = mongoose.connection.db;
-    const user = await db.collection('users').findOne({
-      _id: new mongoose.Types.ObjectId(decoded.userId),
-      role: 'p2ladmin'
-    });
+    const admin = await User.findById(decoded.userId);
+    if (!admin || admin.role !== 'p2ladmin') {
+      return res.status(403).json({ error: 'Access restricted to P2L Admins' });
+    }
 
-    if (!user) return res.status(403).json({ success: false, error: 'P2LAdmin access required' });
-
-    req.user = decoded;
-    req.admin = user;
+    req.user = admin;
     next();
   } catch (err) {
-    console.error('P2L admin auth error:', err);
-    return res.status(401).json({ success: false, error: 'Invalid token' });
+    return res.status(403).json({ error: 'Invalid token' });
   }
 };
 
-// Utility - generate random 8-char alphanumeric
-function genTempPassword(len = 8) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  for (let i = 0; i < len; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
-  return out;
-}
-
-// ==================== SEED / CREATE INITIAL P2LADMIN ====================
-router.post('/seed', async (req, res) => {
+// ==================== Register P2L Admin ====================
+// Public endpoint - allows creation of admin accounts
+router.post('/register-admin', async (req, res) => {
   try {
-    const { email = 'p2ladmin@p2l.com', password = 'P2LAdmin1234', name = 'Platform Admin' } = req.body || {};
-    const db = mongoose.connection.db;
-
-    // Check if exists; if yes, update password
-    const existing = await db.collection('users').findOne({ email });
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    if (existing) {
-      // ✅ FIXED: Use 'password' instead of 'password_hash'
-      await db.collection('users').updateOne(
-        { _id: existing._id },
-        { $set: { password: passwordHash, role: 'p2ladmin', is_active: true, accountActive: true, name } }
-      );
-      console.log(`✅ Updated p2ladmin: ${email}`);
-      return res.json({ success: true, message: 'P2L admin updated', email, password });
+    // Check MongoDB connection status
+    // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    const CONNECTED_STATE = 1;
+    if (mongoose.connection.readyState !== CONNECTED_STATE) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database connection unavailable. Please try again later.' 
+      });
     }
 
-    // ✅ FIXED: Use 'password' instead of 'password_hash'
-    const newUser = {
-      name,
-      email,
-      password: passwordHash,  // ✅ Changed from password_hash
+    const { email, password, name } = req.body;
+    
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email and password are required' 
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid email format' 
+      });
+    }
+
+    // Password validation
+    if (password.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must be at least 8 characters long' 
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email already registered' 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create admin name from email if not provided
+    const adminName = name || email.split('@')[0];
+
+    // Create new admin user
+    const newAdmin = new User({
+      name: adminName,
+      email: email.toLowerCase(),
+      password: hashedPassword,
       role: 'p2ladmin',
-      contact: '',
-      approval_status: 'approved',
-      is_active: true,
-      accountActive: true,
       emailVerified: true,
-      created_at: new Date(),
-      createdAt: new Date(),
-      last_login: null
-    };
-
-    const result = await db.collection('users').insertOne(newUser);
-
-    // Optional platform_admins collection compatibility (not required)
-    await db.collection('platform_admins').insertOne({
-      user_id: result.insertedId,
-      admin_level: 'owner',
-      permissions: ['all'],
-      created_at: new Date()
-    }).catch(err => {
-      console.log('ℹ️  Platform_admins collection not created (optional)');
+      accountActive: true
     });
 
-    console.log(`✅ Created p2ladmin: ${email} / password: ${password}`);
-    return res.json({ success: true, message: 'P2L admin created', email, password });
-  } catch (error) {
-    console.error('❌ Seed p2ladmin error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to seed p2ladmin' });
-  }
-});
+    await newAdmin.save();
 
-// ==================== LANDING PAGE CRUD (modular blocks) ====================
-router.post('/landing', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const { blocks = [] } = req.body;
-
-    // Replace existing landing doc (single document approach)
-    const timestamp = new Date();
-    await db.collection('landing_pages').updateOne(
-      { _id: 'default' },
-      { $set: { blocks, updated_at: timestamp, updated_by: req.admin._id } },
-      { upsert: true }
-    );
-
-    return res.json({ success: true, message: 'Landing page saved', blocks });
-  } catch (err) {
-    console.error('Save landing error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to save landing page' });
-  }
-});
-
-router.get('/landing', async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const doc = await db.collection('landing_pages').findOne({ _id: 'default' });
-    return res.json({ success: true, blocks: doc?.blocks || [] });
-  } catch (err) {
-    console.error('Get landing error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to load landing page' });
-  }
-});
-
-router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    await db.collection('landing_pages').deleteOne({ _id: 'default' });
-    return res.json({ success: true, message: 'Landing page removed' });
-  } catch (err) {
-    console.error('Delete landing error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to delete landing page' });
-  }
-});
-
-// ==================== SCHOOLS & LICENSING ====================
-const LICENSE_PLANS = {
-  starter: { teacher_limit: 50, student_limit: 500, price: 2500 },
-  professional: { teacher_limit: 100, student_limit: 1000, price: 5000 },
-  enterprise: { teacher_limit: 250, student_limit: 2500, price: 10000 }
-};
-
-router.post('/schools', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const { organization_name, organization_type = 'school', plan = 'starter', contact = '' } = req.body;
-
-    if (!organization_name) return res.status(400).json({ success: false, error: 'organization_name required' });
-    if (!LICENSE_PLANS[plan]) return res.status(400).json({ success: false, error: 'Invalid plan' });
-
-    const planInfo = LICENSE_PLANS[plan];
-    const doc = {
-      organization_name,
-      organization_type,
-      plan,
-      plan_info: planInfo,
-      contact,
-      created_at: new Date()
-    };
-
-    const result = await db.collection('schools').insertOne(doc);
-    return res.status(201).json({ success: true, school_id: result.insertedId, school: doc });
-  } catch (err) {
-    console.error('Create school error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to create school' });
-  }
-});
-
-// ==================== CREATE SCHOOL ADMINS (with temp password) ====================
-router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const { schoolId, admins = [] } = req.body;
-
-    if (!schoolId || !Array.isArray(admins) || admins.length === 0) {
-      return res.status(400).json({ success: false, error: 'schoolId and admins[] required' });
-    }
-
-    const created = [];
-    for (const a of admins) {
-      const { name, email, contact = '' } = a;
-      if (!name || !email) continue;
-
-      // Ensure unique email
-      const existing = await db.collection('users').findOne({ email });
-      if (existing) {
-        created.push({ email, success: false, error: 'Email already exists' });
-        continue;
+    res.status(201).json({ 
+      success: true, 
+      message: 'Admin registration successful',
+      user: {
+        id: newAdmin._id,
+        email: newAdmin.email,
+        role: newAdmin.role
       }
-
-      const tempPassword = genTempPassword(8);
-      const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-      // ✅ FIXED: Use 'password' instead of 'password_hash'
-      const newAdmin = {
-        name,
-        email,
-        password: passwordHash,  // ✅ Changed from password_hash
-        contact,
-        role: 'School Admin',
-        schoolId: new mongoose.Types.ObjectId(schoolId),
-        school_id: new mongoose.Types.ObjectId(schoolId),
-        organization_type: 'school',
-        approval_status: 'approved',
-        is_active: true,
-        accountActive: true,
-        emailVerified: true,
-        created_at: new Date(),
-        createdAt: new Date(),
-        last_login: null
-      };
-
-      const result = await db.collection('users').insertOne(newAdmin);
-      
-      // insert profile
-      await db.collection('school_admins').insertOne({
-        user_id: result.insertedId,
-        school_id: new mongoose.Types.ObjectId(schoolId),
-        permissions: ['basic'],
-        created_at: new Date()
-      }).catch(err => {
-        console.log('ℹ️  School_admins collection not created (optional)');
-      });
-
-      console.log(`✅ Created school admin: ${email} / password: ${tempPassword}`);
-      created.push({ email, success: true, tempPassword, name });
+    });
+  } catch (err) {
+    console.error('Admin registration error:', err);
+    
+    // Provide more specific error messages
+    let errorMessage = 'An error occurred during registration';
+    
+    if (err.name === 'MongoNetworkError' || err.name === 'MongoTimeoutError') {
+      errorMessage = 'Database connection error. Please try again later.';
+    } else if (err.code === 11000) {
+      // Duplicate key error (email already exists, but caught by validation)
+      errorMessage = 'Email already registered';
+    } else if (err.message) {
+      // Log the actual error for debugging but don't expose internal details
+      console.error('Detailed error:', err.message, err.stack);
     }
-
-    return res.json({ success: true, created });
-  } catch (err) {
-    console.error('❌ Create school-admins error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to create school admins' });
+    
+    res.status(500).json({ 
+      success: false, 
+      error: errorMessage 
+    });
   }
 });
 
-// ==================== QUIZ / QUESTION BANK (basic adaptive run) ====================
-router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const { title = 'Default Quiz', questions = [] } = req.body;
-    // Questions: [{ text, choices, answer, difficulty: 1|2|3 }]
-    const doc = { title, questions, created_at: new Date() };
-    const result = await db.collection('quizzes').insertOne(doc);
-    return res.status(201).json({ success: true, quiz_id: result.insertedId, quiz: doc });
-  } catch (err) {
-    console.error('Create quiz error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to create quiz' });
-  }
-});
-
-// Simple adaptive run: client sends lastQuestionId & wasCorrect and desired quizId
-router.post('/quizzes/run', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const { quizId, lastQuestionId = null, wasCorrect = null, currentDifficulty = 2 } = req.body;
-
-    const quiz = await db.collection('quizzes').findOne({ _id: new mongoose.Types.ObjectId(quizId) });
-    if (!quiz) return res.status(404).json({ success: false, error: 'Quiz not found' });
-
-    // Decide next difficulty
-    let nextDifficulty = currentDifficulty;
-    if (wasCorrect === true) nextDifficulty = Math.min(3, currentDifficulty + 1);
-    else if (wasCorrect === false) nextDifficulty = Math.max(1, currentDifficulty - 1);
-    // pick a question with that difficulty not equal to lastQuestionId
-    const pool = quiz.questions.filter(q => (q.difficulty || 2) === nextDifficulty && String(q._id || '') !== String(lastQuestionId || ''));
-    let question = pool[Math.floor(Math.random() * pool.length)];
-    if (!question) {
-      // fallback: pick any question not lastQuestionId
-      const alt = quiz.questions.filter(q => String(q._id || '') !== String(lastQuestionId || ''));
-      question = alt[Math.floor(Math.random() * alt.length)];
-    }
-
-    return res.json({ success: true, question: question || null, nextDifficulty });
-  } catch (err) {
-    console.error('Adaptive run error:', err);
-    return res.status(500).json({ success: false, error: 'Adaptive run failed' });
-  }
-});
-
-// ==================== HEALTH CHECK ====================
+// ==================== Default Health Check Endpoint ====================
 router.get('/health', async (req, res) => {
   try {
-    const db = mongoose.connection.db;
-    const mongooseState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-    return res.json({
+    const dbState = mongoose.connection.readyState;
+    const dbStatus = dbState === 1 ? 'connected' : 'disconnected';
+    const isConnected = dbState === 1;
+    
+    res.json({
       success: true,
-      environment: process.env.NODE_ENV || 'development',
-      db: mongooseState,
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString()
+      status: 'healthy',
+      database: {
+        status: dbStatus,
+        connected: isConnected,
+        type: 'MongoDB'
+      },
+      server: {
+        environment: process.env.NODE_ENV || 'development',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+      }
     });
   } catch (err) {
-    console.error('Health error:', err);
-    return res.status(500).json({ success: false, error: 'Health check failed' });
+    console.error('Health check error:', err);
+    return res.status(500).json({ 
+      success: false,
+      status: 'unhealthy',
+      error: 'Health check failed' 
+    });
   }
 });
 
+// ==================== SCHOOL MANAGEMENT ROUTES ====================
+
+// Get all schools
+router.get('/schools', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const schools = await School.find().sort({ createdAt: -1 });
+    res.json({
+      success: true,
+      data: schools
+    });
+  } catch (error) {
+    console.error('Get schools error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch schools' 
+    });
+  }
+});
+
+// Get single school
+router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const school = await School.findById(req.params.id);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+    res.json({
+      success: true,
+      data: school
+    });
+  } catch (error) {
+    console.error('Get school error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch school' 
+    });
+  }
+});
+
+// Create school
+router.post('/schools', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { organization_name, organization_type, plan, plan_info, contact } = req.body;
+    
+    // Validate required fields
+    if (!organization_name || !plan || !plan_info) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'organization_name, plan, and plan_info are required' 
+      });
+    }
+
+    const school = new School({
+      organization_name,
+      organization_type: organization_type || 'school',
+      plan,
+      plan_info,
+      contact: contact || ''
+    });
+
+    await school.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'School created successfully',
+      data: school
+    });
+  } catch (error) {
+    console.error('Create school error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create school' 
+    });
+  }
+});
+
+// Update school
+router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { organization_name, organization_type, plan, plan_info, contact, is_active } = req.body;
+    
+    const school = await School.findById(req.params.id);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+
+    // Update fields if provided
+    if (organization_name) school.organization_name = organization_name;
+    if (organization_type) school.organization_type = organization_type;
+    if (plan) school.plan = plan;
+    if (plan_info) school.plan_info = plan_info;
+    if (contact !== undefined) school.contact = contact;
+    if (is_active !== undefined) school.is_active = is_active;
+
+    await school.save();
+
+    res.json({
+      success: true,
+      message: 'School updated successfully',
+      data: school
+    });
+  } catch (error) {
+    console.error('Update school error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update school' 
+    });
+  }
+});
+
+// Delete school
+router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const school = await School.findByIdAndDelete(req.params.id);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'School deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete school error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete school' 
+    });
+  }
+});
+
+// Get school admins
+router.get('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const schoolId = req.params.id;
+
+    // Find users who are school-admins for this school
+    const admins = await User.find({
+      schoolId: schoolId,
+      role: 'School Admin'
+    }).select('-password');
+
+    res.json({
+      success: true,
+      data: admins
+    });
+  } catch (error) {
+    console.error('Get school admins error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch school admins' 
+    });
+  }
+});
+
+// Create/assign school admin
+router.post('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { email, name } = req.body;
+    const schoolId = req.params.id;
+    
+    // Validate required fields
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email is required' 
+      });
+    }
+    
+    // Validate school exists
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email already registered' 
+      });
+    }
+
+    // Generate temporary password
+    const tempPassword = generateTempPassword('school');
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+    // Create school admin
+    const admin = new User({
+      name: name || email.split('@')[0],
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: 'School Admin',
+      schoolId: schoolId,
+      emailVerified: true,
+      accountActive: true,
+      requirePasswordChange: true
+    });
+
+    await admin.save();
+    
+    // Send welcome email with credentials
+    try {
+      await sendSchoolAdminWelcomeEmail(admin, tempPassword, school.organization_name);
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Continue even if email fails - admin is still created
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'School admin created successfully',
+      data: {
+        id: admin._id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        tempPassword: tempPassword // Return temp password so P2L admin can share it if email fails
+      }
+    });
+  } catch (error) {
+    console.error('Create school admin error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create school admin' 
+    });
+  }
+});
+
+// ==================== QUESTION MANAGEMENT ROUTES ====================
+
+// Get all questions
+router.get('/questions', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { subject, topic, difficulty, is_active } = req.query;
+    
+    const filter = {};
+    if (subject) filter.subject = subject;
+    if (topic) filter.topic = topic;
+    if (difficulty) filter.difficulty = parseInt(difficulty);
+    if (is_active !== undefined) filter.is_active = is_active === 'true';
+
+    const questions = await Question.find(filter)
+      .populate('created_by', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: questions
+    });
+  } catch (error) {
+    console.error('Get questions error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch questions' 
+    });
+  }
+});
+
+// Get question statistics (counts by difficulty)
+router.get('/questions-stats', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const stats = {};
+    
+    // Count active questions for each difficulty level
+    for (let difficulty = 1; difficulty <= 5; difficulty++) {
+      const count = await Question.countDocuments({ 
+        difficulty, 
+        is_active: true 
+      });
+      stats[difficulty] = count;
+    }
+    
+    // Also get total count
+    const totalActive = await Question.countDocuments({ is_active: true });
+    const totalInactive = await Question.countDocuments({ is_active: false });
+    
+    res.json({
+      success: true,
+      data: {
+        byDifficulty: stats,
+        totalActive,
+        totalInactive,
+        total: totalActive + totalInactive
+      }
+    });
+  } catch (error) {
+    console.error('Get question stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch question statistics' 
+    });
+  }
+});
+
+// Get single question
+router.get('/questions/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const question = await Question.findById(req.params.id)
+      .populate('created_by', 'name email');
+    
+    if (!question) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Question not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      data: question
+    });
+  } catch (error) {
+    console.error('Get question error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch question' 
+    });
+  }
+});
+
+// Create question
+router.post('/questions', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { text, choices, answer, difficulty, subject, topic, is_active } = req.body;
+    
+    // Validate required fields
+    if (!text || !answer) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'text and answer are required' 
+      });
+    }
+
+    const question = new Question({
+      text,
+      choices: choices || [],
+      answer,
+      difficulty: difficulty || 2,
+      subject: subject || 'General',
+      topic: topic || '',
+      is_active: is_active !== undefined ? is_active : true,
+      created_by: req.user._id
+    });
+
+    await question.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Question created successfully',
+      data: question
+    });
+  } catch (error) {
+    console.error('Create question error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create question' 
+    });
+  }
+});
+
+// Update question
+router.put('/questions/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { text, choices, answer, difficulty, subject, topic, is_active } = req.body;
+    
+    const question = await Question.findById(req.params.id);
+    if (!question) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Question not found' 
+      });
+    }
+
+    // Update fields if provided
+    if (text) question.text = text;
+    if (choices) question.choices = choices;
+    if (answer) question.answer = answer;
+    if (difficulty !== undefined) question.difficulty = difficulty;
+    if (subject) question.subject = subject;
+    if (topic !== undefined) question.topic = topic;
+    if (is_active !== undefined) question.is_active = is_active;
+
+    await question.save();
+
+    res.json({
+      success: true,
+      message: 'Question updated successfully',
+      data: question
+    });
+  } catch (error) {
+    console.error('Update question error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update question' 
+    });
+  }
+});
+
+// Delete question
+router.delete('/questions/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const question = await Question.findByIdAndDelete(req.params.id);
+    if (!question) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Question not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Question deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete question error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete question' 
+    });
+  }
+});
+
+// CSV upload for questions
+router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file'), async (req, res) => {
+  const filePath = req.file?.path;
+  
+  if (!filePath) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'No file uploaded' 
+    });
+  }
+
+  const results = [];
+  const errors = [];
+  let lineNumber = 1; // Start at 1 for header
+
+  try {
+    // Parse CSV file
+    const parsePromise = new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(csv())
+        .on('data', (row) => {
+          lineNumber++;
+          
+          // Normalize field names (handle case-insensitive headers)
+          const normalizedRow = {};
+          Object.keys(row).forEach(key => {
+            normalizedRow[key.toLowerCase().trim()] = row[key];
+          });
+
+          // Validate required fields
+          const text = normalizedRow.text || normalizedRow.question;
+          const answer = normalizedRow.answer || normalizedRow['correct answer'];
+          
+          if (!text || !answer) {
+            errors.push({
+              line: lineNumber,
+              error: 'Missing required fields: text and answer are required',
+              data: row
+            });
+            return;
+          }
+
+          // Parse choices (can be comma-separated or individual columns)
+          let choices = [];
+          if (normalizedRow.choices) {
+            // If choices are comma-separated
+            choices = normalizedRow.choices.split(',').map(c => c.trim()).filter(c => c);
+          } else {
+            // Check for choice1, choice2, choice3, choice4, etc.
+            const choiceKeys = Object.keys(normalizedRow).filter(k => k.startsWith('choice'));
+            choices = choiceKeys.map(k => normalizedRow[k]).filter(c => c && c.trim());
+          }
+
+          // Parse difficulty (default to 3 if not provided or invalid)
+          let difficulty = parseInt(normalizedRow.difficulty) || 3;
+          if (difficulty < 1 || difficulty > 5) {
+            difficulty = 3;
+          }
+
+          results.push({
+            text: text.trim(),
+            choices: choices,
+            answer: answer.trim(),
+            difficulty: difficulty,
+            subject: normalizedRow.subject || 'General',
+            topic: normalizedRow.topic || '',
+            is_active: normalizedRow.is_active !== 'false' && normalizedRow.is_active !== '0'
+          });
+        })
+        .on('end', () => resolve())
+        .on('error', (error) => reject(error));
+    });
+
+    await parsePromise;
+
+    // Delete uploaded file
+    fs.unlinkSync(filePath);
+
+    // If all rows failed, return error
+    if (results.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid questions found in CSV',
+        errors: errors
+      });
+    }
+
+    // Save questions to database
+    const savedQuestions = [];
+    for (const questionData of results) {
+      try {
+        const question = new Question({
+          ...questionData,
+          created_by: req.user._id
+        });
+        await question.save();
+        savedQuestions.push(question);
+      } catch (dbError) {
+        errors.push({
+          error: 'Failed to save question',
+          data: questionData,
+          message: dbError.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully uploaded ${savedQuestions.length} questions`,
+      data: {
+        total: results.length,
+        successful: savedQuestions.length,
+        failed: errors.length,
+        errors: errors.length > 0 ? errors : undefined
+      }
+    });
+  } catch (error) {
+    console.error('CSV upload error:', error);
+    
+    // Clean up file if it exists
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process CSV file',
+      message: error.message 
+    });
+  }
+});
+
+// ==================== QUIZ MANAGEMENT ROUTES ====================
+
+// Get all quizzes
+router.get('/quizzes', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { is_adaptive, is_active } = req.query;
+    
+    const filter = {};
+    if (is_adaptive !== undefined) filter.is_adaptive = is_adaptive === 'true';
+    if (is_active !== undefined) filter.is_active = is_active === 'true';
+
+    const quizzes = await Quiz.find(filter)
+      .populate('created_by', 'name email')
+      .populate('questions.question_id', 'text difficulty subject')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: quizzes
+    });
+  } catch (error) {
+    console.error('Get quizzes error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch quizzes' 
+    });
+  }
+});
+
+// Get single quiz
+router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id)
+      .populate('created_by', 'name email')
+      .populate('questions.question_id', 'text choices answer difficulty subject topic');
+    
+    if (!quiz) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Quiz not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Get quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch quiz' 
+    });
+  }
+});
+
+// Create quiz
+router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
+    
+    // Validate required fields
+    if (!title) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'title is required' 
+      });
+    }
+
+    // Populate questions with full details from Question references
+    const populatedQuestions = [];
+    if (questions && questions.length > 0) {
+      // Fetch all questions in parallel for better performance
+      const questionIds = questions.map(q => q.question_id).filter(id => id);
+      const questionDocs = await Question.find({ _id: { $in: questionIds } });
+      
+      // Create a map for quick lookup
+      const questionMap = new Map(questionDocs.map(doc => [doc._id.toString(), doc]));
+      
+      // Populate questions in order, log warnings for missing questions
+      for (const q of questions) {
+        if (q.question_id) {
+          const questionDoc = questionMap.get(q.question_id.toString());
+          if (questionDoc) {
+            populatedQuestions.push({
+              question_id: questionDoc._id,
+              text: questionDoc.text,
+              choices: questionDoc.choices,
+              answer: questionDoc.answer,
+              difficulty: questionDoc.difficulty
+            });
+          } else {
+            console.warn(`⚠️ Question not found: ${q.question_id}`);
+          }
+        }
+      }
+      
+      if (populatedQuestions.length !== questionIds.length) {
+        console.warn(`⚠️ Some questions were not found. Expected ${questionIds.length}, got ${populatedQuestions.length}`);
+      }
+    }
+
+    const finalQuizType = quiz_type || (is_adaptive ? 'adaptive' : 'placement');
+
+    const quiz = new Quiz({
+      title,
+      description: description || '',
+      quiz_type: finalQuizType,
+      questions: populatedQuestions,
+      is_adaptive: is_adaptive !== undefined ? is_adaptive : (finalQuizType === 'adaptive'),
+      is_active: is_active !== undefined ? is_active : true,
+      created_by: req.user._id
+    });
+
+    await quiz.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Quiz created successfully',
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Create quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create quiz' 
+    });
+  }
+});
+
+// Update quiz
+router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
+    
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Quiz not found' 
+      });
+    }
+
+    // Update fields if provided
+    if (title) quiz.title = title;
+    if (description !== undefined) quiz.description = description;
+    if (questions) quiz.questions = questions;
+    if (is_adaptive !== undefined) quiz.is_adaptive = is_adaptive;
+    if (is_active !== undefined) quiz.is_active = is_active;
+    if (quiz_type !== undefined) quiz.quiz_type = quiz_type;
+
+    await quiz.save();
+
+    res.json({
+      success: true,
+      message: 'Quiz updated successfully',
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Update quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update quiz' 
+    });
+  }
+});
+
+// Delete quiz
+router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quiz = await Quiz.findByIdAndDelete(req.params.id);
+    if (!quiz) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Quiz not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Quiz deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete quiz' 
+    });
+  }
+});
+
+// Generate adaptive quiz with specific difficulty distribution
+router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { title, description, difficulty_distribution, target_correct, difficulty_progression } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'title is required' 
+      });
+    }
+
+    // difficulty_distribution should be like: { 1: 10, 2: 10, 3: 10 }
+    // meaning 10 questions of difficulty 1, 10 of difficulty 2, etc.
+    if (!difficulty_distribution || typeof difficulty_distribution !== 'object') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'difficulty_distribution is required and must be an object' 
+      });
+    }
+
+    const questions = [];
+    const missingQuestions = [];
+    
+    // First, check if there are ANY questions in the database
+    const totalQuestions = await Question.countDocuments({ is_active: true });
+    if (totalQuestions === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No active questions found in the question bank. Please add questions before creating a quiz.',
+        suggestion: 'You can add questions by: (1) Using the Question Bank page in P2L Admin, (2) Uploading a CSV file, or (3) Running the seed script: node backend/seed-questions.js',
+        totalQuestions: 0
+      });
+    }
+    
+    // Check availability for all difficulty levels
+    for (const [difficulty, count] of Object.entries(difficulty_distribution)) {
+      const diff = parseInt(difficulty);
+      const questionCount = parseInt(count);
+      
+      if (questionCount > 0) {
+        const availableCount = await Question.countDocuments({ 
+          difficulty: diff,
+          is_active: true 
+        });
+        
+        if (availableCount < questionCount) {
+          missingQuestions.push({
+            difficulty: diff,
+            needed: questionCount,
+            available: availableCount,
+            missing: questionCount - availableCount
+          });
+        }
+      }
+    }
+    
+    // If any difficulty level doesn't have enough questions, return detailed error
+    if (missingQuestions.length > 0) {
+      const errorDetails = missingQuestions.map(m => 
+        `Difficulty ${m.difficulty}: need ${m.needed}, have ${m.available} (missing ${m.missing})`
+      ).join('; ');
+      
+      return res.status(400).json({ 
+        success: false, 
+        error: `Not enough active questions in question bank. ${errorDetails}. Please add more questions or adjust your quiz configuration.`,
+        suggestion: 'Add more questions at the required difficulty levels using the Question Bank page, or reduce the number of questions requested for each difficulty level.',
+        missingQuestions,
+        totalQuestions
+      });
+    }
+    
+    // Fetch and select questions for each difficulty level
+    for (const [difficulty, count] of Object.entries(difficulty_distribution)) {
+      const diff = parseInt(difficulty);
+      const questionCount = parseInt(count);
+      
+      if (questionCount > 0) {
+        const availableQuestions = await Question.find({ 
+          difficulty: diff,
+          is_active: true 
+        });
+        
+        // Randomly select questions
+        const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, questionCount);
+        
+        selected.forEach(q => {
+          questions.push({
+            question_id: q._id,
+            text: q.text,
+            choices: q.choices,
+            answer: q.answer,
+            difficulty: q.difficulty
+          });
+        });
+      }
+    }
+
+    const quiz = new Quiz({
+      title,
+      description: description || '',
+      quiz_type: 'adaptive',
+      questions,
+      is_adaptive: true,
+      is_active: true,
+      adaptive_config: {
+        target_correct_answers: target_correct || 10,
+        difficulty_progression: difficulty_progression || 'gradual',
+        starting_difficulty: 1
+      },
+      created_by: req.user._id
+    });
+
+    await quiz.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Adaptive quiz created successfully',
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Generate adaptive quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to generate adaptive quiz' 
+    });
+  }
+});
+
+// ==================== LANDING PAGE MANAGEMENT ROUTES ====================
+
+// Get landing page
+router.get('/landing', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Get the active landing page or the most recent one
+    let landingPage = await LandingPage.findOne({ is_active: true });
+    
+    if (!landingPage) {
+      // If no active page, get the most recent one
+      landingPage = await LandingPage.findOne().sort({ createdAt: -1 });
+    }
+    
+    if (!landingPage) {
+      // If no landing page exists at all, return empty structure
+      return res.json({
+        success: true,
+        blocks: [],
+        message: 'No landing page found'
+      });
+    }
+
+    res.json({
+      success: true,
+      blocks: landingPage.blocks || [],
+      id: landingPage._id,
+      is_active: landingPage.is_active,
+      version: landingPage.version
+    });
+  } catch (error) {
+    console.error('Get landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch landing page' 
+    });
+  }
+});
+
+// Create/Save landing page
+router.post('/landing', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { blocks } = req.body;
+    
+    if (!blocks || !Array.isArray(blocks)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'blocks array is required' 
+      });
+    }
+
+    // Deactivate all existing landing pages
+    await LandingPage.updateMany({}, { is_active: false });
+
+    // Create new landing page
+    const landingPage = new LandingPage({
+      blocks,
+      is_active: true,
+      version: 1,
+      updated_by: req.user._id
+    });
+
+    await landingPage.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Landing page saved successfully',
+      data: landingPage
+    });
+  } catch (error) {
+    console.error('Save landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to save landing page' 
+    });
+  }
+});
+
+// Update landing page
+router.put('/landing/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { blocks } = req.body;
+    
+    const landingPage = await LandingPage.findById(req.params.id);
+    if (!landingPage) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Landing page not found' 
+      });
+    }
+
+    // Update the landing page
+    landingPage.blocks = blocks || landingPage.blocks;
+    landingPage.version = (landingPage.version || 1) + 1;
+    landingPage.updated_by = req.user._id;
+
+    await landingPage.save();
+
+    res.json({
+      success: true,
+      message: 'Landing page updated successfully',
+      data: landingPage
+    });
+  } catch (error) {
+    console.error('Update landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update landing page' 
+    });
+  }
+});
+
+// Delete landing page
+router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Delete all landing pages or just the active one
+    const result = await LandingPage.deleteMany({ is_active: true });
+    
+    res.json({
+      success: true,
+      message: 'Landing page(s) deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Delete landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete landing page' 
+    });
+  }
+});
+
+// ==================== TESTIMONIAL MANAGEMENT ====================
+
+// Get testimonials for landing page display (MUST be before /:id route)
+router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const testimonials = await Testimonial.find({ 
+      approved: true, 
+      display_on_landing: true 
+    })
+      .sort({ created_at: -1 })
+      .limit(10);
+
+    res.json({
+      success: true,
+      testimonials: testimonials.map(t => ({
+        id: t._id,
+        name: t.student_name,
+        role: t.user_role,
+        title: t.title,
+        rating: t.rating,
+        quote: t.message,
+        created_at: t.created_at,
+      }))
+    });
+  } catch (error) {
+    console.error('Get landing page testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch landing page testimonials' 
+    });
+  }
+});
+
+// Get all testimonials with filtering
+router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { 
+      minRating, 
+      sentiment, 
+      approved, 
+      userRole, 
+      page = 1, 
+      limit = 50 
+    } = req.query;
+
+    const query = {};
+    
+    // Apply filters
+    if (minRating) query.rating = { $gte: parseInt(minRating) };
+    if (sentiment) query.sentiment_label = sentiment;
+    if (approved !== undefined) query.approved = approved === 'true';
+    if (userRole) query.user_role = userRole;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const testimonials = await Testimonial.find(query)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Testimonial.countDocuments(query);
+
+    res.json({
+      success: true,
+      testimonials: testimonials.map(t => ({
+        id: t._id,
+        student_name: t.student_name,
+        student_email: t.student_email,
+        title: t.title,
+        rating: t.rating,
+        message: t.message,
+        approved: t.approved,
+        display_on_landing: t.display_on_landing,
+        user_role: t.user_role,
+        sentiment_score: t.sentiment_score,
+        sentiment_label: t.sentiment_label,
+        created_at: t.created_at,
+      })),
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('Get testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch testimonials' 
+    });
+  }
+});
+
+// Update testimonial approval and display status
+router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approved, display_on_landing } = req.body;
+
+    const testimonial = await Testimonial.findById(id);
+    if (!testimonial) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Testimonial not found' 
+      });
+    }
+
+    if (approved !== undefined) {
+      testimonial.approved = approved;
+      // If unapproving, automatically remove from landing page
+      if (!approved) {
+        testimonial.display_on_landing = false;
+      }
+    }
+    
+    // Only allow setting display_on_landing to true if testimonial is approved
+    if (display_on_landing !== undefined) {
+      if (display_on_landing && !testimonial.approved) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot display unapproved testimonials on landing page'
+        });
+      }
+      testimonial.display_on_landing = display_on_landing;
+    }
+
+    await testimonial.save();
+
+    res.json({
+      success: true,
+      message: 'Testimonial updated successfully',
+      testimonial: {
+        id: testimonial._id,
+        approved: testimonial.approved,
+        display_on_landing: testimonial.display_on_landing,
+      }
+    });
+  } catch (error) {
+    console.error('Update testimonial error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update testimonial' 
+    });
+  }
+});
+
+// Delete testimonial
+router.delete('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const testimonial = await Testimonial.findByIdAndDelete(id);
+    
+    if (!testimonial) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Testimonial not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Testimonial deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete testimonial error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete testimonial' 
+    });
+  }
+});
+
+// Other Admin Functions...
 module.exports = router;

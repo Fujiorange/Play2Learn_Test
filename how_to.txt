@@ -1,2 +1,0 @@
-go into frontend > run cmd > npm start
-same for backend > run cmd > npm start

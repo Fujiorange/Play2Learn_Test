@@ -1,26 +1,33 @@
+// backend/server.js - Play2Learn Backend
 // backend/server.js - Play2Learn Backend - WITH PARENT ROUTES
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
+
+// Importing route files
+const authRoutes = require('./routes/mongoAuthRoutes');
+const studentRoutes = require('./routes/mongoStudentRoutes');
+const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
+const p2lAdminRoutes = require('./routes/p2lAdminRoutes');
+const adaptiveQuizRoutes = require('./routes/adaptiveQuizRoutes');
 const path = require('path');
 
 // ==================== CORS CONFIGURATION ====================
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    
     const allowedOrigins = [
       'https://play2learn-test.onrender.com',
       'http://localhost:3000',
       'http://localhost:5000',
-      'http://localhost:5173'
+      'http://localhost:5173',
     ];
-    
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -34,7 +41,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],
 };
 
 app.use(cors(corsOptions));
@@ -48,68 +55,66 @@ console.log('🚀 Starting Play2Learn Server...');
 console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔗 MongoDB:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
 
-// Mongoose 9.1.3 connection (no options needed)
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('✅ MongoDB Connected Successfully!');
-    console.log('📊 Database:', mongoose.connection.name);
-    console.log('🏢 Host:', mongoose.connection.host);
-    console.log('✅ Ready to accept connections');
-  })
-  .catch(err => {
-    console.error('❌ MongoDB Connection Failed:', err.message);
-    console.log('\n💡 TROUBLESHOOTING TIPS:');
-    console.log('1. Check MONGODB_URI in Render environment variables');
-    console.log('2. Whitelist IP 0.0.0.0/0 in MongoDB Atlas Network Access');
-    console.log('3. Verify database user credentials');
-    console.log('4. Check if cluster is running (not paused)');
-    
-    if (process.env.NODE_ENV === 'production') {
-      console.log('🚫 Exiting - Database required in production');
-      process.exit(1);
-    } else {
-      console.log('⚠️  Continuing without database for development...');
-    }
-  });
-
 // ==================== JWT CONFIGURATION ====================
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
-// Validate JWT_SECRET in production
-if (process.env.NODE_ENV === 'production') {
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-this-in-production') {
-    console.error('❌ ERROR: JWT_SECRET must be set in production environment!');
-    console.error('💡 Set JWT_SECRET in Render dashboard as a secure random string');
-    process.exit(1);
-  }
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-this-in-production')) {
+  console.error('❌ ERROR: JWT_SECRET must be set in the production environment!');
+  process.exit(1);
 }
 
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  
-  console.log('Auth check:', req.method, req.path, token ? 'Token present' : 'No token');
-  
+
   if (!token) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'Access token required' 
-    });
+    return res.status(401).json({ error: 'Access token required' });
   }
-  
+
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Invalid or expired token' 
-      });
+      return res.status(403).json({ error: 'Invalid or expired token' });
     }
     req.user = user;
     next();
   });
 }
 
+// ==================== PUBLIC LANDING PAGE ENDPOINT ====================
+// Public endpoint to fetch landing page blocks (no authentication required)
+const LandingPage = require('./models/LandingPage');
+
+app.get('/api/public/landing-page', async (req, res) => {
+  try {
+    // Get the active landing page or the most recent one
+    let landingPage = await LandingPage.findOne({ is_active: true });
+    
+    if (!landingPage) {
+      // If no active page, get the most recent one
+      landingPage = await LandingPage.findOne().sort({ createdAt: -1 });
+    }
+    
+    if (!landingPage) {
+      // If no landing page exists at all, return empty structure
+      return res.json({
+        success: true,
+        blocks: [],
+        message: 'No landing page found'
+      });
+    }
+
+    res.json({
+      success: true,
+      blocks: landingPage.blocks || []
+    });
+  } catch (error) {
+    console.error('Get public landing page error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch landing page' 
+    });
+  }
 // ==================== STATIC FILES (PRODUCTION) ====================
 if (process.env.NODE_ENV === 'production') {
   // Serve static frontend files
@@ -122,16 +127,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// ==================== MODEL IMPORTS (MUST BE BEFORE ROUTES!) ====================
-// ✅ CRITICAL FIX: Load User model BEFORE loading routes
+// ==================== ROUTE IMPORTS & REGISTRATION ====================
 try {
-  const User = require('./models/User');
-  console.log('✅ User model loaded');
+  app.use('/api/mongo/auth', authRoutes); // User authentication
+  app.use('/api/mongo/student', authenticateToken, studentRoutes); // Student-specific routes
+  app.use('/api/mongo/school-admin', authenticateToken, schoolAdminRoutes); // School admin routes
+  app.use('/api/p2ladmin', p2lAdminRoutes); // P2lAdmin routes
+  app.use('/api/adaptive-quiz', adaptiveQuizRoutes); // Adaptive quiz routes
+  console.log('✅ Registered all routes successfully.');
 } catch (error) {
-  console.error('❌ Error loading User model:', error.message);
-  console.error('💡 Make sure ./models/User.js exists');
+  console.error('❌ Error registering routes:', error.message);
 }
 
+// ==================== STATIC FILE SERVING ====================
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
 // ==================== ROUTE IMPORTS ====================
 try {
   const mongoAuthRoutes = require('./routes/mongoAuthRoutes');
@@ -155,18 +168,17 @@ try {
   console.log('⚠️  Some routes may not be available');
 }
 
-// ==================== TEST ENDPOINTS ====================
+// ==================== TEST ENDPOINT ====================
 app.get('/api/test', (req, res) => {
   res.json({
-    success: true,
-    message: 'API is working!',
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    message: 'API working',
     environment: process.env.NODE_ENV || 'development',
+    db: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
   });
 });
 
+// ==================== ERROR HANDLING ====================
 app.get('/api/health', (req, res) => {
   const dbStatus = mongoose.connection.readyState;
   const statusText = ['Disconnected', 'Connected', 'Connecting', 'Disconnecting'][dbStatus];
@@ -215,23 +227,35 @@ if (process.env.NODE_ENV === 'production') {
 // ==================== ERROR HANDLERS ====================
 app.use((req, res) => {
   res.status(404).json({
-    success: false,
-    error: 'Route not found: ' + req.url,
-    available: ['/', '/api/test', '/api/health', '/api/auth/*', '/api/mongo/*']
+    error: `Route not found: ${req.originalUrl}`,
   });
 });
 
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    error: err.message || 'Internal server error'
-  });
-});
-
-// ==================== START SERVER ====================
+// ==================== SERVER STARTUP ====================
 const PORT = process.env.PORT || 5000;
 
+// Connect to MongoDB first, then start server
+async function startServer() {
+  try {
+    // MongoDB default serverSelectionTimeoutMS is 30000ms (30 seconds)
+    // We reduce it to 5000ms (5 seconds) for faster failure detection
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    console.log('✅ MongoDB Connected Successfully!');
+    console.log('📊 Database:', mongoose.connection.db.databaseName);
+    console.log('🏢 Host:', mongoose.connection.host);
+    
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log('✅ Ready to accept connections');
+    });
+  } catch (err) {
+    console.error('❌ MongoDB Connection Failed:', err.message);
+    console.error('❌ Server startup aborted');
+    process.exit(1);
+  }
+}
 const server = app.listen(PORT, () => {
   console.log('╔═══════════════════════════════════════════════╗');
   console.log('║          🚀 Play2Learn Server               ║');
@@ -255,4 +279,4 @@ process.on('SIGTERM', () => {
   });
 });
 
-module.exports = app;
+startServer();

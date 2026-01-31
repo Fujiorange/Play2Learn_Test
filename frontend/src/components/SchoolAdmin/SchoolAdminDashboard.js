@@ -38,7 +38,6 @@ export default function SchoolAdminDashboard() {
           total_classes: result.total_classes || 0,
           total_teachers: result.total_teachers || 0,
           total_parents: result.total_parents || 0,
-          license: result.license || null
         });
       } else {
         console.error('Failed to load dashboard stats:', result.error);
@@ -46,8 +45,6 @@ export default function SchoolAdminDashboard() {
           total_students: 0,
           total_classes: 0,
           total_teachers: 0,
-          total_parents: 0,
-          license: null
         });
       }
     } catch (error) {
@@ -56,8 +53,6 @@ export default function SchoolAdminDashboard() {
         total_students: 0,
         total_classes: 0,
         total_teachers: 0,
-        total_parents: 0,
-        license: null
       });
     } finally {
       setLoading(false);
@@ -153,77 +148,7 @@ export default function SchoolAdminDashboard() {
             <p style={styles.statLabel}>Total Teachers</p>
             <p style={styles.statValue}>{loading ? '...' : dashboardData?.total_teachers || 0}</p>
           </div>
-          <div style={styles.statCard}>
-            <div style={styles.statIcon}>👨‍👩‍👧</div>
-            <p style={styles.statLabel}>Total Parents</p>
-            <p style={styles.statValue}>{loading ? '...' : dashboardData?.total_parents || 0}</p>
-          </div>
         </div>
-
-        {/* License Info Card */}
-        {dashboardData?.license && (
-          <div style={{ 
-            background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', 
-            borderRadius: '16px', 
-            padding: '24px', 
-            color: 'white', 
-            marginBottom: '32px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>
-                📋 License: {dashboardData.license.plan?.toUpperCase() || 'STARTER'}
-              </h3>
-              <p style={{ margin: 0, opacity: 0.9, fontSize: '14px' }}>
-                Manage your school's user limits
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '32px' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
-                  {dashboardData.license.currentTeachers || 0}/{dashboardData.license.teacherLimit || 50}
-                </div>
-                <div style={{ fontSize: '12px', opacity: 0.9 }}>Teachers</div>
-                <div style={{ 
-                  width: '100%', 
-                  height: '4px', 
-                  background: 'rgba(255,255,255,0.3)', 
-                  borderRadius: '2px', 
-                  marginTop: '8px' 
-                }}>
-                  <div style={{ 
-                    width: `${Math.min(100, ((dashboardData.license.currentTeachers || 0) / (dashboardData.license.teacherLimit || 50)) * 100)}%`, 
-                    height: '100%', 
-                    background: 'white', 
-                    borderRadius: '2px' 
-                  }} />
-                </div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
-                  {dashboardData.license.currentStudents || 0}/{dashboardData.license.studentLimit || 500}
-                </div>
-                <div style={{ fontSize: '12px', opacity: 0.9 }}>Students</div>
-                <div style={{ 
-                  width: '100%', 
-                  height: '4px', 
-                  background: 'rgba(255,255,255,0.3)', 
-                  borderRadius: '2px', 
-                  marginTop: '8px' 
-                }}>
-                  <div style={{ 
-                    width: `${Math.min(100, ((dashboardData.license.currentStudents || 0) / (dashboardData.license.studentLimit || 500)) * 100)}%`, 
-                    height: '100%', 
-                    background: 'white', 
-                    borderRadius: '2px' 
-                  }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div style={styles.sectionsGrid}>
           {/* Account Management */}
@@ -342,81 +267,6 @@ export default function SchoolAdminDashboard() {
                 onClick={() => handleMenuClick('/school-admin/points')}
               >
                 <span>💰 Points & Shop</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Analytics */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>📊</span>
-              <h2 style={styles.sectionTitle}>Analytics</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'analytics' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('analytics')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/analytics')}
-              >
-                <span>📈 Performance Dashboard</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Communication */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>📢</span>
-              <h2 style={styles.sectionTitle}>Communication</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'announcements' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('announcements')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/announcements')}
-              >
-                <span>📢 Announcements</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'maintenance' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('maintenance')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/maintenance')}
-              >
-                <span>🔧 System Maintenance</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Support */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>📚</span>
-              <h2 style={styles.sectionTitle}>Support</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'support-tickets' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('support-tickets')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/support-tickets')}
-              >
-                <span>🎫 Support Tickets</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'knowledge-base' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('knowledge-base')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/knowledge-base')}
-              >
-                <span>📚 Knowledge Base</span>
                 <span style={styles.arrow}>→</span>
               </li>
             </ul>

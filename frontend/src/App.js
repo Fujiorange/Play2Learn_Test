@@ -1,22 +1,15 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
-// Landing Page Components
-import Header from './components/Header/Header';
-import Hero from './components/Hero/Hero';
-import Features from './components/Feature/Features';
-import About from './components/About/About';
-import Roadmap from './components/Roadmap/Roadmap';
-import Testimonials from './components/Testimonials/Testimonials';
-import Pricing from './components/Pricing/Pricing';
-import Contact from './components/Contact/Contact';
-import Footer from './components/Footer/Footer';
+// Dynamic Landing Page Component
+import DynamicLandingPage from './components/DynamicLandingPage/DynamicLandingPage';
 
 // Auth Components
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
+import RegisterAdminPage from './components/RegisterAdminPage';
 
 // Teacher Components
 import TeacherDashboard from './components/Teacher/TeacherDashboard';
@@ -37,7 +30,6 @@ import Chat from './components/Teacher/Chat';
 import WriteTestimonial from './components/Teacher/WriteTestimonial';
 import TeacherCreateTicket from './components/Teacher/CreateTicket';
 import TeacherTrackTicket from './components/Teacher/TrackTicket';
-import TeacherPointsManagement from './components/Teacher/TeacherPointsManagement';
 
 // Student Components
 import StudentDashboard from './components/Student/StudentDashboard';
@@ -58,7 +50,6 @@ import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
 import StudentCreateSupportTicket from './components/Student/CreateSupportTicket';
 import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
-import StudentBadgesShop from './components/Student/StudentBadgesShop';
 
 // ⭐ NEW IMPORT - Student Announcements
 import StudentViewAnnouncements from './components/Student/ViewAnnouncements';
@@ -96,11 +87,20 @@ import ResetPassword from './components/SchoolAdmin/ResetPassword';
 import DisableUser from './components/SchoolAdmin/DisableUser';
 import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
 import PointsManagement from './components/SchoolAdmin/PointsManagement';
-import AnalyticsDashboard from './components/SchoolAdmin/AnalyticsDashboard';
-import Announcements from './components/SchoolAdmin/Announcements';
-import MaintenanceMessages from './components/SchoolAdmin/MaintenanceMessages';
-import KnowledgeBase from './components/SchoolAdmin/KnowledgeBase';
-import SupportTicketManagement from './components/SchoolAdmin/SupportTicketManagement';
+
+// P2LAdmin Components
+import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
+import SchoolManagement from './components/P2LAdmin/SchoolManagement';
+import SchoolAdminManagement from './components/P2LAdmin/SchoolAdminManagement';
+import QuestionBank from './components/P2LAdmin/QuestionBank';
+import QuizManager from './components/P2LAdmin/QuizManager';
+import AdaptiveQuizCreator from './components/P2LAdmin/AdaptiveQuizCreator';
+import LandingPageManager from './components/P2LAdmin/LandingPageManager';
+import HealthCheck from './components/P2LAdmin/HealthCheck';
+
+// Student Adaptive Quiz Components
+import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
+import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 
 function App() {
   return (
@@ -110,24 +110,13 @@ function App() {
           {/* ========== LANDING PAGE ========== */}
           <Route
             path="/"
-            element={
-              <>
-                <Header />
-                <Hero />
-                <Features />
-                <About />
-                <Roadmap />
-                <Testimonials />
-                <Pricing />
-                <Contact />
-                <Footer />
-              </>
-            }
+            element={<DynamicLandingPage />}
           />
 
           {/* ========== AUTHENTICATION ========== */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register_admin" element={<RegisterAdminPage />} />
 
           {/* ========== TEACHER ROUTES ========== */}
           <Route path="/teacher" element={<TeacherDashboard />} />
@@ -148,7 +137,6 @@ function App() {
           <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
           <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
           <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
-          <Route path="/teacher/points" element={<TeacherPointsManagement />} />
 
           {/* ========== STUDENT ROUTES ========== */}
           <Route path="/student" element={<StudentDashboard />} />
@@ -160,8 +148,6 @@ function App() {
           <Route path="/student/leaderboard" element={<ViewLeaderboard />} />
           <Route path="/student/skills" element={<DisplaySkillMatrix />} />
           <Route path="/student/subjects" element={<ViewDetailedSubjectInfo />} />
-          <Route path="/student/badges" element={<StudentBadgesShop />} />
-          <Route path="/student/shop" element={<StudentBadgesShop />} />
 
           {/* ⭐ NEW ROUTE - Student Announcements */}
           <Route path="/student/announcements" element={<StudentViewAnnouncements />} />
@@ -175,6 +161,10 @@ function App() {
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
           <Route path="/student/quiz/take" element={<TakeQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
+
+          {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
+          <Route path="/student/adaptive-quizzes" element={<AdaptiveQuizzes />} />
+          <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
 
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
@@ -216,11 +206,18 @@ function App() {
           <Route path="/school-admin/users/disable" element={<DisableUser />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
-          <Route path="/school-admin/analytics" element={<AnalyticsDashboard />} />
-          <Route path="/school-admin/announcements" element={<Announcements />} />
-          <Route path="/school-admin/maintenance" element={<MaintenanceMessages />} />
-          <Route path="/school-admin/knowledge-base" element={<KnowledgeBase />} />
-          <Route path="/school-admin/support-tickets" element={<SupportTicketManagement />} />
+
+          {/* ========== P2LADMIN ROUTES ========== */}
+          {/* Redirect /platform-admin to /p2ladmin/dashboard */}
+          <Route path="/platform-admin" element={<Navigate to="/p2ladmin/dashboard" replace />} />
+          <Route path="/p2ladmin/dashboard" element={<P2LAdminDashboard />} />
+          <Route path="/p2ladmin/schools" element={<SchoolManagement />} />
+          <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
+          <Route path="/p2ladmin/questions" element={<QuestionBank />} />
+          <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
+          <Route path="/p2ladmin/quizzes/create-adaptive" element={<AdaptiveQuizCreator />} />
+          <Route path="/p2ladmin/landing-page" element={<LandingPageManager />} />
+          <Route path="/p2ladmin/health" element={<HealthCheck />} />
 
         </Routes>
       </div>

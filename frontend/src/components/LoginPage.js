@@ -1,20 +1,43 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
+import ChangePassword from './Auth/ChangePassword';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+
+  // Helper function to normalize and route based on role
+  const navigateByRole = (role) => {
+    const normalizedRole = role.toLowerCase().replace(/[\s-]/g, '');
+    
+    const roleRoutes = {
+      'platformadmin': '/platform-admin',
+      'p2ladmin': '/platform-admin',
+      'schooladmin': '/school-admin',
+      'teacher': '/teacher',
+      'student': '/student',
+      'parent': '/parent'
+    };
+    
+    const route = roleRoutes[normalizedRole];
+    if (route) {
+      navigate(route);
+    } else {
+      console.log('⚠️ Unknown role:', role);
+      navigate('/login');
+    }
+  };
 
   const handleSubmit = async () => {
     setError('');
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
@@ -24,7 +47,7 @@ export default function LoginPage() {
     try {
       console.log('📤 Attempting login...');
       
-      const result = await authService.login(email, password, role);
+      const result = await authService.login(email, password);
 
       console.log('📥 Login result:', result);
 
@@ -32,25 +55,15 @@ export default function LoginPage() {
         console.log('✅ Login successful!');
         console.log('👤 User role:', result.user.role);
         
-        // Redirect based on user role (case-insensitive)
-        const userRole = result.user.role.toLowerCase();
-        
-        console.log('🔀 Navigating to:', userRole);
-        
-        if (userRole === 'platform-admin') {
-          navigate('/platform-admin');
-        } else if (userRole === 'school-admin') {
-          navigate('/school-admin');
-        } else if (userRole === 'teacher') {
-          navigate('/teacher');
-        } else if (userRole === 'student') {
-          navigate('/student');
-        } else if (userRole === 'parent') {
-          navigate('/parent');
-        } else {
-          console.log('⚠️ Unknown role:', userRole);
-          navigate('/login');
+        // Check if password change is required
+        if (result.user.requirePasswordChange) {
+          console.log('🔒 Password change required');
+          setShowPasswordChange(true);
+          setLoading(false);
+          return;
         }
+        
+        navigateByRole(result.user.role);
       } else {
         console.log('❌ Login failed:', result.error);
         setError(result.error || 'Login failed');
@@ -60,6 +73,14 @@ export default function LoginPage() {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    const user = authService.getCurrentUser();
+    if (user) {
+      setShowPasswordChange(false);
+      navigateByRole(user.role);
     }
   };
 
@@ -279,8 +300,17 @@ export default function LoginPage() {
 
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [roleFocused, setRoleFocused] = useState(false);
   const [buttonHovered, setButtonHovered] = useState(false);
+
+  // Show password change modal if needed
+  if (showPasswordChange) {
+    return (
+      <ChangePassword 
+        requireChange={true}
+        onSuccess={handlePasswordChangeSuccess}
+      />
+    );
+  }
 
   return (
     <div style={styles.container}>
@@ -293,7 +323,7 @@ export default function LoginPage() {
 
           <h1 style={styles.title}>Welcome back!</h1>
           <p style={styles.subtitle}>
-            Sign in to continue your personalised learning journey.
+            Sign in with your email and password to access your account.
           </p>
 
           <div>
@@ -352,28 +382,6 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Login As</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                onFocus={() => setRoleFocused(true)}
-                onBlur={() => setRoleFocused(false)}
-                disabled={loading}
-                style={{
-                  ...styles.select,
-                  ...(roleFocused ? styles.inputFocus : {}),
-                }}
-              >
-                <option value="">Select your role</option>
-                <option value="student">Student</option>
-                <option value="parent">Parent</option>
-                <option value="teacher">Teacher</option>
-                <option value="school-admin">School Admin</option>
-                <option value="platform-admin">Platform Admin</option>
-              </select>
             </div>
 
             <button
