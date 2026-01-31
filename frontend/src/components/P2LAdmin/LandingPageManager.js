@@ -1040,13 +1040,26 @@ function LandingPageManager() {
         );
       
       case 'features':
+        const previewFeatures = (block.custom_data && block.custom_data.features) || [];
         return (
           <section className="preview-features">
             <div className="preview-container">
               <h2>{block.title || 'Features'}</h2>
-              <div className="preview-features-content">
-                <p>{block.content || 'Features content will appear here'}</p>
-              </div>
+              {previewFeatures.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginTop: '24px' }}>
+                  {previewFeatures.map((feature, index) => (
+                    <div key={index} style={{ padding: '24px', background: '#f9fafb', borderRadius: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>{feature.icon || '🎯'}</div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#111827' }}>{feature.title}</h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5' }}>{feature.description}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="preview-features-content">
+                  <p>{block.content || 'Features content will appear here'}</p>
+                </div>
+              )}
             </div>
           </section>
         );
@@ -1112,13 +1125,131 @@ function LandingPageManager() {
         );
       
       case 'pricing':
+        const previewPlans = (block.custom_data && block.custom_data.plans) || [];
         return (
           <section className="preview-pricing">
             <div className="preview-container">
               <h2>{block.title || 'Pricing'}</h2>
-              <div className="preview-pricing-content">
-                <p>{block.content || 'Pricing information will appear here'}</p>
-              </div>
+              {previewPlans.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginTop: '32px' }}>
+                  {previewPlans.map((plan, index) => (
+                    <div key={index} style={{ 
+                      padding: '32px 24px', 
+                      background: plan.popular ? '#eff6ff' : '#f9fafb', 
+                      borderRadius: '12px',
+                      border: plan.popular ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                      position: 'relative'
+                    }}>
+                      {plan.popular && (
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '-12px', 
+                          left: '50%', 
+                          transform: 'translateX(-50%)', 
+                          background: '#3b82f6', 
+                          color: 'white', 
+                          padding: '4px 16px', 
+                          borderRadius: '12px', 
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}>
+                          Most Popular
+                        </div>
+                      )}
+                      <h3 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px', color: '#111827' }}>{plan.name}</h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px' }}>{plan.description}</p>
+                      <div style={{ marginBottom: '16px' }}>
+                        <span style={{ fontSize: '36px', fontWeight: '800', color: '#111827' }}>${plan.price?.monthly || 0}</span>
+                        <span style={{ fontSize: '16px', color: '#6b7280' }}>/month</span>
+                        {plan.price?.yearly && (
+                          <div style={{ fontSize: '14px', color: '#059669', marginTop: '4px' }}>
+                            or ${plan.price.yearly}/year (save ${(plan.price.monthly * 12 - plan.price.yearly).toFixed(0)})
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ padding: '12px', background: 'white', borderRadius: '8px', marginBottom: '16px' }}>
+                        <div style={{ fontSize: '14px', color: '#374151' }}>Up to {plan.teachers} teachers</div>
+                        <div style={{ fontSize: '14px', color: '#374151', marginTop: '4px' }}>Up to {plan.students} students</div>
+                      </div>
+                      {plan.features && plan.features.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                          {plan.features.map((feature, fIdx) => (
+                            <li key={fIdx} style={{ fontSize: '14px', color: '#374151', marginBottom: '8px', paddingLeft: '24px', position: 'relative' }}>
+                              <span style={{ position: 'absolute', left: 0, color: '#10b981' }}>✓</span>
+                              {feature}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="preview-pricing-content">
+                  <p>{block.content || 'Pricing information will appear here'}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      
+      case 'roadmap':
+        const roadmapSteps = (block.custom_data && block.custom_data.steps) || [];
+        return (
+          <section className="preview-roadmap">
+            <div className="preview-container">
+              <h2>{block.title || 'Roadmap'}</h2>
+              {roadmapSteps.length > 0 ? (
+                <div style={{ marginTop: '32px', position: 'relative', paddingLeft: '40px' }}>
+                  {roadmapSteps.map((step, index) => (
+                    <div key={index} style={{ 
+                      marginBottom: '32px', 
+                      position: 'relative',
+                      paddingLeft: '40px',
+                      borderLeft: index < roadmapSteps.length - 1 ? '2px solid #e5e7eb' : 'none'
+                    }}>
+                      <div style={{ 
+                        position: 'absolute', 
+                        left: '-20px', 
+                        top: '0',
+                        width: '40px', 
+                        height: '40px', 
+                        background: '#3b82f6', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: '700',
+                        fontSize: '16px',
+                        border: '3px solid white',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}>
+                        {step.step || index + 1}
+                      </div>
+                      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#111827' }}>{step.title}</h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.5' }}>{step.description}</p>
+                      {step.duration && (
+                        <span style={{ 
+                          display: 'inline-block', 
+                          padding: '4px 12px', 
+                          background: '#dbeafe', 
+                          color: '#1e40af', 
+                          borderRadius: '12px', 
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}>
+                          ⏱️ {step.duration}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ textAlign: 'center', color: '#6b7280', marginTop: '24px' }}>
+                  {block.content || 'Roadmap steps will appear here'}
+                </p>
+              )}
             </div>
           </section>
         );
