@@ -140,7 +140,7 @@ export default function StudentDashboard() {
       icon: '👤',
       action: () => navigate('/student/profile'),
     },
-    // 2️⃣ View Results
+    // 2️⃣ Adaptive Quizzes
     {
       id: 'adaptive-quiz',
       title: 'Adaptive Quizzes',
@@ -148,12 +148,8 @@ export default function StudentDashboard() {
       icon: '🎲',
       action: () => navigate('/student/adaptive-quizzes'),
     },
+    // 2️⃣a View Results
     {
-      id: 'skills',
-      title: 'Skill Matrix',
-      description: 'See your unlocked math skills',
-      icon: '📊',
-      action: () => navigate('/student/skills'),
       id: 'results',
       title: 'View Results',
       description: 'Review your quiz results and history',
@@ -233,10 +229,6 @@ export default function StudentDashboard() {
       action: () => navigate('/student/shop'),
     },
     // 1️⃣2️⃣ My Badges
-    {
-      id: 'badges',
-      title: 'My Badges',
-      description: 'View your earned achievement badges',
     {
       id: 'badges',
       title: 'Badges & Shop',
