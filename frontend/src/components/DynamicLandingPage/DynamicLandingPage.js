@@ -208,7 +208,7 @@ const DynamicLandingPage = () => {
           <section key={index} id="testimonials" className="section testimonials dynamic-testimonials">
             <div className="container">
               <h2 className="section-title">{block.title || 'Testimonials'}</h2>
-              <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '24px' }}>{block.content}</p>
+              {block.content && <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '24px' }}>{block.content}</p>}
               {testimonials.length > 0 && (
                 <div className="testimonials-grid">
                   {testimonials.map((testimonial, tIdx) => (
