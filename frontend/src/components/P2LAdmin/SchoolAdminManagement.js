@@ -1,7 +1,7 @@
 // School Admin Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getSchools, createSchoolAdmins, getSchoolAdmins } from '../../services/p2lAdminService';
+import { getSchools, createSchoolAdmins, getSchoolAdmins, updateSchoolAdmin, deleteSchoolAdmin } from '../../services/p2lAdminService';
 import './SchoolAdminManagement.css';
 
 function SchoolAdminManagement() {
@@ -13,6 +13,8 @@ function SchoolAdminManagement() {
   const [adminForms, setAdminForms] = useState([{ name: '', email: '', contact: '' }]);
   const [createdAdmins, setCreatedAdmins] = useState([]);
   const [viewedPasswords, setViewedPasswords] = useState({});
+  const [editingAdmin, setEditingAdmin] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '', contact: '', accountActive: true });
 
   useEffect(() => {
     fetchSchools();
@@ -104,6 +106,53 @@ function SchoolAdminManagement() {
     setViewedPasswords(prev => ({ ...prev, [adminId]: true }));
   };
 
+  const handleEditAdmin = (admin) => {
+    setEditingAdmin(admin);
+    setEditForm({
+      name: admin.name || '',
+      email: admin.email || '',
+      contact: admin.contact || '',
+      accountActive: admin.accountActive !== undefined ? admin.accountActive : true
+    });
+  };
+
+  const handleEditFormChange = (field, value) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleUpdateAdmin = async (e) => {
+    e.preventDefault();
+    try {
+      await updateSchoolAdmin(editingAdmin._id, editForm);
+      alert('Admin updated successfully');
+      setEditingAdmin(null);
+      fetchSchoolAdmins(selectedSchool);
+    } catch (error) {
+      console.error('Failed to update admin:', error);
+      alert(error.message || 'Failed to update admin');
+    }
+  };
+
+  const handleDeleteAdmin = async (admin) => {
+    if (!window.confirm(`Are you sure you want to delete admin ${admin.name}? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      await deleteSchoolAdmin(admin._id);
+      alert('Admin deleted successfully');
+      fetchSchoolAdmins(selectedSchool);
+    } catch (error) {
+      console.error('Failed to delete admin:', error);
+      alert(error.message || 'Failed to delete admin');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingAdmin(null);
+    setEditForm({ name: '', email: '', contact: '', accountActive: true });
+  };
+
   if (loading) {
     return <div className="loading">Loading...</div>;
   }
@@ -157,6 +206,20 @@ function SchoolAdminManagement() {
                     <p className="created-date">
                       Created: {new Date(admin.createdAt).toLocaleDateString()}
                     </p>
+                    <div className="admin-card-actions">
+                      <button 
+                        onClick={() => handleEditAdmin(admin)}
+                        className="btn-edit"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteAdmin(admin)}
+                        className="btn-delete"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -269,6 +332,64 @@ function SchoolAdminManagement() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {editingAdmin && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2>Edit School Admin</h2>
+            <form onSubmit={handleUpdateAdmin}>
+              <div className="form-group">
+                <label>Name *</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => handleEditFormChange('name', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => handleEditFormChange('email', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Contact</label>
+                <input
+                  type="text"
+                  value={editForm.contact}
+                  onChange={(e) => handleEditFormChange('contact', e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={editForm.accountActive}
+                    onChange={(e) => handleEditFormChange('accountActive', e.target.checked)}
+                  />
+                  {' '}Account Active
+                </label>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="btn-submit">
+                  Update Admin
+                </button>
+                <button type="button" onClick={cancelEdit} className="btn-cancel">
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

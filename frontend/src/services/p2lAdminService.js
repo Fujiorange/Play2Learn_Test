@@ -144,6 +144,19 @@ export const createSchoolAdmins = async (schoolId, admins) => {
   });
 };
 
+export const updateSchoolAdmin = async (id, adminData) => {
+  return apiCall(`/api/p2ladmin/school-admins/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(adminData),
+  });
+};
+
+export const deleteSchoolAdmin = async (id) => {
+  return apiCall(`/api/p2ladmin/school-admins/${id}`, {
+    method: 'DELETE',
+  });
+};
+
 // ==================== QUESTIONS ====================
 export const getQuestions = async (filters = {}) => {
   const queryString = new URLSearchParams(filters).toString();
@@ -303,6 +316,8 @@ export default {
   deleteSchool,
   getSchoolAdmins,
   createSchoolAdmins,
+  updateSchoolAdmin,
+  deleteSchoolAdmin,
   getQuestions,
   getQuestion,
   createQuestion,

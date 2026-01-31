@@ -526,6 +526,109 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Update school admin
+router.put('/school-admins/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, contact, accountActive } = req.body;
+    
+    // Find the admin
+    const admin = await User.findById(id);
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Admin not found' 
+      });
+    }
+    
+    // Ensure this is a school admin
+    if (admin.role !== 'School Admin') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'This user is not a school admin' 
+      });
+    }
+    
+    // Check if email is being changed and if new email exists
+    if (email && email.toLowerCase() !== admin.email) {
+      const existingUser = await User.findOne({ 
+        email: email.toLowerCase(),
+        _id: { $ne: id }
+      });
+      if (existingUser) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Email already in use' 
+        });
+      }
+      admin.email = email.toLowerCase();
+    }
+    
+    // Update fields
+    if (name) admin.name = name;
+    if (contact !== undefined) admin.contact = contact;
+    if (accountActive !== undefined) admin.accountActive = accountActive;
+    
+    await admin.save();
+    
+    res.json({
+      success: true,
+      message: 'School admin updated successfully',
+      data: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        contact: admin.contact,
+        accountActive: admin.accountActive
+      }
+    });
+  } catch (error) {
+    console.error('Update school admin error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update school admin' 
+    });
+  }
+});
+
+// Delete school admin
+router.delete('/school-admins/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the admin
+    const admin = await User.findById(id);
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Admin not found' 
+      });
+    }
+    
+    // Ensure this is a school admin
+    if (admin.role !== 'School Admin') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'This user is not a school admin' 
+      });
+    }
+    
+    // Delete the admin
+    await User.findByIdAndDelete(id);
+    
+    res.json({
+      success: true,
+      message: 'School admin deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete school admin error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete school admin' 
+    });
+  }
+});
+
 // ==================== QUESTION MANAGEMENT ROUTES ====================
 
 // Get all questions
