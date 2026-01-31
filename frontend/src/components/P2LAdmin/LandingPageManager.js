@@ -1077,7 +1077,6 @@ function LandingPageManager() {
         return (
           <section className="section about dynamic-about">
             <div className="container">
-              <h2>{block.title || 'About Us'}</h2>
               <h2 className="section-title">{block.title || 'About Us'}</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
                 {aboutData.mission && (
