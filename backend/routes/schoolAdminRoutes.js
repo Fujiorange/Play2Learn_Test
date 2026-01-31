@@ -163,16 +163,32 @@ const canModifyUser = async (db, userId) => {
 router.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // ========== DEBUG LOGGING ==========
+    console.log('📝 PUT /users/:id called');
+    console.log('   User ID:', req.params.id);
+    console.log('   Request body:', JSON.stringify(req.body));
+    
     const check = await canModifyUser(db, req.params.id);
-    if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
+    if (!check.allowed) {
+      console.log('   ❌ Not allowed:', check.error);
+      return res.status(403).json({ success: false, error: check.error });
+    }
     
     const updates = { ...req.body, updatedAt: new Date() };
     delete updates._id; delete updates.password; delete updates.role;
     
-    const objectId = toObjectId(req.params.id);
-    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    // ========== DEBUG: Show what we're saving ==========
+    console.log('   Updates to save:', JSON.stringify(updates));
     
-    await db.collection('users').updateOne({ _id: objectId }, { $set: updates });
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) {
+      console.log('   ❌ Invalid ObjectId');
+      return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    }
+    
+    const result = await db.collection('users').updateOne({ _id: objectId }, { $set: updates });
+    console.log('   ✅ Update result: matchedCount=' + result.matchedCount + ', modifiedCount=' + result.modifiedCount);
     
     // SYNC to students collection
     if (check.user.role?.toLowerCase() === 'student') {
@@ -256,7 +272,19 @@ router.get('/classes', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
     const classes = await db.collection('classes').find({}).sort({ name: 1 }).toArray();
+    
+    // ========== FIX: Remove duplicates by name ==========
+    const seenNames = new Set();
+    const uniqueClasses = [];
+    const duplicateIds = [];
+    
     for (let cls of classes) {
+      if (seenNames.has(cls.name)) {
+        duplicateIds.push(cls._id);
+        continue;
+      }
+      seenNames.add(cls.name);
+      
       cls.studentCount = await db.collection('users').countDocuments({ class: cls.name, role: { $in: ['Student', 'student'] } });
       if (cls.teacherId) {
         try {
@@ -266,8 +294,17 @@ router.get('/classes', authenticateToken, async (req, res) => {
       } else {
         cls.teacherName = 'Not assigned';
       }
+      uniqueClasses.push(cls);
     }
-    res.json({ success: true, classes });
+    
+    // Clean up duplicates in background
+    if (duplicateIds.length > 0) {
+      db.collection('classes').deleteMany({ _id: { $in: duplicateIds } })
+        .then(() => console.log(`🧹 Cleaned up ${duplicateIds.length} duplicate classes`))
+        .catch(err => console.error('Cleanup error:', err));
+    }
+    
+    res.json({ success: true, classes: uniqueClasses });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to load classes' });
   }
@@ -565,6 +602,32 @@ router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), asyn
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path).pipe(csv()).on('data', (row) => rows.push(row)).on('end', resolve).on('error', reject);
     });
+    
+    // ========== FIX: Auto-create classes without duplicates ==========
+    const classesToCreate = new Set();
+    for (const row of rows) {
+      const className = (row.class || row.Class || '').trim();
+      if (className) classesToCreate.add(className);
+    }
+    
+    // Create classes that don't exist
+    for (const className of classesToCreate) {
+      const existing = await db.collection('classes').findOne({ name: className });
+      if (!existing) {
+        await db.collection('classes').insertOne({
+          name: className,
+          grade: 'Primary 1',
+          subject: 'Mathematics',
+          teacherId: null,
+          teacherName: null,
+          studentCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        console.log(`✅ Auto-created class: ${className}`);
+      }
+    }
+    
     for (const row of rows) {
       try {
         const email = (row.email || row.Email || '').toLowerCase().trim();

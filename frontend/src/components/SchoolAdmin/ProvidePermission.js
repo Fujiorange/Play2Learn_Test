@@ -65,9 +65,11 @@ export default function ProvidePermission() {
   });
 
   const handleEditClick = (user) => {
+    console.log('✏️ Editing user:', user.email, 'ID:', user._id || user.id);
+    console.log('✏️ Current permissions from API:', user.permissions);
     setEditingUser(user);
     // Load existing permissions or set defaults
-    setPermissions(user.permissions || {
+    const initialPerms = user.permissions || {
       canAccessPoints: true,
       canAccessBadges: true,
       canAccessShop: true,
@@ -75,11 +77,14 @@ export default function ProvidePermission() {
       canTakeQuizzes: true,
       canViewProgress: true,
       canCreateTickets: true
-    });
+    };
+    console.log('✏️ Setting initial permissions:', initialPerms);
+    setPermissions(initialPerms);
     setMessage({ type: '', text: '' });
   };
 
   const handlePermissionToggle = (key) => {
+    console.log('🔄 Toggling:', key, 'from', permissions[key], 'to', !permissions[key]);
     setPermissions(prev => ({
       ...prev,
       [key]: !prev[key]
@@ -87,11 +92,14 @@ export default function ProvidePermission() {
   };
 
   const handleSave = async () => {
+    console.log('💾 SAVING permissions:', permissions);
+    console.log('💾 For user ID:', editingUser._id || editingUser.id);
     setSaving(true);
     try {
       const result = await schoolAdminService.updateUser(editingUser._id || editingUser.id, {
         permissions
       });
+      console.log('💾 Save result:', result);
 
       if (result.success) {
         setUsers(users.map(u => 
@@ -106,6 +114,7 @@ export default function ProvidePermission() {
         setMessage({ type: 'error', text: result.error || 'Failed to update permissions' });
       }
     } catch (err) {
+      console.error('💾 Save error:', err);
       setMessage({ type: 'error', text: 'Failed to update permissions' });
     } finally {
       setSaving(false);
