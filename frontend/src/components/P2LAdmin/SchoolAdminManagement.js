@@ -134,7 +134,7 @@ function SchoolAdminManagement() {
 
   const handleViewTempPasswordFromList = (adminId) => {
     if (!tempPasswords[adminId]) {
-      alert('Temporary password is no longer available.');
+      alert('Temporary password is no longer available. It may have been viewed previously or the browser session may have expired.');
       return;
     }
     
