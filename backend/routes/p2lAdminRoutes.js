@@ -694,7 +694,7 @@ router.get('/questions-subjects', authenticateP2LAdmin, async (req, res) => {
     const subjects = await Question.distinct('subject');
     res.json({
       success: true,
-      data: subjects.filter(s => s).sort() // Filter out empty/null and sort alphabetically
+      data: subjects.filter(s => s && s.trim()).sort() // Filter out empty/null values and sort alphabetically
     });
   } catch (error) {
     console.error('Get subjects error:', error);

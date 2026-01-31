@@ -28,8 +28,11 @@ function QuestionBank() {
 
   useEffect(() => {
     fetchQuestions();
-    fetchSubjects();
   }, [filters]);
+
+  useEffect(() => {
+    fetchSubjects();
+  }, []);
 
   const fetchQuestions = async () => {
     try {
