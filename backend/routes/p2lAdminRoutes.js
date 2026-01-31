@@ -417,6 +417,119 @@ router.post('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Create multiple school admins (batch creation)
+router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { schoolId, admins } = req.body;
+    
+    // Validate required fields
+    if (!schoolId || !admins || !Array.isArray(admins) || admins.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School ID and admins array are required' 
+      });
+    }
+    
+    // Validate school exists
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+
+    const created = [];
+    const errors = [];
+
+    // Process each admin
+    for (const adminData of admins) {
+      try {
+        const { name, email, contact } = adminData;
+        
+        // Validate email
+        if (!email) {
+          errors.push({
+            email: email || 'N/A',
+            name: name || 'N/A',
+            success: false,
+            error: 'Email is required'
+          });
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+          errors.push({
+            email: email,
+            name: name || email.split('@')[0],
+            success: false,
+            error: 'Email already registered'
+          });
+          continue;
+        }
+
+        // Use fixed default password Admin@123
+        const defaultPassword = 'Admin@123';
+        
+        // Hash password
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        
+        // Create school admin
+        const admin = new User({
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          password: hashedPassword,
+          role: 'School Admin',
+          schoolId: schoolId,
+          contact: contact || '',
+          emailVerified: true,
+          accountActive: true,
+          requirePasswordChange: true  // Force password change on first login
+        });
+
+        await admin.save();
+        
+        // Send welcome email with credentials
+        try {
+          await sendSchoolAdminWelcomeEmail(admin, defaultPassword, school.organization_name);
+        } catch (emailError) {
+          console.error('Email sending error:', emailError);
+          // Continue even if email fails - admin is still created
+        }
+
+        created.push({
+          email: admin.email,
+          name: admin.name,
+          success: true,
+          tempPassword: defaultPassword  // Return default password
+        });
+      } catch (error) {
+        console.error('Error creating admin:', error);
+        errors.push({
+          email: adminData.email || 'N/A',
+          name: adminData.name || 'N/A',
+          success: false,
+          error: error.message || 'Failed to create admin'
+        });
+      }
+    }
+
+    res.status(created.length > 0 ? 201 : 400).json({
+      success: created.length > 0,
+      message: `Created ${created.length} admin(s), ${errors.length} failed`,
+      created: [...created, ...errors]
+    });
+  } catch (error) {
+    console.error('Batch create school admins error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create school admins' 
+    });
+  }
+});
+
 // ==================== QUESTION MANAGEMENT ROUTES ====================
 
 // Get all questions
