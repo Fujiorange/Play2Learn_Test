@@ -24,7 +24,7 @@ export default function ManualAddUser() {
     }
 
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') {
+    if (currentUser.role !== 'School Admin') {
       navigate('/login');
       return;
     }

@@ -1,7 +1,7 @@
 // School Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getSchools, createSchool, updateSchool, deleteSchool } from '../../services/p2lAdminService';
+import { getSchools, createSchool, updateSchool, deleteSchool, getLandingPagePricingPlans } from '../../services/p2lAdminService';
 import LICENSE_PLANS from '../../constants/licensePlans';
 import './SchoolManagement.css';
 
@@ -10,15 +10,18 @@ function SchoolManagement() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingSchool, setEditingSchool] = useState(null);
+  const [pricingPlans, setPricingPlans] = useState([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
   const [formData, setFormData] = useState({
     organization_name: '',
     organization_type: 'school',
-    plan: 'starter',
+    plan: '',
     contact: ''
   });
 
   useEffect(() => {
     fetchSchools();
+    fetchPricingPlans();
   }, []);
 
   const fetchSchools = async () => {
@@ -33,6 +36,45 @@ function SchoolManagement() {
     }
   };
 
+  const fetchPricingPlans = async () => {
+    setLoadingPlans(true);
+    try {
+      const response = await getLandingPagePricingPlans();
+      if (response.success && response.plans && response.plans.length > 0) {
+        setPricingPlans(response.plans);
+        // Set default plan if not already set
+        if (!formData.plan && response.plans.length > 0) {
+          setFormData(prev => ({ ...prev, plan: response.plans[0].id }));
+        }
+      } else {
+        // Use fallback plans
+        setFallbackPlans();
+      }
+    } catch (error) {
+      console.error('Failed to fetch pricing plans:', error);
+      // Use fallback plans
+      setFallbackPlans();
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  // Helper function to use fallback pricing plans
+  const setFallbackPlans = () => {
+    console.warn('No pricing plans found in landing page, using fallback constants');
+    const fallbackPlans = Object.entries(LICENSE_PLANS).map(([key, value]) => ({
+      id: key,
+      name: value.name,
+      teacher_limit: value.teacher_limit,
+      student_limit: value.student_limit,
+      price: value.price
+    }));
+    setPricingPlans(fallbackPlans);
+    if (!formData.plan) {
+      setFormData(prev => ({ ...prev, plan: 'starter' }));
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -41,9 +83,9 @@ function SchoolManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Get plan_info based on selected plan
-      const planInfo = LICENSE_PLANS[formData.plan];
-      if (!planInfo) {
+      // Get plan_info based on selected plan from landing page pricing
+      const selectedPlan = pricingPlans.find(p => p.id === formData.plan);
+      if (!selectedPlan) {
         console.error('Invalid plan selected:', formData.plan);
         alert('Please select a valid subscription plan');
         return;
@@ -53,9 +95,9 @@ function SchoolManagement() {
       const schoolData = {
         ...formData,
         plan_info: {
-          teacher_limit: planInfo.teacher_limit,
-          student_limit: planInfo.student_limit,
-          price: planInfo.price
+          teacher_limit: selectedPlan.teacher_limit,
+          student_limit: selectedPlan.student_limit,
+          price: selectedPlan.price
         }
       };
 
@@ -71,7 +113,7 @@ function SchoolManagement() {
       setFormData({
         organization_name: '',
         organization_type: 'school',
-        plan: 'starter',
+        plan: pricingPlans.length > 0 ? pricingPlans[0].id : '',
         contact: ''
       });
       fetchSchools();
@@ -112,7 +154,7 @@ function SchoolManagement() {
     setFormData({
       organization_name: '',
       organization_type: 'school',
-      plan: 'starter',
+      plan: pricingPlans.length > 0 ? pricingPlans[0].id : '',
       contact: ''
     });
   };
@@ -164,16 +206,26 @@ function SchoolManagement() {
 
               <div className="form-group">
                 <label>License Plan *</label>
-                <select
-                  name="plan"
-                  value={formData.plan}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="starter">Starter - 50 Teachers, 500 Students ($2,500)</option>
-                  <option value="professional">Professional - 100 Teachers, 1000 Students ($5,000)</option>
-                  <option value="enterprise">Enterprise - 250 Teachers, 2500 Students ($10,000)</option>
-                </select>
+                {loadingPlans ? (
+                  <div>Loading pricing plans...</div>
+                ) : pricingPlans.length > 0 ? (
+                  <select
+                    name="plan"
+                    value={formData.plan}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    {pricingPlans.map(plan => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} - {plan.teacher_limit} Teachers, {plan.student_limit} Students (${(plan.price || 0).toLocaleString()})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
+                    ⚠️ No pricing plans found. Please create a pricing block in the Landing Page Manager first.
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -188,7 +240,7 @@ function SchoolManagement() {
               </div>
 
               <div className="form-actions">
-                <button type="submit" className="btn-submit">
+                <button type="submit" className="btn-submit" disabled={loadingPlans || pricingPlans.length === 0}>
                   {editingSchool ? 'Update' : 'Create'}
                 </button>
                 <button type="button" onClick={cancelForm} className="btn-cancel">

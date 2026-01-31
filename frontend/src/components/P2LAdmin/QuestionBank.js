@@ -1,7 +1,7 @@
 // Question Bank Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV } from '../../services/p2lAdminService';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, bulkDeleteQuestions } from '../../services/p2lAdminService';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -9,7 +9,10 @@ function QuestionBank() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [filters, setFilters] = useState({ difficulty: '', subject: '' });
+  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '' });
+  const [subjects, setSubjects] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
     choices: ['', '', '', ''],
@@ -28,15 +31,40 @@ function QuestionBank() {
     fetchQuestions();
   }, [filters]);
 
+  useEffect(() => {
+    fetchSubjects();
+    fetchTopics();
+  }, []);
+
   const fetchQuestions = async () => {
     try {
       const response = await getQuestions(filters);
       setQuestions(response.data || []);
+      // Clear selections when filter changes
+      setSelectedQuestions([]);
     } catch (error) {
       console.error('Failed to fetch questions:', error);
       alert('Failed to load questions');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSubjects = async () => {
+    try {
+      const response = await getQuestionSubjects();
+      setSubjects(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch subjects:', error);
+    }
+  };
+
+  const fetchTopics = async () => {
+    try {
+      const response = await getQuestionTopics();
+      setTopics(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch topics:', error);
     }
   };
 
@@ -108,6 +136,47 @@ function QuestionBank() {
       console.error('Failed to delete question:', error);
       alert(error.message || 'Failed to delete question');
     }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedQuestions.length === 0) {
+      alert('Please select questions to delete');
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to delete ${selectedQuestions.length} question(s)?`)) {
+      return;
+    }
+    
+    try {
+      await bulkDeleteQuestions(selectedQuestions);
+      alert(`${selectedQuestions.length} question(s) deleted successfully`);
+      setSelectedQuestions([]);
+      fetchQuestions();
+    } catch (error) {
+      console.error('Failed to delete questions:', error);
+      alert(error.message || 'Failed to delete questions');
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedQuestions.length === questions.length && questions.length > 0) {
+      // Deselect all
+      setSelectedQuestions([]);
+    } else {
+      // Select all filtered questions
+      setSelectedQuestions(questions.map(q => q._id));
+    }
+  };
+
+  const handleQuestionSelect = (id) => {
+    setSelectedQuestions(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(qId => qId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
   };
 
   const cancelForm = () => {
@@ -234,17 +303,53 @@ function QuestionBank() {
 
         <div className="filter-group">
           <label>Subject:</label>
-          <input 
-            type="text" 
+          <select 
             value={filters.subject}
             onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
-            placeholder="Filter by subject"
-          />
+          >
+            <option value="">All</option>
+            {subjects.map((subject) => (
+              <option key={subject} value={subject}>
+                {subject}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <button onClick={() => setFilters({ difficulty: '', subject: '' })} className="btn-clear">
+        <div className="filter-group">
+          <label>Topic:</label>
+          <select 
+            value={filters.topic}
+            onChange={(e) => setFilters({ ...filters, topic: e.target.value })}
+          >
+            <option value="">All</option>
+            {topics.map((topic) => (
+              <option key={topic} value={topic}>
+                {topic}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '' })} className="btn-clear">
           Clear Filters
         </button>
+        
+        {questions.length > 0 && (
+          <>
+            <button onClick={handleSelectAll} className="btn-select-all">
+              {selectedQuestions.length === questions.length && questions.length > 0 
+                ? '☑ Deselect All' 
+                : '☐ Select All'}
+            </button>
+            
+            {selectedQuestions.length > 0 && (
+              <button onClick={handleBulkDelete} className="btn-delete-selected">
+                🗑 Delete Selected ({selectedQuestions.length})
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {showForm && (
@@ -478,7 +583,16 @@ function QuestionBank() {
           <p className="no-data">No questions found. Create your first question!</p>
         ) : (
           questions.map((question) => (
-            <div key={question._id} className="question-card">
+            <div key={question._id} className={`question-card ${selectedQuestions.includes(question._id) ? 'selected' : ''}`}>
+              <div className="question-selection">
+                <input
+                  type="checkbox"
+                  checked={selectedQuestions.includes(question._id)}
+                  onChange={() => handleQuestionSelect(question._id)}
+                  className="question-checkbox"
+                />
+              </div>
+              
               <div className="question-header">
                 <span className={`difficulty-badge ${getDifficultyClass(question.difficulty)}`}>
                   {getDifficultyLabel(question.difficulty)}

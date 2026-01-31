@@ -54,7 +54,8 @@ const authenticateSchoolAdmin = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId);
     
-    if (!user || user.role !== 'school-admin') {
+    // Fixed: Check for 'School Admin' as stored in database, not 'school-admin'
+    if (!user || user.role !== 'School Admin') {
       return res.status(403).json({ success: false, error: 'Access restricted to school admins' });
     }
     

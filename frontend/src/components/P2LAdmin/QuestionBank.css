@@ -51,6 +51,36 @@
   background: #5a6268;
 }
 
+.btn-select-all {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-weight: 500;
+}
+
+.btn-select-all:hover {
+  background: #138496;
+}
+
+.btn-delete-selected {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-weight: 500;
+}
+
+.btn-delete-selected:hover {
+  background: #c82333;
+}
+
 .modal-content.large {
   max-width: 700px;
 }
@@ -122,6 +152,26 @@ textarea:focus {
   padding: 1.5rem;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.question-card.selected {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  border: 2px solid #667eea;
+}
+
+.question-selection {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+.question-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #667eea;
 }
 
 .question-header {

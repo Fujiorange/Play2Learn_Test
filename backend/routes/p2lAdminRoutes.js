@@ -174,6 +174,35 @@ router.get('/health', async (req, res) => {
   }
 });
 
+// ==================== Dashboard Statistics ====================
+router.get('/dashboard-stats', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Get counts for dashboard
+    const [schoolsCount, adminsCount, questionsCount, quizzesCount] = await Promise.all([
+      School.countDocuments(),
+      User.countDocuments({ role: 'schooladmin' }),
+      Question.countDocuments({ is_active: true }),
+      Quiz.countDocuments()
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        schools: schoolsCount,
+        admins: adminsCount,
+        questions: questionsCount,
+        quizzes: quizzesCount
+      }
+    });
+  } catch (error) {
+    console.error('Get dashboard stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch dashboard statistics' 
+    });
+  }
+});
+
 // ==================== SCHOOL MANAGEMENT ROUTES ====================
 
 // Get all schools
@@ -526,6 +555,109 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Update school admin
+router.put('/school-admins/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, contact, accountActive } = req.body;
+    
+    // Find the admin
+    const admin = await User.findById(id);
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Admin not found' 
+      });
+    }
+    
+    // Ensure this is a school admin
+    if (admin.role !== 'School Admin') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'This user is not a school admin' 
+      });
+    }
+    
+    // Check if email is being changed and if new email exists
+    if (email && email.toLowerCase() !== admin.email.toLowerCase()) {
+      const existingUser = await User.findOne({ 
+        email: email.toLowerCase(),
+        _id: { $ne: id }
+      });
+      if (existingUser) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Email already in use' 
+        });
+      }
+      admin.email = email.toLowerCase();
+    }
+    
+    // Update fields
+    if (name) admin.name = name;
+    if (contact !== undefined) admin.contact = contact;
+    if (accountActive !== undefined) admin.accountActive = accountActive;
+    
+    await admin.save();
+    
+    res.json({
+      success: true,
+      message: 'School admin updated successfully',
+      data: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        contact: admin.contact,
+        accountActive: admin.accountActive
+      }
+    });
+  } catch (error) {
+    console.error('Update school admin error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update school admin' 
+    });
+  }
+});
+
+// Delete school admin
+router.delete('/school-admins/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the admin
+    const admin = await User.findById(id);
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Admin not found' 
+      });
+    }
+    
+    // Ensure this is a school admin
+    if (admin.role !== 'School Admin') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'This user is not a school admin' 
+      });
+    }
+    
+    // Delete the admin
+    await User.findByIdAndDelete(id);
+    
+    res.json({
+      success: true,
+      message: 'School admin deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete school admin error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete school admin' 
+    });
+  }
+});
+
 // ==================== QUESTION MANAGEMENT ROUTES ====================
 
 // Get all questions
@@ -552,6 +684,40 @@ router.get('/questions', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch questions' 
+    });
+  }
+});
+
+// Get unique subjects
+router.get('/questions-subjects', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const subjects = await Question.distinct('subject');
+    res.json({
+      success: true,
+      data: subjects.filter(s => s && s.trim()).sort() // Filter out empty/null values and sort alphabetically
+    });
+  } catch (error) {
+    console.error('Get subjects error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch subjects' 
+    });
+  }
+});
+
+// Get unique topics
+router.get('/questions-topics', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const topics = await Question.distinct('topic');
+    res.json({
+      success: true,
+      data: topics.filter(t => t && t.trim()).sort() // Filter out empty/null values and sort alphabetically
+    });
+  } catch (error) {
+    console.error('Get topics error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch topics' 
     });
   }
 });
@@ -716,6 +882,34 @@ router.delete('/questions/:id', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete question' 
+    });
+  }
+});
+
+// Bulk delete questions
+router.post('/questions/bulk-delete', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please provide an array of question IDs' 
+      });
+    }
+
+    const result = await Question.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      success: true,
+      message: `${result.deletedCount} question(s) deleted successfully`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Bulk delete questions error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete questions' 
     });
   }
 });
@@ -1300,6 +1494,80 @@ router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete landing page' 
+    });
+  }
+});
+
+// Get pricing plans from landing page
+router.get('/landing/pricing-plans', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Get the active landing page
+    let landingPage = await LandingPage.findOne({ is_active: true });
+    
+    if (!landingPage) {
+      // If no active page, get the most recent one
+      landingPage = await LandingPage.findOne().sort({ createdAt: -1 });
+    }
+    
+    if (!landingPage) {
+      return res.json({
+        success: true,
+        plans: [],
+        message: 'No landing page found'
+      });
+    }
+
+    // Find the pricing block
+    const pricingBlock = landingPage.blocks.find(block => block.type === 'pricing');
+    
+    if (!pricingBlock || !pricingBlock.custom_data || !pricingBlock.custom_data.plans) {
+      return res.json({
+        success: true,
+        plans: [],
+        message: 'No pricing block found in landing page'
+      });
+    }
+
+    // Extract and transform pricing plans to match school management format
+    const plans = pricingBlock.custom_data.plans.map(plan => {
+      // Generate consistent ID - try to match known plan types, otherwise use normalized name
+      const normalizedName = (plan.name || '').toLowerCase().trim();
+      let planId;
+      
+      // Match against known plan types for consistency
+      if (normalizedName.includes('starter') || normalizedName.includes('basic')) {
+        planId = 'starter';
+      } else if (normalizedName.includes('professional') || normalizedName.includes('pro')) {
+        planId = 'professional';
+      } else if (normalizedName.includes('enterprise') || normalizedName.includes('business')) {
+        planId = 'enterprise';
+      } else {
+        // Fallback: sanitize name to create ID
+        planId = normalizedName.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      }
+      
+      return {
+        id: planId,
+        name: plan.name,
+        description: plan.description,
+        price: plan.price?.yearly || 0, // Use yearly price
+        teacher_limit: plan.teachers || 0,
+        student_limit: plan.students || 0,
+        features: plan.features || [],
+        popular: plan.popular || false
+      };
+    });
+
+    res.json({
+      success: true,
+      plans: plans,
+      message: `Found ${plans.length} pricing plan(s)`
+    });
+  } catch (error) {
+    console.error('Get pricing plans error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch pricing plans from landing page' 
     });
   }
 });

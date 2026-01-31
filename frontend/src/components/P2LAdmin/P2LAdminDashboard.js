@@ -1,13 +1,14 @@
 // P2LAdmin Dashboard Component
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getHealthStatus } from '../../services/p2lAdminService';
+import { getHealthStatus, getDashboardStats } from '../../services/p2lAdminService';
 import './P2LAdminDashboard.css';
 
 function P2LAdminDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [healthStatus, setHealthStatus] = useState(null);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,13 +28,19 @@ function P2LAdminDashboard() {
 
     setUser(userData);
 
-    // Fetch health status
-    getHealthStatus()
-      .then(response => {
-        setHealthStatus(response);
+    // Fetch health status and dashboard stats
+    Promise.all([
+      getHealthStatus(),
+      getDashboardStats()
+    ])
+      .then(([healthResponse, statsResponse]) => {
+        setHealthStatus(healthResponse);
+        if (statsResponse.success) {
+          setStats(statsResponse.data);
+        }
       })
       .catch(error => {
-        console.error('Failed to fetch health status:', error);
+        console.error('Failed to fetch dashboard data:', error);
       })
       .finally(() => {
         setLoading(false);
@@ -117,19 +124,19 @@ function P2LAdminDashboard() {
           <div className="stats-grid">
             <div className="stat-card">
               <h4>Total Schools</h4>
-              <p className="stat-value">-</p>
+              <p className="stat-value">{stats ? stats.schools : '-'}</p>
             </div>
             <div className="stat-card">
               <h4>Total Admins</h4>
-              <p className="stat-value">-</p>
+              <p className="stat-value">{stats ? stats.admins : '-'}</p>
             </div>
             <div className="stat-card">
               <h4>Total Questions</h4>
-              <p className="stat-value">-</p>
+              <p className="stat-value">{stats ? stats.questions : '-'}</p>
             </div>
             <div className="stat-card">
               <h4>Total Quizzes</h4>
-              <p className="stat-value">-</p>
+              <p className="stat-value">{stats ? stats.quizzes : '-'}</p>
             </div>
           </div>
         </div>

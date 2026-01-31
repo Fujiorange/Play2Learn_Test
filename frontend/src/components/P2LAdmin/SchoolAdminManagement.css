@@ -60,6 +60,26 @@
   border-left: 4px solid #667eea;
 }
 
+.admin-card.newly-created {
+  background: #fff9e6;
+  border-left: 4px solid #ffc107;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
+}
+
+.temp-password-notice {
+  background: #fff3cd;
+  padding: 0.5rem;
+  border-radius: 5px;
+  margin: 0.5rem 0;
+}
+
+.temp-password-notice .notice-text {
+  margin: 0;
+  color: #856404;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
 .admin-card h3 {
   margin-top: 0;
   color: #333;
@@ -223,6 +243,68 @@
   font-weight: bold;
   font-size: 12px;
   margin-left: 8px;
+}
+
+.admin-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ddd;
+  /* flex-wrap allows the "View Temp Password" button to take full width 
+     while Edit/Delete buttons stay on the same line */
+  flex-wrap: wrap;
+}
+
+.btn-view-temp-password {
+  /* Takes full width of container, pushes Edit/Delete to next line */
+  flex: 1 1 100%;
+  background: #ffc107;
+  color: #333;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: bold;
+  transition: background 0.3s;
+  margin-bottom: 0.5rem;
+}
+
+.btn-view-temp-password:hover {
+  background: #e0a800;
+}
+
+.btn-edit {
+  flex: 1;
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.btn-edit:hover {
+  background: #218838;
+}
+
+.btn-delete {
+  flex: 1;
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.btn-delete:hover {
+  background: #c82333;
 }
 
 @media (max-width: 768px) {

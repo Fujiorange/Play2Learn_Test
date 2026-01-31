@@ -9,6 +9,15 @@ jest.mock('../../services/p2lAdminService', () => ({
     database: { status: 'connected', connected: true },
     environment: 'test',
     uptime: 1000
+  })),
+  getDashboardStats: jest.fn(() => Promise.resolve({
+    success: true,
+    data: {
+      schools: 5,
+      admins: 10,
+      questions: 100,
+      quizzes: 20
+    }
   }))
 }));
 

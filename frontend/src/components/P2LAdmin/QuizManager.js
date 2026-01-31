@@ -19,7 +19,8 @@ function QuizManager() {
     description: '',
     question_ids: [],
     quiz_type: 'placement',
-    is_adaptive: false
+    is_adaptive: false,
+    target_correct_answers: 10
   });
 
   useEffect(() => {
@@ -70,6 +71,13 @@ function QuizManager() {
         is_adaptive: formData.is_adaptive
       };
       
+      // Add adaptive config if adaptive mode is enabled
+      if (formData.is_adaptive) {
+        quizData.adaptive_config = {
+          target_correct_answers: formData.target_correct_answers
+        };
+      }
+      
       if (editingQuiz) {
         await updateQuiz(editingQuiz._id, quizData);
         alert('Quiz updated successfully');
@@ -84,7 +92,8 @@ function QuizManager() {
         description: '',
         question_ids: [],
         quiz_type: 'placement',
-        is_adaptive: false
+        is_adaptive: false,
+        target_correct_answers: 10
       });
       fetchData();
     } catch (error) {
@@ -100,7 +109,8 @@ function QuizManager() {
       description: quiz.description || '',
       question_ids: quiz.questions?.map(q => q.question_id?._id || q.question_id) || [],
       quiz_type: quiz.quiz_type || 'placement',
-      is_adaptive: quiz.is_adaptive !== undefined ? quiz.is_adaptive : false
+      is_adaptive: quiz.is_adaptive !== undefined ? quiz.is_adaptive : false,
+      target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10
     });
     setShowForm(true);
   };
@@ -127,7 +137,8 @@ function QuizManager() {
       description: '',
       question_ids: [],
       quiz_type: 'placement',
-      is_adaptive: false
+      is_adaptive: false,
+      target_correct_answers: 10
     });
     setQuestionFilters({ topic: '', difficulty: '' });
   };
@@ -165,14 +176,9 @@ function QuizManager() {
           </p>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Link to="/p2ladmin/quizzes/create-adaptive" className="btn-primary">
-            + Create Adaptive Quiz (Advanced)
-          </Link>
-          <button onClick={() => setShowForm(true)} className="btn-primary">
-            + Create Placement Quiz
-          </button>
-        </div>
+        <button onClick={() => setShowForm(true)} className="btn-primary">
+          + Create Quiz
+        </button>
       </header>
 
       {showForm && (
@@ -231,6 +237,24 @@ function QuizManager() {
                   Adaptive quizzes adjust difficulty based on student performance
                 </p>
               </div>
+
+              {formData.is_adaptive && (
+                <div className="form-group">
+                  <label>How many questions correct to end the quiz? *</label>
+                  <input
+                    type="number"
+                    name="target_correct_answers"
+                    value={formData.target_correct_answers}
+                    onChange={handleInputChange}
+                    min="1"
+                    max="100"
+                    required
+                  />
+                  <p className="help-text">
+                    Students need to get this many correct answers to complete the adaptive quiz
+                  </p>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Select Questions ({formData.question_ids.length} selected)</label>

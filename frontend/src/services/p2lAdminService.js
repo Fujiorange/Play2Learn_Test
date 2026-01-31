@@ -103,6 +103,11 @@ export const deleteLandingPage = async () => {
   });
 };
 
+// Get pricing plans from landing page
+export const getLandingPagePricingPlans = async () => {
+  return apiCall('/api/p2ladmin/landing/pricing-plans');
+};
+
 // ==================== SCHOOLS ====================
 export const getSchools = async () => {
   return apiCall('/api/p2ladmin/schools');
@@ -141,6 +146,19 @@ export const createSchoolAdmins = async (schoolId, admins) => {
   return apiCall('/api/p2ladmin/school-admins', {
     method: 'POST',
     body: JSON.stringify({ schoolId, admins }),
+  });
+};
+
+export const updateSchoolAdmin = async (id, adminData) => {
+  return apiCall(`/api/p2ladmin/school-admins/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(adminData),
+  });
+};
+
+export const deleteSchoolAdmin = async (id) => {
+  return apiCall(`/api/p2ladmin/school-admins/${id}`, {
+    method: 'DELETE',
   });
 };
 
@@ -200,6 +218,21 @@ export const getQuestionStats = async () => {
   return apiCall('/api/p2ladmin/questions-stats');
 };
 
+export const getQuestionSubjects = async () => {
+  return apiCall('/api/p2ladmin/questions-subjects');
+};
+
+export const getQuestionTopics = async () => {
+  return apiCall('/api/p2ladmin/questions-topics');
+};
+
+export const bulkDeleteQuestions = async (ids) => {
+  return apiCall('/api/p2ladmin/questions/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+};
+
 // ==================== QUIZZES ====================
 export const getQuizzes = async () => {
   return apiCall('/api/p2ladmin/quizzes');
@@ -239,6 +272,11 @@ export const runAdaptiveQuiz = async (quizData) => {
 // ==================== HEALTH CHECK ====================
 export const getHealthStatus = async () => {
   return apiCall('/api/p2ladmin/health');
+};
+
+// ==================== DASHBOARD STATISTICS ====================
+export const getDashboardStats = async () => {
+  return apiCall('/api/p2ladmin/dashboard-stats');
 };
 
 // ==================== TESTIMONIALS ====================
@@ -303,6 +341,8 @@ export default {
   deleteSchool,
   getSchoolAdmins,
   createSchoolAdmins,
+  updateSchoolAdmin,
+  deleteSchoolAdmin,
   getQuestions,
   getQuestion,
   createQuestion,
