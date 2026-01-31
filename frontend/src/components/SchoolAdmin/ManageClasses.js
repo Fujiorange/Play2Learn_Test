@@ -23,7 +23,7 @@ export default function ManageClasses() {
     }
 
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') {
+    if (currentUser.role !== 'School Admin') {
       navigate('/login');
       return;
     }

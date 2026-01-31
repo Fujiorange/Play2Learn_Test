@@ -41,7 +41,7 @@ export default function BadgeManagement() {
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
     const currentUser = authService.getCurrentUser();
-    if (currentUser.role !== 'school-admin') { navigate('/login'); return; }
+    if (currentUser.role !== 'School Admin') { navigate('/login'); return; }
     loadBadges();
   }, [navigate]);
 
