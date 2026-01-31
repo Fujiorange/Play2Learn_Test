@@ -78,7 +78,9 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ success: false, error: 'Email and password are required' });
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    // Use direct MongoDB query to get ALL fields including permissions
+    const db = mongoose.connection.db;
+    const user = await db.collection('users').findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
     // FIXED: Check both 'password' and 'password_hash' fields
@@ -94,16 +96,17 @@ router.post('/login', async (req, res) => {
     // FIXED: Include 'name' in JWT token for support tickets and other features
     const token = jwt.sign(
       { 
-        userId: user._id, 
+        userId: user._id.toString(), 
         email: user.email, 
         role: user.role,
-        name: user.name  // ← ADDED: Now included in token
+        name: user.name
       }, 
       JWT_SECRET, 
       { expiresIn: '7d' }
     );
 
     console.log(`✅ Login successful: ${user.email} (${user.role})`);
+    console.log(`📤 Login returning permissions:`, user.permissions);
 
     return res.json({
       success: true,
@@ -123,7 +126,7 @@ router.post('/login', async (req, res) => {
         subject: user.subject,
         emailVerified: user.emailVerified,
         accountActive: user.accountActive,
-        permissions: user.permissions || null,  // Include permissions!
+        permissions: user.permissions || null,
       },
     });
   } catch (error) {
@@ -138,30 +141,41 @@ router.get('/me', async (req, res) => {
     if (!token) return res.status(401).json({ success: false, error: 'No token provided' });
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password -password_hash');
-    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    
+    // Use direct MongoDB query to get ALL fields including permissions
+    // (Mongoose model might not have permissions field defined)
+    const db = mongoose.connection.db;
+    const userDoc = await db.collection('users').findOne(
+      { _id: new mongoose.Types.ObjectId(decoded.userId) },
+      { projection: { password: 0, password_hash: 0 } }
+    );
+    
+    if (!userDoc) return res.status(404).json({ success: false, error: 'User not found' });
+
+    console.log('📤 /me returning permissions:', userDoc.permissions);
 
     return res.json({
       success: true,
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        contact: user.contact,
-        gender: user.gender,
-        date_of_birth: user.date_of_birth,
-        profile_picture: user.profile_picture,
-        schoolId: user.schoolId,
-        class: user.class,
-        gradeLevel: user.gradeLevel,
-        subject: user.subject,
-        emailVerified: user.emailVerified,
-        accountActive: user.accountActive,
-        permissions: user.permissions || null,  // Include permissions!
+        id: userDoc._id,
+        name: userDoc.name,
+        email: userDoc.email,
+        role: userDoc.role,
+        contact: userDoc.contact,
+        gender: userDoc.gender,
+        date_of_birth: userDoc.date_of_birth,
+        profile_picture: userDoc.profile_picture,
+        schoolId: userDoc.schoolId,
+        class: userDoc.class,
+        gradeLevel: userDoc.gradeLevel,
+        subject: userDoc.subject,
+        emailVerified: userDoc.emailVerified,
+        accountActive: userDoc.accountActive,
+        permissions: userDoc.permissions || null,
       },
     });
   } catch (error) {
+    console.error('/me error:', error);
     return res.status(401).json({ success: false, error: 'Invalid or expired token' });
   }
 });
