@@ -30,15 +30,20 @@ export default function RemoveUser() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // REAL API CALL - Fetches from database!
-      const result = await schoolAdminService.getUsers({
-        gradeLevel: 'Primary 1',
-        subject: 'Mathematics'
-      });
+      const result = await schoolAdminService.getUsers({});
 
       if (result.success) {
-        // Filter out school-admin users (they shouldn't be deletable)
-        const filteredUsers = (result.users || []).filter(u => !u.role?.toLowerCase().includes('school'));
+        // Filter out admin users and map to consistent format
+        const filteredUsers = (result.users || [])
+          .filter(u => 
+            !u.role?.toLowerCase().includes('school') &&
+            !u.role?.toLowerCase().includes('p2l') &&
+            !u.role?.toLowerCase().includes('platform')
+          )
+          .map(u => ({
+            ...u,
+            id: u._id || u.id  // Ensure we have id field
+          }));
         setUsers(filteredUsers);
       } else {
         console.error('Failed to load users:', result.error);
@@ -53,28 +58,38 @@ export default function RemoveUser() {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === 'all' || user.role === filterRole;
+    const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = filterRole === 'all' || user.role?.toLowerCase() === filterRole.toLowerCase();
     return matchesSearch && matchesRole;
   });
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
 
+    // Use _id or id
+    const userId = deleteConfirm._id || deleteConfirm.id;
+    if (!userId) {
+      setMessage({ type: 'error', text: 'Invalid user ID' });
+      return;
+    }
+
     try {
-      // REAL API CALL - Deletes from database!
-      const result = await schoolAdminService.deleteUser(deleteConfirm.id);
+      console.log('🗑️ Deleting user:', userId);
+      const result = await schoolAdminService.deleteUser(userId);
 
       if (result.success) {
-        setUsers(users.filter(u => u.id !== deleteConfirm.id));
+        // Remove from list using the same ID check
+        setUsers(users.filter(u => (u._id || u.id) !== userId));
         setMessage({ type: 'success', text: `User "${deleteConfirm.name}" removed successfully` });
         setDeleteConfirm(null);
         setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       } else {
+        console.error('Delete failed:', result.error);
         setMessage({ type: 'error', text: result.error || 'Failed to delete user' });
       }
     } catch (err) {
+      console.error('Delete error:', err);
       setMessage({ type: 'error', text: 'Failed to delete user' });
     }
   };
@@ -110,6 +125,16 @@ export default function RemoveUser() {
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
+    roleBadge: { padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600' },
+  };
+
+  const getRoleBadgeStyle = (role) => {
+    const colors = {
+      student: { background: '#dbeafe', color: '#1d4ed8' },
+      teacher: { background: '#fef3c7', color: '#d97706' },
+      parent: { background: '#f3e8ff', color: '#7c3aed' },
+    };
+    return colors[role?.toLowerCase()] || { background: '#f3f4f6', color: '#6b7280' };
   };
 
   return (
@@ -128,7 +153,7 @@ export default function RemoveUser() {
 
       <main style={styles.main}>
         <h1 style={styles.pageTitle}>Remove User</h1>
-        <p style={styles.pageSubtitle}>Search and remove Primary 1 Mathematics user accounts.</p>
+        <p style={styles.pageSubtitle}>Search and remove user accounts from your school.</p>
 
         <div style={styles.card}>
           {message.text && (
@@ -173,18 +198,25 @@ export default function RemoveUser() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td style={styles.td}>{user.name}</td>
-                      <td style={styles.td}>{user.email}</td>
-                      <td style={styles.td}>{user.role}</td>
-                      <td style={styles.td}>
-                        <button style={styles.deleteButton} onClick={() => setDeleteConfirm(user)}>
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredUsers.map((user) => {
+                    const uniqueKey = user._id || user.id || user.email;
+                    return (
+                      <tr key={uniqueKey}>
+                        <td style={styles.td}><strong>{user.name}</strong></td>
+                        <td style={styles.td}>{user.email}</td>
+                        <td style={styles.td}>
+                          <span style={{ ...styles.roleBadge, ...getRoleBadgeStyle(user.role) }}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <button style={styles.deleteButton} onClick={() => setDeleteConfirm(user)}>
+                            🗑️ Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -201,9 +233,11 @@ export default function RemoveUser() {
       {deleteConfirm && (
         <div style={styles.modal} onClick={() => setDeleteConfirm(null)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>Confirm Deletion</h2>
+            <h2 style={styles.modalTitle}>⚠️ Confirm Deletion</h2>
             <p style={styles.modalText}>
-              Are you sure you want to remove <strong>{deleteConfirm.name}</strong>? This action cannot be undone.
+              Are you sure you want to remove <strong>{deleteConfirm.name}</strong> ({deleteConfirm.email})?
+              <br /><br />
+              This action cannot be undone.
             </p>
             <div style={styles.modalButtons}>
               <button style={styles.modalButtonCancel} onClick={() => setDeleteConfirm(null)}>
