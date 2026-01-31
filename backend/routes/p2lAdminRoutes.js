@@ -12,6 +12,7 @@ const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
 const Testimonial = require('../models/Testimonial');
+const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const Sentiment = require('sentiment');
@@ -413,6 +414,114 @@ router.post('/schools/:id/admins', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create school admin' 
+    });
+  }
+});
+
+// Create multiple school admins (batch creation)
+router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { schoolId, admins } = req.body;
+    
+    // Validate required fields
+    if (!schoolId || !admins || !Array.isArray(admins) || admins.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School ID and admins array are required' 
+      });
+    }
+    
+    // Validate school exists
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'School not found' 
+      });
+    }
+
+    const created = [];
+    const errors = [];
+
+    // Process each admin
+    for (const adminData of admins) {
+      try {
+        const { email, name, contact } = adminData;
+        
+        if (!email) {
+          errors.push({
+            email: email || 'unknown',
+            error: 'Email is required'
+          });
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+          errors.push({
+            email: email,
+            error: 'Email already registered'
+          });
+          continue;
+        }
+
+        // Generate temporary password
+        const tempPassword = generateTempPassword('school');
+        
+        // Hash password
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        // Create school admin
+        const admin = new User({
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          contact: contact || null,
+          password: hashedPassword,
+          role: 'School Admin',
+          schoolId: schoolId,
+          emailVerified: true,
+          accountActive: true,
+          requirePasswordChange: true
+        });
+
+        await admin.save();
+        
+        // Send welcome email with credentials
+        try {
+          await sendSchoolAdminWelcomeEmail(admin, tempPassword, school.organization_name);
+        } catch (emailError) {
+          console.error('Email sending error for', email, ':', emailError);
+          // Continue even if email fails - admin is still created
+        }
+
+        created.push({
+          success: true,
+          id: admin._id,
+          email: admin.email,
+          name: admin.name,
+          tempPassword: tempPassword // Return temp password so P2L admin can share it
+        });
+      } catch (error) {
+        console.error('Error creating admin:', adminData.email, error);
+        errors.push({
+          email: adminData.email,
+          error: error.message || 'Failed to create admin'
+        });
+      }
+    }
+
+    res.status(created.length > 0 ? 201 : 400).json({
+      success: created.length > 0,
+      message: `Created ${created.length} admin(s)${errors.length > 0 ? `, ${errors.length} failed` : ''}`,
+      created: created,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Create school admins error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create school admins' 
     });
   }
 });
@@ -1361,6 +1470,128 @@ router.delete('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete testimonial' 
+    });
+  }
+});
+
+// ==================== MAINTENANCE BROADCAST ROUTES ====================
+
+// Get all maintenance broadcasts
+router.get('/maintenance', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const broadcasts = await Maintenance.find()
+      .populate('created_by', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: broadcasts
+    });
+  } catch (error) {
+    console.error('Get maintenance broadcasts error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch maintenance broadcasts' 
+    });
+  }
+});
+
+// Create maintenance broadcast
+router.post('/maintenance', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { title, message, type, target_roles, start_date, end_date } = req.body;
+    
+    if (!title || !message) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Title and message are required' 
+      });
+    }
+
+    const broadcast = new Maintenance({
+      title,
+      message,
+      type: type || 'info',
+      target_roles: target_roles || ['all'],
+      start_date: start_date || Date.now(),
+      end_date: end_date || null,
+      is_active: true,
+      created_by: req.user._id
+    });
+
+    await broadcast.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Maintenance broadcast created successfully',
+      data: broadcast
+    });
+  } catch (error) {
+    console.error('Create maintenance broadcast error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create maintenance broadcast' 
+    });
+  }
+});
+
+// Update maintenance broadcast
+router.put('/maintenance/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { title, message, type, target_roles, start_date, end_date, is_active } = req.body;
+    
+    const broadcast = await Maintenance.findById(req.params.id);
+    if (!broadcast) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Maintenance broadcast not found' 
+      });
+    }
+
+    if (title) broadcast.title = title;
+    if (message) broadcast.message = message;
+    if (type) broadcast.type = type;
+    if (target_roles) broadcast.target_roles = target_roles;
+    if (start_date !== undefined) broadcast.start_date = start_date;
+    if (end_date !== undefined) broadcast.end_date = end_date;
+    if (is_active !== undefined) broadcast.is_active = is_active;
+
+    await broadcast.save();
+
+    res.json({
+      success: true,
+      message: 'Maintenance broadcast updated successfully',
+      data: broadcast
+    });
+  } catch (error) {
+    console.error('Update maintenance broadcast error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update maintenance broadcast' 
+    });
+  }
+});
+
+// Delete maintenance broadcast
+router.delete('/maintenance/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const broadcast = await Maintenance.findByIdAndDelete(req.params.id);
+    if (!broadcast) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Maintenance broadcast not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Maintenance broadcast deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete maintenance broadcast error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete maintenance broadcast' 
     });
   }
 });

@@ -1,0 +1,137 @@
+/* Maintenance Banner Styles */
+
+.maintenance-banner-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.maintenance-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 20px;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.maintenance-banner.info {
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+}
+
+.maintenance-banner.warning {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+}
+
+.maintenance-banner.critical {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+}
+
+.maintenance-banner.maintenance {
+  background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.banner-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.banner-text {
+  flex: 1;
+}
+
+.banner-text h4 {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.banner-text p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.banner-text small {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-style: italic;
+}
+
+.banner-dismiss {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 28px;
+  line-height: 1;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+  margin-left: 15px;
+}
+
+.banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .maintenance-banner {
+    padding: 12px 15px;
+  }
+  
+  .banner-content {
+    gap: 10px;
+  }
+  
+  .banner-icon {
+    font-size: 24px;
+  }
+  
+  .banner-text h4 {
+    font-size: 14px;
+  }
+  
+  .banner-text p {
+    font-size: 13px;
+  }
+  
+  .banner-dismiss {
+    font-size: 24px;
+    padding: 3px 10px;
+  }
+}
+
+/* Add spacing to body when banner is visible */
+.has-maintenance-banner {
+  padding-top: 80px;
+}

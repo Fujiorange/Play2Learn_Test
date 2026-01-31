@@ -116,6 +116,40 @@ app.get('/api/public/landing-page', async (req, res) => {
   }
 });
 
+// ==================== PUBLIC MAINTENANCE BROADCAST ENDPOINT ====================
+// Public endpoint to fetch active maintenance broadcasts (no authentication required)
+const Maintenance = require('./models/Maintenance');
+
+app.get('/api/public/maintenance', async (req, res) => {
+  try {
+    const now = new Date();
+    
+    // Get all active broadcasts that:
+    // 1. is_active = true
+    // 2. start_date <= now
+    // 3. end_date is null OR end_date >= now
+    const broadcasts = await Maintenance.find({
+      is_active: true,
+      start_date: { $lte: now },
+      $or: [
+        { end_date: null },
+        { end_date: { $gte: now } }
+      ]
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      broadcasts: broadcasts
+    });
+  } catch (error) {
+    console.error('Get public maintenance broadcasts error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch maintenance broadcasts' 
+    });
+  }
+});
+
 // ==================== REQUEST LOGGING ====================
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString().split('T')[1]} - ${req.method} ${req.path}`);
