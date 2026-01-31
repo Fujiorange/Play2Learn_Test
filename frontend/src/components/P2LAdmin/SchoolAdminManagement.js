@@ -12,6 +12,7 @@ function SchoolAdminManagement() {
   const [loading, setLoading] = useState(true);
   const [adminForms, setAdminForms] = useState([{ name: '', email: '', contact: '' }]);
   const [createdAdmins, setCreatedAdmins] = useState([]);
+  const [viewedPasswords, setViewedPasswords] = useState({});
 
   useEffect(() => {
     fetchSchools();
@@ -68,7 +69,20 @@ function SchoolAdminManagement() {
 
     try {
       const response = await createSchoolAdmins(selectedSchool, adminForms);
-      setCreatedAdmins(response.created || []);
+      
+      // Store created admins with their temp passwords
+      if (response.created && response.created.length > 0) {
+        setCreatedAdmins(response.created);
+        // Initialize viewedPasswords state for each created admin
+        const initialViewed = {};
+        response.created.forEach(admin => {
+          if (admin.id) {
+            initialViewed[admin.id] = false;
+          }
+        });
+        setViewedPasswords(initialViewed);
+      }
+      
       setShowForm(false);
       setAdminForms([{ name: '', email: '', contact: '' }]);
       fetchSchoolAdmins(selectedSchool);
@@ -82,6 +96,12 @@ function SchoolAdminManagement() {
     setShowForm(false);
     setAdminForms([{ name: '', email: '', contact: '' }]);
     setCreatedAdmins([]);
+    setViewedPasswords({});
+  };
+  
+  const handleViewPassword = (adminId) => {
+    // Mark this password as viewed (can only be viewed once)
+    setViewedPasswords(prev => ({ ...prev, [adminId]: true }));
   };
 
   if (loading) {
@@ -221,16 +241,28 @@ function SchoolAdminManagement() {
               <div className="created-admins-section">
                 <h3>✅ Created Administrators</h3>
                 <p className="warning-text">
-                  ⚠️ Important: Save these temporary passwords! They won't be shown again.
+                  ⚠️ Important: You can only view each password once! Make sure to save it.
                 </p>
                 {createdAdmins.map((admin, index) => (
                   <div key={index} className={`created-admin ${admin.success ? 'success' : 'error'}`}>
                     <p><strong>{admin.name}</strong></p>
                     <p>Email: {admin.email}</p>
                     {admin.success && admin.tempPassword && (
-                      <p className="temp-password">
-                        Password: <code>{admin.tempPassword}</code>
-                      </p>
+                      <div className="temp-password-section">
+                        {!viewedPasswords[admin.id] ? (
+                          <button 
+                            onClick={() => handleViewPassword(admin.id)} 
+                            className="btn-view-password"
+                          >
+                            👁️ View Temp Password
+                          </button>
+                        ) : (
+                          <p className="temp-password">
+                            Password: <code>{admin.tempPassword}</code>
+                            <span className="password-warning"> (Password revealed - save it now!)</span>
+                          </p>
+                        )}
+                      </div>
                     )}
                     {!admin.success && <p className="error-msg">{admin.error}</p>}
                   </div>

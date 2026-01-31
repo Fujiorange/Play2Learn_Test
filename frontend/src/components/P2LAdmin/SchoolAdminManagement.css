@@ -199,6 +199,32 @@
   cursor: not-allowed;
 }
 
+.temp-password-section {
+  margin-top: 10px;
+}
+
+.btn-view-password {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+
+.btn-view-password:hover {
+  background: #5568d3;
+}
+
+.password-warning {
+  color: #e74c3c;
+  font-weight: bold;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
 @media (max-width: 768px) {
   .admins-grid {
     grid-template-columns: 1fr;

@@ -97,15 +97,32 @@ import QuizManager from './components/P2LAdmin/QuizManager';
 import AdaptiveQuizCreator from './components/P2LAdmin/AdaptiveQuizCreator';
 import LandingPageManager from './components/P2LAdmin/LandingPageManager';
 import HealthCheck from './components/P2LAdmin/HealthCheck';
+import MaintenanceBroadcastManager from './components/P2LAdmin/MaintenanceBroadcastManager';
+
+// Maintenance Banner
+import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner';
 
 // Student Adaptive Quiz Components
 import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 
 function App() {
+  // Get user role from localStorage for maintenance banner
+  const getUserRole = () => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      return user.role || null;
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <Router>
       <div className="App">
+        {/* Show maintenance banner on all pages except landing */}
+        <MaintenanceBanner userRole={getUserRole()} />
+        
         <Routes>
           {/* ========== LANDING PAGE ========== */}
           <Route
@@ -217,6 +234,7 @@ function App() {
           <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
           <Route path="/p2ladmin/quizzes/create-adaptive" element={<AdaptiveQuizCreator />} />
           <Route path="/p2ladmin/landing-page" element={<LandingPageManager />} />
+          <Route path="/p2ladmin/maintenance" element={<MaintenanceBroadcastManager />} />
           <Route path="/p2ladmin/health" element={<HealthCheck />} />
 
         </Routes>

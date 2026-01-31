@@ -264,6 +264,31 @@ export const getLandingPageTestimonials = async () => {
   return apiCall('/api/p2ladmin/testimonials/landing-page');
 };
 
+// ==================== MAINTENANCE BROADCASTS ====================
+export const getMaintenanceBroadcasts = async () => {
+  return apiCall('/api/p2ladmin/maintenance');
+};
+
+export const createMaintenanceBroadcast = async (broadcastData) => {
+  return apiCall('/api/p2ladmin/maintenance', {
+    method: 'POST',
+    body: JSON.stringify(broadcastData),
+  });
+};
+
+export const updateMaintenanceBroadcast = async (id, broadcastData) => {
+  return apiCall(`/api/p2ladmin/maintenance/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(broadcastData),
+  });
+};
+
+export const deleteMaintenanceBroadcast = async (id) => {
+  return apiCall(`/api/p2ladmin/maintenance/${id}`, {
+    method: 'DELETE',
+  });
+};
+
 export default {
   seedP2LAdmin,
   registerP2LAdmin,
@@ -295,4 +320,8 @@ export default {
   updateTestimonial,
   deleteTestimonial,
   getLandingPageTestimonials,
+  getMaintenanceBroadcasts,
+  createMaintenanceBroadcast,
+  updateMaintenanceBroadcast,
+  deleteMaintenanceBroadcast,
 };
