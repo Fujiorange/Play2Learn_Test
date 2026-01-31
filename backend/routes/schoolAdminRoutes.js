@@ -1,4 +1,4 @@
-// backend/routes/schoolAdminRoutes.js - COMPREHENSIVE FIX
+// backend/routes/schoolAdminRoutes.js - WITH SCHOOL ISOLATION
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -25,6 +25,41 @@ const authenticateToken = (req, res, next) => {
 const upload = multer({ dest: 'uploads/' });
 const getDb = () => mongoose.connection.db;
 
+// ============ SCHOOL ISOLATION HELPER ============
+// Gets the schoolId for the current School Admin
+const getSchoolId = async (db, userId) => {
+  try {
+    const adminUser = await db.collection('users').findOne({ 
+      _id: new mongoose.Types.ObjectId(userId) 
+    });
+    
+    if (!adminUser) return null;
+    
+    // Check multiple possible fields for school ID
+    // Priority: schoolId > school_id > organization_id > _id (for school-admin who IS the school)
+    if (adminUser.schoolId) return adminUser.schoolId.toString();
+    if (adminUser.school_id) return adminUser.school_id.toString();
+    if (adminUser.organization_id) return adminUser.organization_id.toString();
+    
+    // For school admins, their own _id might be the school reference
+    // Check if there's a school record linked to this admin
+    const school = await db.collection('schools').findOne({
+      $or: [
+        { admin_id: adminUser._id },
+        { admin_email: adminUser.email }
+      ]
+    });
+    
+    if (school) return school._id.toString();
+    
+    // Fallback: use admin's own _id as schoolId
+    return adminUser._id.toString();
+  } catch (e) {
+    console.error('getSchoolId error:', e);
+    return null;
+  }
+};
+
 const normalizeRole = (role) => {
   const roleMap = {
     'student': 'Student', 'teacher': 'Teacher', 'parent': 'Parent',
@@ -39,20 +74,85 @@ function generateTempPassword(userType) {
   return `${userType.substring(0, 3).toUpperCase()}${new Date().getFullYear()}${crypto.randomBytes(3).toString('hex')}!`;
 }
 
-// Dashboard Stats
+// Helper to safely convert to ObjectId
+const toObjectId = (id) => {
+  if (!id) return null;
+  if (id instanceof mongoose.Types.ObjectId) return id;
+  try {
+    return new mongoose.Types.ObjectId(id);
+  } catch (e) {
+    return null;
+  }
+};
+
+const canModifyUser = async (db, userId, schoolId) => {
+  try {
+    const objectId = toObjectId(userId);
+    if (!objectId) {
+      return { allowed: false, error: 'Invalid user ID format', user: null };
+    }
+    const user = await db.collection('users').findOne({ _id: objectId });
+    if (!user) return { allowed: false, error: 'User not found', user: null };
+    
+    // Check if user belongs to same school
+    const userSchoolId = user.schoolId || user.school_id;
+    if (schoolId && userSchoolId && userSchoolId.toString() !== schoolId.toString()) {
+      return { allowed: false, error: 'User belongs to different school', user: null };
+    }
+    
+    const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin', 'platform admin'];
+    if (protectedRoles.includes(user.role?.toLowerCase())) return { allowed: false, error: 'Cannot modify admin', user };
+    return { allowed: true, user };
+  } catch (e) {
+    console.error('canModifyUser error:', e);
+    return { allowed: false, error: 'Invalid user ID', user: null };
+  }
+};
+
+// ============ ROUTES WITH SCHOOL ISOLATION ============
+
+// Dashboard Stats - FILTERED BY SCHOOL
 router.get('/dashboard-stats', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    console.log('📊 Dashboard for schoolId:', schoolId);
+    
+    // Build filter - if schoolId exists, filter by it
+    const schoolFilter = schoolId ? { schoolId: schoolId } : {};
+    
     const [totalStudents, totalTeachers, totalParents, totalClasses] = await Promise.all([
-      db.collection('users').countDocuments({ role: { $in: ['Student', 'student'] } }),
-      db.collection('users').countDocuments({ role: { $in: ['Teacher', 'teacher'] } }),
-      db.collection('users').countDocuments({ role: { $in: ['Parent', 'parent'] } }),
-      db.collection('classes').countDocuments({})
+      db.collection('users').countDocuments({ ...schoolFilter, role: { $in: ['Student', 'student'] } }),
+      db.collection('users').countDocuments({ ...schoolFilter, role: { $in: ['Teacher', 'teacher'] } }),
+      db.collection('users').countDocuments({ ...schoolFilter, role: { $in: ['Parent', 'parent'] } }),
+      db.collection('classes').countDocuments(schoolId ? { schoolId: schoolId } : {})
     ]);
+    
+    // Get school info if available
+    let schoolInfo = null;
+    if (schoolId) {
+      schoolInfo = await db.collection('schools').findOne({ _id: toObjectId(schoolId) });
+    }
+    
     res.json({
-      success: true, total_students: totalStudents, total_teachers: totalTeachers,
-      total_parents: totalParents, total_classes: totalClasses,
-      license: { plan: 'starter', teacherLimit: 50, studentLimit: 500, currentTeachers: totalTeachers, currentStudents: totalStudents }
+      success: true, 
+      total_students: totalStudents, 
+      total_teachers: totalTeachers,
+      total_parents: totalParents, 
+      total_classes: totalClasses,
+      school: schoolInfo ? {
+        name: schoolInfo.organization_name,
+        plan: schoolInfo.plan,
+        teacherLimit: schoolInfo.plan_info?.teacher_limit || 50,
+        studentLimit: schoolInfo.plan_info?.student_limit || 500
+      } : null,
+      license: { 
+        plan: schoolInfo?.plan || 'starter', 
+        teacherLimit: schoolInfo?.plan_info?.teacher_limit || 50, 
+        studentLimit: schoolInfo?.plan_info?.student_limit || 500, 
+        currentTeachers: totalTeachers, 
+        currentStudents: totalStudents 
+      }
     });
   } catch (error) {
     console.error('Dashboard stats error:', error);
@@ -60,28 +160,47 @@ router.get('/dashboard-stats', authenticateToken, async (req, res) => {
   }
 });
 
-// Get users
+// Get users - FILTERED BY SCHOOL
 router.get('/users', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    console.log('👥 Getting users for schoolId:', schoolId);
+    
     const { role, search, status } = req.query;
     const allowedRoles = ['Student', 'student', 'Teacher', 'teacher', 'Parent', 'parent'];
-    let filter = { role: { $in: allowedRoles } };
+    
+    // Base filter with school isolation
+    let filter = { 
+      role: { $in: allowedRoles }
+    };
+    
+    // Add school filter if schoolId exists
+    if (schoolId) {
+      filter.schoolId = schoolId;
+    }
+    
     if (role && role !== 'all') filter.role = { $regex: new RegExp(`^${role}$`, 'i') };
     if (status === 'active') filter.accountActive = true;
     if (status === 'disabled') filter.accountActive = false;
     if (search) filter.$or = [{ name: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } }];
-    const users = await db.collection('users').find(filter).project({ password: 0 }).sort({ createdAt: -1 }).limit(200).toArray();
+    
+    const users = await db.collection('users').find(filter).project({ password: 0, password_hash: 0 }).sort({ createdAt: -1 }).limit(500).toArray();
+    console.log('👥 Found', users.length, 'users for school');
     res.json({ success: true, users });
   } catch (error) {
+    console.error('Get users error:', error);
     res.status(500).json({ success: false, error: 'Failed to load users' });
   }
 });
 
-// Create user
+// Create user - WITH SCHOOL ID
 router.post('/users', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    console.log('➕ Creating user for schoolId:', schoolId);
+    
     const { name, email, role, gender, gradeLevel, class: userClass, classes, linkedStudents } = req.body;
     if (!['student', 'teacher', 'parent'].includes(role.toLowerCase())) {
       return res.status(403).json({ success: false, error: 'Invalid role' });
@@ -94,91 +213,70 @@ router.post('/users', authenticateToken, async (req, res) => {
     const normalizedRole = normalizeRole(role);
     
     const newUser = {
-      name, email: email.toLowerCase(), password: hashedPassword, role: normalizedRole,
-      gender: gender || null, gradeLevel: gradeLevel || 'Primary 1', class: userClass || null,
+      name, 
+      email: email.toLowerCase(), 
+      password: hashedPassword, 
+      role: normalizedRole,
+      gender: gender || null, 
+      gradeLevel: gradeLevel || 'Primary 1', 
+      class: userClass || null,
       classes: normalizedRole === 'Teacher' ? (classes || []) : undefined,
       linkedStudents: normalizedRole === 'Parent' ? (linkedStudents || []) : [],
-      accountActive: true, emailVerified: false, createdBy: req.user.email,
-      createdAt: new Date(), updatedAt: new Date()
+      schoolId: schoolId, // ← SCHOOL ISOLATION: Tag user with school
+      accountActive: true, 
+      emailVerified: false, 
+      createdBy: req.user.email,
+      createdAt: new Date(), 
+      updatedAt: new Date()
     };
     
     const result = await db.collection('users').insertOne(newUser);
-    console.log(`✅ User created: ${email} (${normalizedRole})`);
     
+    // If student, also create in students collection
     if (normalizedRole === 'Student') {
       await db.collection('students').insertOne({
-        user_id: result.insertedId, name, email: email.toLowerCase(),
-        grade_level: gradeLevel || 'Primary 1', class: userClass || null,
-        points: 0, level: 1, current_profile: 1, streak: 0, total_quizzes: 0,
-        badges: [], achievements: [], placement_completed: false,
-        created_at: new Date(), updated_at: new Date()
+        user_id: result.insertedId,
+        name,
+        email: email.toLowerCase(),
+        grade_level: gradeLevel || 'Primary 1',
+        class: userClass || null,
+        schoolId: schoolId, // ← SCHOOL ISOLATION
+        points: 0,
+        level: 1,
+        streak: 0,
+        total_quizzes: 0,
+        badges: [],
+        created_at: new Date()
       });
     }
     
-    if (normalizedRole === 'Parent' && linkedStudents?.length > 0) {
-      for (const sid of linkedStudents) {
-        try {
-          await db.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(sid) }, { $set: { parentId: result.insertedId } });
-          await db.collection('students').updateOne({ user_id: new mongoose.Types.ObjectId(sid) }, { $set: { parent_id: result.insertedId } });
-        } catch (e) {}
-      }
-    }
-    
-    res.json({ success: true, user: { ...newUser, _id: result.insertedId, password: undefined }, tempPassword });
+    console.log('✅ User created:', email, 'for school:', schoolId);
+    res.json({ success: true, user: { ...newUser, _id: result.insertedId, tempPassword } });
   } catch (error) {
-    console.error('Add user error:', error);
+    console.error('Create user error:', error);
     res.status(500).json({ success: false, error: 'Failed to create user' });
   }
 });
 
-// Helper to safely convert to ObjectId
-const toObjectId = (id) => {
-  if (!id) return null;
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  try {
-    return new mongoose.Types.ObjectId(id);
-  } catch (e) {
-    return null;
-  }
-};
-
-const canModifyUser = async (db, userId) => {
-  try {
-    const objectId = toObjectId(userId);
-    if (!objectId) {
-      return { allowed: false, error: 'Invalid user ID format', user: null };
-    }
-    const user = await db.collection('users').findOne({ _id: objectId });
-    if (!user) return { allowed: false, error: 'User not found', user: null };
-    const protectedRoles = ['p2ladmin', 'p2l-admin', 'school-admin', 'schooladmin', 'platform-admin', 'platform admin'];
-    if (protectedRoles.includes(user.role?.toLowerCase())) return { allowed: false, error: 'Cannot modify admin', user };
-    return { allowed: true, user };
-  } catch (e) {
-    console.error('canModifyUser error:', e);
-    return { allowed: false, error: 'Invalid user ID', user: null };
-  }
-};
-
-// Update user - FIXED to sync students collection
+// Update user
 router.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
     
-    // ========== DEBUG LOGGING ==========
     console.log('📝 PUT /users/:id called');
     console.log('   User ID:', req.params.id);
-    console.log('   Request body:', JSON.stringify(req.body));
+    console.log('   School ID:', schoolId);
     
-    const check = await canModifyUser(db, req.params.id);
+    const check = await canModifyUser(db, req.params.id, schoolId);
     if (!check.allowed) {
       console.log('   ❌ Not allowed:', check.error);
       return res.status(403).json({ success: false, error: check.error });
     }
     
     const updates = { ...req.body, updatedAt: new Date() };
-    delete updates._id; delete updates.password; delete updates.role;
+    delete updates._id; delete updates.password; delete updates.role; delete updates.schoolId;
     
-    // ========== DEBUG: Show what we're saving ==========
     console.log('   Updates to save:', JSON.stringify(updates));
     
     const objectId = toObjectId(req.params.id);
@@ -209,10 +307,12 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Update user status (enable/disable)
 router.patch('/users/:id/status', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const check = await canModifyUser(db, req.params.id);
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const check = await canModifyUser(db, req.params.id, schoolId);
     if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
     
     const objectId = toObjectId(req.params.id);
@@ -227,10 +327,12 @@ router.patch('/users/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
+// Reset user password
 router.post('/users/:id/reset-password', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const check = await canModifyUser(db, req.params.id);
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const check = await canModifyUser(db, req.params.id, schoolId);
     if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
     
     const objectId = toObjectId(req.params.id);
@@ -238,7 +340,8 @@ router.post('/users/:id/reset-password', authenticateToken, async (req, res) => 
     
     const tempPassword = generateTempPassword(check.user.role || 'user');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    await db.collection('users').updateOne({ _id: objectId }, { $set: { password: hashedPassword } });
+    await db.collection('users').updateOne({ _id: objectId }, { $set: { password: hashedPassword, updatedAt: new Date() } });
+    console.log(`🔑 Password reset for ${check.user.email}`);
     res.json({ success: true, tempPassword });
   } catch (error) {
     console.error('Reset password error:', error);
@@ -246,10 +349,12 @@ router.post('/users/:id/reset-password', authenticateToken, async (req, res) => 
   }
 });
 
+// Delete user
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const check = await canModifyUser(db, req.params.id);
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const check = await canModifyUser(db, req.params.id, schoolId);
     if (!check.allowed) return res.status(403).json({ success: false, error: check.error });
     
     const objectId = toObjectId(req.params.id);
@@ -267,13 +372,17 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Classes
+// Classes - FILTERED BY SCHOOL
 router.get('/classes', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const classes = await db.collection('classes').find({}).sort({ name: 1 }).toArray();
+    const schoolId = await getSchoolId(db, req.user.userId);
     
-    // ========== FIX: Remove duplicates by name ==========
+    // Filter by school if schoolId exists
+    const filter = schoolId ? { schoolId: schoolId } : {};
+    const classes = await db.collection('classes').find(filter).sort({ name: 1 }).toArray();
+    
+    // Remove duplicates by name
     const seenNames = new Set();
     const uniqueClasses = [];
     const duplicateIds = [];
@@ -285,7 +394,11 @@ router.get('/classes', authenticateToken, async (req, res) => {
       }
       seenNames.add(cls.name);
       
-      cls.studentCount = await db.collection('users').countDocuments({ class: cls.name, role: { $in: ['Student', 'student'] } });
+      // Count students in this school
+      const studentFilter = { class: cls.name, role: { $in: ['Student', 'student'] } };
+      if (schoolId) studentFilter.schoolId = schoolId;
+      cls.studentCount = await db.collection('users').countDocuments(studentFilter);
+      
       if (cls.teacherId) {
         try {
           const teacher = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(cls.teacherId) });
@@ -310,13 +423,20 @@ router.get('/classes', authenticateToken, async (req, res) => {
   }
 });
 
+// Create class - WITH SCHOOL ID
 router.post('/classes', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    
     const { name, grade, subject, teacherId } = req.body;
     if (!name?.trim()) return res.status(400).json({ success: false, error: 'Class name required' });
-    const existing = await db.collection('classes').findOne({ name: name.trim() });
-    if (existing) return res.status(400).json({ success: false, error: 'Class name exists' });
+    
+    // Check for existing class with same name IN THIS SCHOOL
+    const existingFilter = { name: name.trim() };
+    if (schoolId) existingFilter.schoolId = schoolId;
+    const existing = await db.collection('classes').findOne(existingFilter);
+    if (existing) return res.status(400).json({ success: false, error: 'Class name exists in your school' });
     
     let teacherName = null;
     if (teacherId && teacherId !== '' && teacherId !== 'null') {
@@ -327,48 +447,67 @@ router.post('/classes', authenticateToken, async (req, res) => {
       } catch (e) {}
     }
     
-    const newClass = { name: name.trim(), grade: grade || 'Primary 1', subject: subject || 'Mathematics', teacherId: teacherId || null, teacherName, studentCount: 0, createdAt: new Date(), updatedAt: new Date() };
+    const newClass = { 
+      name: name.trim(), 
+      grade: grade || 'Primary 1', 
+      subject: subject || 'Mathematics', 
+      teacherId: teacherId || null, 
+      teacherName, 
+      studentCount: 0, 
+      schoolId: schoolId, // ← SCHOOL ISOLATION
+      createdAt: new Date(), 
+      updatedAt: new Date() 
+    };
     const result = await db.collection('classes').insertOne(newClass);
-    console.log(`✅ Class created: ${name}`);
+    console.log(`✅ Class created: ${name} for school: ${schoolId}`);
     res.json({ success: true, class: { ...newClass, _id: result.insertedId } });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to create class' });
   }
 });
 
+// Update class
 router.put('/classes/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
     const { teacherId, name } = req.body;
-    const objectId = new mongoose.Types.ObjectId(req.params.id);
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid class ID' });
+    
     const cls = await db.collection('classes').findOne({ _id: objectId });
     if (!cls) return res.status(404).json({ success: false, error: 'Class not found' });
     
-    const updates = { updatedAt: new Date() };
+    // Verify class belongs to this school
+    if (schoolId && cls.schoolId && cls.schoolId.toString() !== schoolId.toString()) {
+      return res.status(403).json({ success: false, error: 'Class belongs to different school' });
+    }
     
-    if (teacherId !== undefined) {
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id; delete updates.schoolId;
+    
+    // Handle teacher change
+    if (teacherId !== undefined && teacherId !== cls.teacherId) {
       if (cls.teacherId) {
         try { await db.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(cls.teacherId) }, { $pull: { classes: cls.name } }); } catch (e) {}
       }
       if (teacherId && teacherId !== '' && teacherId !== 'null') {
-        const teacher = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(teacherId) });
-        if (teacher) {
-          updates.teacherId = teacherId;
-          updates.teacherName = teacher.name;
+        try {
+          const teacher = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(teacherId) });
+          updates.teacherName = teacher?.name || null;
           await db.collection('users').updateOne({ _id: teacher._id }, { $addToSet: { classes: cls.name } });
-        }
+        } catch (e) { updates.teacherName = null; }
       } else {
-        updates.teacherId = null;
         updates.teacherName = null;
       }
     }
     
+    // Check name uniqueness if changing
     if (name && name !== cls.name) {
-      const existing = await db.collection('classes').findOne({ name: name.trim() });
+      const nameFilter = { name: name.trim(), _id: { $ne: objectId } };
+      if (schoolId) nameFilter.schoolId = schoolId;
+      const existing = await db.collection('classes').findOne(nameFilter);
       if (existing) return res.status(400).json({ success: false, error: 'Class name exists' });
-      updates.name = name.trim();
-      await db.collection('users').updateMany({ class: cls.name }, { $set: { class: name.trim() } });
-      await db.collection('students').updateMany({ class: cls.name }, { $set: { class: name.trim() } });
     }
     
     await db.collection('classes').updateOne({ _id: objectId }, { $set: updates });
@@ -378,11 +517,21 @@ router.put('/classes/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete class
 router.delete('/classes/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const objectId = new mongoose.Types.ObjectId(req.params.id);
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const objectId = toObjectId(req.params.id);
+    if (!objectId) return res.status(400).json({ success: false, error: 'Invalid class ID' });
+    
     const cls = await db.collection('classes').findOne({ _id: objectId });
+    
+    // Verify class belongs to this school
+    if (cls && schoolId && cls.schoolId && cls.schoolId.toString() !== schoolId.toString()) {
+      return res.status(403).json({ success: false, error: 'Class belongs to different school' });
+    }
+    
     if (cls?.teacherId) {
       try { await db.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(cls.teacherId) }, { $pull: { classes: cls.name } }); } catch (e) {}
     }
@@ -393,24 +542,33 @@ router.delete('/classes/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Badges
+// Badges - FILTERED BY SCHOOL
 router.get('/badges', authenticateToken, async (req, res) => {
-  try { res.json({ success: true, badges: await getDb().collection('badges').find({}).toArray() }); }
-  catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+  try {
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const filter = schoolId ? { $or: [{ schoolId: schoolId }, { schoolId: { $exists: false } }, { isGlobal: true }] } : {};
+    const badges = await db.collection('badges').find(filter).toArray();
+    res.json({ success: true, badges });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.post('/badges', authenticateToken, async (req, res) => {
   try {
-    const { name, description, icon, criteriaType, criteriaValue, rarity, isActive } = req.body;
-    const result = await getDb().collection('badges').insertOne({ name, description, icon: icon || '🏆', criteriaType: criteriaType || 'manual', criteriaValue: criteriaValue || 0, rarity: rarity || 'common', isActive: isActive !== false, earnedCount: 0, createdAt: new Date() });
-    res.json({ success: true, badge: { ...req.body, _id: result.insertedId } });
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const badge = { ...req.body, schoolId: schoolId, createdAt: new Date() };
+    const result = await db.collection('badges').insertOne(badge);
+    res.json({ success: true, badge: { ...badge, _id: result.insertedId } });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.put('/badges/:id', authenticateToken, async (req, res) => {
   try {
-    const updates = { ...req.body, updatedAt: new Date() }; delete updates._id;
-    await getDb().collection('badges').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
+    const db = getDb();
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id; delete updates.schoolId;
+    await db.collection('badges').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
@@ -420,23 +578,30 @@ router.delete('/badges/:id', authenticateToken, async (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
-// Shop Items
+// Shop Items - FILTERED BY SCHOOL
 router.get('/shop-items', authenticateToken, async (req, res) => {
-  try { res.json({ success: true, items: await getDb().collection('shop_items').find({}).toArray() }); }
-  catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+  try {
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const filter = schoolId ? { $or: [{ schoolId: schoolId }, { schoolId: { $exists: false } }, { isGlobal: true }] } : {};
+    res.json({ success: true, items: await db.collection('shop_items').find(filter).toArray() });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.post('/shop-items', authenticateToken, async (req, res) => {
   try {
-    const { name, description, icon, cost, category, stock, isActive } = req.body;
-    const result = await getDb().collection('shop_items').insertOne({ name, description, icon: icon || '🎁', cost: cost || 100, category: category || 'reward', stock: stock === undefined ? -1 : stock, isActive: isActive !== false, purchaseCount: 0, createdAt: new Date() });
-    res.json({ success: true, item: { ...req.body, _id: result.insertedId } });
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const item = { ...req.body, schoolId: schoolId, createdAt: new Date() };
+    const result = await db.collection('shop_items').insertOne(item);
+    res.json({ success: true, item: { ...item, _id: result.insertedId } });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.put('/shop-items/:id', authenticateToken, async (req, res) => {
   try {
-    const updates = { ...req.body, updatedAt: new Date() }; delete updates._id;
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id; delete updates.schoolId;
     await getDb().collection('shop_items').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
@@ -447,59 +612,30 @@ router.delete('/shop-items/:id', authenticateToken, async (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
-// Announcements - FIXED for all roles
+// Announcements - FILTERED BY SCHOOL
 router.get('/announcements', authenticateToken, async (req, res) => {
-  try { res.json({ success: true, announcements: await getDb().collection('announcements').find({}).sort({ pinned: -1, createdAt: -1 }).toArray() }); }
-  catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
-});
-
-router.get('/announcements/public', async (req, res) => {
   try {
     const db = getDb();
-    const { audience } = req.query;
-    console.log('📢 Fetching announcements for:', audience);
-    
-    const now = new Date();
-    let filter = { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] };
-    
-    if (audience && audience !== 'all') {
-      const audienceNormalized = audience.toLowerCase();
-      const audienceMatches = ['all'];
-      if (audienceNormalized.includes('student')) audienceMatches.push('student', 'students');
-      else if (audienceNormalized.includes('teacher')) audienceMatches.push('teacher', 'teachers');
-      else if (audienceNormalized.includes('parent')) audienceMatches.push('parent', 'parents');
-      else audienceMatches.push(audienceNormalized);
-      
-      filter = {
-        $and: [
-          { $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }] },
-          { $or: [{ audience: { $in: audienceMatches } }, { audience: { $exists: false } }] }
-        ]
-      };
-    }
-    
-    const announcements = await db.collection('announcements').find(filter).sort({ pinned: -1, createdAt: -1 }).limit(10).toArray();
-    console.log(`✅ Found ${announcements.length} announcements`);
-    res.json({ success: true, announcements });
-  } catch (e) {
-    console.error('Get announcements error:', e);
-    res.status(500).json({ success: false, error: 'Failed' });
-  }
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const filter = schoolId ? { $or: [{ schoolId: schoolId }, { schoolId: { $exists: false } }, { isGlobal: true }] } : {};
+    res.json({ success: true, announcements: await db.collection('announcements').find(filter).sort({ createdAt: -1 }).toArray() });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.post('/announcements', authenticateToken, async (req, res) => {
   try {
-    const { title, content, priority, audience, pinned, expiresAt } = req.body;
-    const result = await getDb().collection('announcements').insertOne({ title, content, priority: priority || 'info', audience: audience || 'all', pinned: pinned || false, author: req.user.name || req.user.email, expiresAt: expiresAt ? new Date(expiresAt) : null, createdAt: new Date(), updatedAt: new Date() });
-    console.log(`📢 Announcement created: "${title}"`);
-    res.json({ success: true, announcement: { ...req.body, _id: result.insertedId } });
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const ann = { ...req.body, schoolId: schoolId, createdAt: new Date(), createdBy: req.user.email };
+    const result = await db.collection('announcements').insertOne(ann);
+    res.json({ success: true, announcement: { ...ann, _id: result.insertedId } });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.put('/announcements/:id', authenticateToken, async (req, res) => {
   try {
-    const updates = { ...req.body, updatedAt: new Date() }; delete updates._id;
-    if (updates.expiresAt) updates.expiresAt = new Date(updates.expiresAt);
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id; delete updates.schoolId;
     await getDb().collection('announcements').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
@@ -510,7 +646,29 @@ router.delete('/announcements/:id', authenticateToken, async (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
-// Maintenance
+// Support Tickets - FILTERED BY SCHOOL
+router.get('/support-tickets', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const { status, priority } = req.query;
+    const filter = schoolId ? { schoolId: schoolId } : {};
+    if (status) filter.status = status;
+    if (priority) filter.priority = priority;
+    res.json({ success: true, tickets: await db.collection('supporttickets').find(filter).sort({ createdAt: -1 }).toArray() });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+});
+
+router.put('/support-tickets/:id', authenticateToken, async (req, res) => {
+  try {
+    const updates = { ...req.body, updatedAt: new Date() };
+    delete updates._id;
+    await getDb().collection('supporttickets').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+});
+
+// Maintenance Messages
 router.get('/maintenance', authenticateToken, async (req, res) => {
   try { res.json({ success: true, messages: await getDb().collection('maintenance_messages').find({}).sort({ createdAt: -1 }).toArray() }); }
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
@@ -518,20 +676,15 @@ router.get('/maintenance', authenticateToken, async (req, res) => {
 
 router.post('/maintenance', authenticateToken, async (req, res) => {
   try {
-    const { title, content, scheduledStart, scheduledEnd, type, isActive } = req.body;
-    const result = await getDb().collection('maintenance_messages').insertOne({ title, content, scheduledStart: scheduledStart ? new Date(scheduledStart) : null, scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null, type: type || 'maintenance', isActive: isActive !== false, createdBy: req.user.email, createdAt: new Date() });
-    res.json({ success: true, message: { ...req.body, _id: result.insertedId } });
+    const msg = { ...req.body, createdAt: new Date() };
+    const result = await getDb().collection('maintenance_messages').insertOne(msg);
+    res.json({ success: true, message: { ...msg, _id: result.insertedId } });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.put('/maintenance/:id', authenticateToken, async (req, res) => {
-  try {
-    const updates = { ...req.body, updatedAt: new Date() }; delete updates._id;
-    if (updates.scheduledStart) updates.scheduledStart = new Date(updates.scheduledStart);
-    if (updates.scheduledEnd) updates.scheduledEnd = new Date(updates.scheduledEnd);
-    await getDb().collection('maintenance_messages').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+  try { await getDb().collection('maintenance_messages').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: { ...req.body, updatedAt: new Date() } }); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
 router.delete('/maintenance/:id', authenticateToken, async (req, res) => {
@@ -539,62 +692,39 @@ router.delete('/maintenance/:id', authenticateToken, async (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
-// Support Tickets
-router.get('/support-tickets', authenticateToken, async (req, res) => {
-  try {
-    const db = getDb();
-    const { status, priority } = req.query;
-    let filter = {};
-    if (status && status !== 'all') filter.status = status;
-    if (priority && priority !== 'all') filter.priority = priority;
-    const tickets = await db.collection('supporttickets').find(filter).sort({ createdAt: -1 }).toArray();
-    const counts = {
-      all: await db.collection('supporttickets').countDocuments({}),
-      open: await db.collection('supporttickets').countDocuments({ status: 'open' }),
-      in_progress: await db.collection('supporttickets').countDocuments({ status: 'in_progress' }),
-      resolved: await db.collection('supporttickets').countDocuments({ status: 'resolved' }),
-      closed: await db.collection('supporttickets').countDocuments({ status: 'closed' })
-    };
-    res.json({ success: true, tickets, counts });
-  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
-});
-
-router.put('/support-tickets/:id', authenticateToken, async (req, res) => {
-  try {
-    const db = getDb();
-    const { status, reply } = req.body;
-    const ticket = await db.collection('supporttickets').findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
-    if (!ticket) return res.status(404).json({ success: false, error: 'Not found' });
-    const updates = { status, updatedAt: new Date() };
-    if (reply) updates.responses = [...(ticket.responses || []), { by: req.user.name || 'Admin', message: reply, at: new Date() }];
-    await db.collection('supporttickets').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: updates });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
-});
-
-// Analytics
+// Analytics - FILTERED BY SCHOOL
 router.get('/analytics', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const [totalStudents, activeToday, totalQuizzes] = await Promise.all([
-      db.collection('students').countDocuments({}),
-      db.collection('students').countDocuments({ last_active: { $gte: new Date(Date.now() - 86400000) } }),
-      db.collection('quizattempts').countDocuments({})
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const filter = schoolId ? { schoolId: schoolId } : {};
+    
+    const [totalStudents, totalQuizzes, avgScore] = await Promise.all([
+      db.collection('users').countDocuments({ ...filter, role: { $in: ['Student', 'student'] } }),
+      db.collection('quiz_attempts').countDocuments(filter),
+      db.collection('quiz_attempts').aggregate([
+        { $match: filter },
+        { $group: { _id: null, avg: { $avg: '$score' } } }
+      ]).toArray()
     ]);
-    const classPerformance = await db.collection('students').aggregate([
-      { $match: { class: { $ne: null } } },
-      { $group: { _id: '$class', students: { $sum: 1 }, avgScore: { $avg: '$average_score' }, avgPoints: { $avg: '$points' } } },
-      { $sort: { avgScore: -1 } }
-    ]).toArray();
-    const topStudents = await db.collection('students').find({}).sort({ points: -1 }).limit(10).toArray();
-    res.json({ success: true, overview: { totalStudents, activeToday, totalQuizzes, avgScore: 0 }, classPerformance, topStudents, strugglingStudents: [] });
+    
+    res.json({
+      success: true,
+      analytics: {
+        totalStudents,
+        totalQuizzes,
+        averageScore: avgScore[0]?.avg || 0,
+        activeUsers: totalStudents
+      }
+    });
   } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
 
-// Bulk Upload
+// Bulk Upload - WITH SCHOOL ID
 router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
     const { type } = req.params;
     const results = [], errors = [];
     if (!req.file) return res.status(400).json({ success: false, error: 'No file' });
@@ -603,16 +733,17 @@ router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), asyn
       fs.createReadStream(req.file.path).pipe(csv()).on('data', (row) => rows.push(row)).on('end', resolve).on('error', reject);
     });
     
-    // ========== FIX: Auto-create classes without duplicates ==========
+    // Auto-create classes without duplicates
     const classesToCreate = new Set();
     for (const row of rows) {
       const className = (row.class || row.Class || '').trim();
       if (className) classesToCreate.add(className);
     }
     
-    // Create classes that don't exist
     for (const className of classesToCreate) {
-      const existing = await db.collection('classes').findOne({ name: className });
+      const existingFilter = { name: className };
+      if (schoolId) existingFilter.schoolId = schoolId;
+      const existing = await db.collection('classes').findOne(existingFilter);
       if (!existing) {
         await db.collection('classes').insertOne({
           name: className,
@@ -621,10 +752,11 @@ router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), asyn
           teacherId: null,
           teacherName: null,
           studentCount: 0,
+          schoolId: schoolId, // ← SCHOOL ISOLATION
           createdAt: new Date(),
           updatedAt: new Date()
         });
-        console.log(`✅ Auto-created class: ${className}`);
+        console.log(`✅ Auto-created class: ${className} for school: ${schoolId}`);
       }
     }
     
@@ -637,10 +769,34 @@ router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), asyn
         const role = normalizeRole(type.slice(0, -1));
         const tempPassword = generateTempPassword(role);
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
-        const newUser = { name, email, password: hashedPassword, role, gradeLevel: row.gradeLevel || 'Primary 1', class: row.class || null, accountActive: true, createdBy: req.user.email, createdAt: new Date() };
+        const newUser = { 
+          name, 
+          email, 
+          password: hashedPassword, 
+          role, 
+          gradeLevel: row.gradeLevel || 'Primary 1', 
+          class: row.class || null, 
+          schoolId: schoolId, // ← SCHOOL ISOLATION
+          accountActive: true, 
+          createdBy: req.user.email, 
+          createdAt: new Date() 
+        };
         const result = await db.collection('users').insertOne(newUser);
         if (role === 'Student') {
-          await db.collection('students').insertOne({ user_id: result.insertedId, name, email, grade_level: newUser.gradeLevel, class: newUser.class, points: 0, level: 1, streak: 0, total_quizzes: 0, badges: [], created_at: new Date() });
+          await db.collection('students').insertOne({ 
+            user_id: result.insertedId, 
+            name, 
+            email, 
+            grade_level: newUser.gradeLevel, 
+            class: newUser.class, 
+            schoolId: schoolId, // ← SCHOOL ISOLATION
+            points: 0, 
+            level: 1, 
+            streak: 0, 
+            total_quizzes: 0, 
+            badges: [], 
+            created_at: new Date() 
+          });
         }
         results.push({ name, email, tempPassword });
       } catch (err) { errors.push({ row, error: err.message }); }
@@ -652,17 +808,28 @@ router.post('/bulk-upload/:type', authenticateToken, upload.single('file'), asyn
 
 // Point Rules
 router.get('/point-rules', authenticateToken, async (req, res) => {
-  try { res.json({ success: true, rules: await getDb().collection('point_rules').find({}).toArray() }); }
-  catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+  try {
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const filter = schoolId ? { $or: [{ schoolId: schoolId }, { schoolId: { $exists: false } }] } : {};
+    res.json({ success: true, rules: await db.collection('point_rules').find(filter).toArray() });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
+
 router.post('/point-rules', authenticateToken, async (req, res) => {
-  try { const result = await getDb().collection('point_rules').insertOne({ ...req.body, createdAt: new Date() }); res.json({ success: true, rule: { ...req.body, _id: result.insertedId } }); }
-  catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
+  try {
+    const db = getDb();
+    const schoolId = await getSchoolId(db, req.user.userId);
+    const result = await db.collection('point_rules').insertOne({ ...req.body, schoolId: schoolId, createdAt: new Date() });
+    res.json({ success: true, rule: { ...req.body, _id: result.insertedId } });
+  } catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
+
 router.put('/point-rules/:id', authenticateToken, async (req, res) => {
   try { await getDb().collection('point_rules').updateOne({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: { ...req.body, updatedAt: new Date() } }); res.json({ success: true }); }
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }
 });
+
 router.delete('/point-rules/:id', authenticateToken, async (req, res) => {
   try { await getDb().collection('point_rules').deleteOne({ _id: new mongoose.Types.ObjectId(req.params.id) }); res.json({ success: true }); }
   catch (e) { res.status(500).json({ success: false, error: 'Failed' }); }

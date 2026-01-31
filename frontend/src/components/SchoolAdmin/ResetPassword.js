@@ -7,10 +7,9 @@ export default function ResetPassword() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(null);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -30,22 +29,17 @@ export default function ResetPassword() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // REAL API CALL - Fetches from database!
-      const result = await schoolAdminService.getUsers({
-        gradeLevel: 'Primary 1',
-        subject: 'Mathematics'
-      });
-
+      const result = await schoolAdminService.getUsers({});
       if (result.success) {
-        // Filter out school-admin users
-        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin');
+        // Filter out admin users
+        const filteredUsers = (result.users || []).filter(u => 
+          !['school-admin', 'p2ladmin', 'p2l-admin'].includes(u.role?.toLowerCase())
+        );
         setUsers(filteredUsers);
       } else {
-        console.error('Failed to load users:', result.error);
         setMessage({ type: 'error', text: result.error || 'Failed to load users' });
       }
     } catch (error) {
-      console.error('Error loading users:', error);
       setMessage({ type: 'error', text: 'Failed to load users' });
     } finally {
       setLoading(false);
@@ -53,30 +47,39 @@ export default function ResetPassword() {
   };
 
   const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
+    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleReset = async () => {
-    if (!newPassword || newPassword.length < 8) {
-      setMessage({ type: 'error', text: 'Password must be at least 8 characters' });
+  const handleReset = async (user) => {
+    // FIX: Use _id or id
+    const userId = user._id || user.id;
+    if (!userId) {
+      setMessage({ type: 'error', text: 'Invalid user ID' });
       return;
     }
 
+    if (!window.confirm(`Reset password for ${user.name}? A temporary password will be generated.`)) {
+      return;
+    }
+
+    setResetting(userId);
     try {
-      // REAL API CALL - Updates database!
-      const result = await schoolAdminService.resetUserPassword(selectedUser.id, newPassword);
+      const result = await schoolAdminService.resetUserPassword(userId);
 
       if (result.success) {
-        setMessage({ type: 'success', text: `Password reset for ${selectedUser.name}` });
-        setSelectedUser(null);
-        setNewPassword('');
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+        setMessage({ 
+          type: 'success', 
+          text: `Password reset for ${user.name}. Temporary password: ${result.tempPassword}` 
+        });
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
       }
     } catch (err) {
+      console.error('Reset error:', err);
       setMessage({ type: 'error', text: 'Failed to reset password' });
+    } finally {
+      setResetting(null);
     }
   };
 
@@ -97,18 +100,21 @@ export default function ResetPassword() {
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
     resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
-    modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '500px', width: '90%' },
-    modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '24px' },
-    label: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' },
-    input: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '24px' },
-    modalButtons: { display: 'flex', gap: '12px' },
-    cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    resetButtonDisabled: { padding: '6px 12px', background: '#d1d5db', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'not-allowed' },
     message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
+    roleBadge: { padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600' },
+  };
+
+  const getRoleBadgeStyle = (role) => {
+    const colors = {
+      student: { background: '#dbeafe', color: '#1d4ed8' },
+      teacher: { background: '#fef3c7', color: '#d97706' },
+      parent: { background: '#f3e8ff', color: '#7c3aed' },
+    };
+    return colors[role?.toLowerCase()] || { background: '#f3f4f6', color: '#6b7280' };
   };
 
   return (
@@ -127,7 +133,7 @@ export default function ResetPassword() {
 
       <main style={styles.main}>
         <h1 style={styles.pageTitle}>Reset User Password</h1>
-        <p style={styles.pageSubtitle}>Search for a Primary 1 Mathematics user and reset their password.</p>
+        <p style={styles.pageSubtitle}>Click reset to generate a temporary password for any user.</p>
 
         <div style={styles.card}>
           {message.text && (
@@ -158,18 +164,29 @@ export default function ResetPassword() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td style={styles.td}><strong>{user.name}</strong></td>
-                      <td style={styles.td}>{user.email}</td>
-                      <td style={styles.td}>{user.role}</td>
-                      <td style={styles.td}>
-                        <button style={styles.resetButton} onClick={() => setSelectedUser(user)}>
-                          Reset Password
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredUsers.map((user) => {
+                    const userId = user._id || user.id;
+                    return (
+                      <tr key={userId}>
+                        <td style={styles.td}><strong>{user.name}</strong></td>
+                        <td style={styles.td}>{user.email}</td>
+                        <td style={styles.td}>
+                          <span style={{ ...styles.roleBadge, ...getRoleBadgeStyle(user.role) }}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <button 
+                            style={resetting === userId ? styles.resetButtonDisabled : styles.resetButton} 
+                            onClick={() => handleReset(user)}
+                            disabled={resetting === userId}
+                          >
+                            {resetting === userId ? 'Resetting...' : 'Reset Password'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -182,26 +199,6 @@ export default function ResetPassword() {
           )}
         </div>
       </main>
-
-      {selectedUser && (
-        <div style={styles.modal} onClick={() => setSelectedUser(null)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>Reset Password for {selectedUser.name}</h2>
-            <label style={styles.label}>New Password (min. 8 characters)</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              style={styles.input}
-            />
-            <div style={styles.modalButtons}>
-              <button style={styles.cancelButton} onClick={() => setSelectedUser(null)}>Cancel</button>
-              <button style={styles.saveButton} onClick={handleReset}>Reset Password</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
