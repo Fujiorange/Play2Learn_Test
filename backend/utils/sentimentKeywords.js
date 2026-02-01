@@ -77,18 +77,32 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
     }
   }
   
-  // Add rating adjustment
-  // Rating contributes: (rating - 3) × 0.5, range: [-1.0, +1.0]
+  // Add rating adjustment with stronger weighting
+  // Rating contributes: (rating - 3) × 2.0, range: [-4.0, +4.0]
   // Each keyword contributes: ±3.0
-  // With keywords present: keywords dominate (3× stronger per match)
-  // Without keywords: rating becomes the primary sentiment indicator
-  const ratingAdjustment = (rating - 3) * 0.5;
+  // This ensures rating has significant influence especially at extremes (1 or 5 stars)
+  const ratingAdjustment = (rating - 3) * 2.0;
   sentimentScore += ratingAdjustment;
   
   // Determine sentiment label
+  // Rating takes strong precedence at extremes (1-2 stars = negative, 4-5 stars = positive)
   let sentimentLabel = 'neutral';
-  if (sentimentScore > 1) sentimentLabel = 'positive';
-  else if (sentimentScore < -1) sentimentLabel = 'negative';
+  
+  // For extreme low ratings (1-2 stars), it should almost always be negative
+  // Only mark as neutral if sentiment is OVERWHELMINGLY positive (e.g., sarcasm detection)
+  if (rating <= 2) {
+    sentimentLabel = sentimentScore > 10 ? 'neutral' : 'negative';
+  } 
+  // For extreme high ratings (4-5 stars), it should almost always be positive
+  // Only mark as neutral if sentiment is OVERWHELMINGLY negative
+  else if (rating >= 4) {
+    sentimentLabel = sentimentScore < -10 ? 'neutral' : 'positive';
+  } 
+  // For neutral rating (3 stars), use sentiment score
+  else {
+    if (sentimentScore > 1) sentimentLabel = 'positive';
+    else if (sentimentScore < -1) sentimentLabel = 'negative';
+  }
   
   return {
     score: sentimentScore,
