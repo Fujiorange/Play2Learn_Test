@@ -228,7 +228,6 @@ export default function StudentLeaderboard() {
   }
 
   const topThree = leaderboard.slice(0, 3);
-  const remaining = leaderboard.slice(3);
 
   return (
     <div style={styles.container}>

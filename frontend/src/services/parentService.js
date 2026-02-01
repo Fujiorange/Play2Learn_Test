@@ -574,4 +574,5 @@ class ParentService {
   }
 }
 
-export default new ParentService();
+const parentService = new ParentService();
+export default parentService;

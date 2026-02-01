@@ -8,7 +8,7 @@ export default function QuizResult() {
   const location = useLocation();
   const [showConfetti, setShowConfetti] = useState(false);
 
-  const { result, quizType, profile } = location.state || {};
+  const { result, quizType } = location.state || {};
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {

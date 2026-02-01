@@ -660,23 +660,6 @@ const studentService = {
     }
   },
 
-  async getShopItems() {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return { success: false, error: 'Not authenticated' };
-
-      const response = await fetch(`${API_URL}/mongo/student/shop`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch shop items');
-      return await response.json();
-    } catch (error) {
-      console.error('getShopItems error:', error);
-      return { success: false, error: 'Failed to load shop items' };
-    }
-  },
-
   async purchaseItem(itemId) {
     try {
       const token = localStorage.getItem('token');

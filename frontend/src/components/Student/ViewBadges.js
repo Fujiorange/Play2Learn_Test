@@ -6,7 +6,7 @@ import studentService from '../../services/studentService';
 
 export default function ViewBadges() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const [, setUser] = useState(null);
   const [badges, setBadges] = useState([]);
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [progress, setProgress] = useState({});

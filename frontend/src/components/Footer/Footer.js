@@ -10,9 +10,9 @@ const Footer = () => {
             <h3>Play2Learn</h3>
             <p>Transforming education through adaptive learning and incentive-driven engagement.</p>
             <div className="social-links">
-              <a href="#">LinkedIn</a>
-              <a href="#">Twitter</a>
-              <a href="#">Facebook</a>
+              <a href="#linkedin" aria-label="LinkedIn">LinkedIn</a>
+              <a href="#twitter" aria-label="Twitter">Twitter</a>
+              <a href="#facebook" aria-label="Facebook">Facebook</a>
             </div>
           </div>
           
@@ -30,19 +30,19 @@ const Footer = () => {
             <h4>Support</h4>
             <ul>
               <li><a href="#contact">Contact Us</a></li>
-              <li><a href="#">Documentation</a></li>
-              <li><a href="#">Help Center</a></li>
-              <li><a href="#">Teacher Resources</a></li>
+              <li><a href="#documentation">Documentation</a></li>
+              <li><a href="#help">Help Center</a></li>
+              <li><a href="#resources">Teacher Resources</a></li>
             </ul>
           </div>
           
           <div className="footer-section">
             <h4>Legal</h4>
             <ul>
-              <li><a href="#">Privacy Policy</a></li>
-              <li><a href="#">Terms of Service</a></li>
-              <li><a href="#">Data Protection</a></li>
-              <li><a href="#">Compliance</a></li>
+              <li><a href="#privacy">Privacy Policy</a></li>
+              <li><a href="#terms">Terms of Service</a></li>
+              <li><a href="#data-protection">Data Protection</a></li>
+              <li><a href="#compliance">Compliance</a></li>
             </ul>
           </div>
         </div>

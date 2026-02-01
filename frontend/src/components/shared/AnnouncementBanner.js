@@ -21,26 +21,26 @@ export default function AnnouncementBanner({ userRole = 'all' }) {
   const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
+    const loadAnnouncements = async () => {
+      try {
+        // Fetch from public announcements endpoint (no auth required)
+        const response = await fetch(`${API_URL}/mongo/school-admin/announcements/public?audience=${userRole}`);
+        const data = await response.json();
+        
+        if (data.success && data.announcements) {
+          setAnnouncements(data.announcements);
+        }
+      } catch (error) {
+        console.error('Error loading announcements:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     loadAnnouncements();
     const dismissed = JSON.parse(localStorage.getItem('dismissedAnnouncements') || '[]');
     setDismissedIds(dismissed);
   }, [userRole]);
-
-  const loadAnnouncements = async () => {
-    try {
-      // Fetch from public announcements endpoint (no auth required)
-      const response = await fetch(`${API_URL}/mongo/school-admin/announcements/public?audience=${userRole}`);
-      const data = await response.json();
-      
-      if (data.success && data.announcements) {
-        setAnnouncements(data.announcements);
-      }
-    } catch (error) {
-      console.error('Error loading announcements:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const dismissAnnouncement = (id) => {
     const newDismissed = [...dismissedIds, id];

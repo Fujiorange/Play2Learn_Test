@@ -12,32 +12,26 @@ export default function AnalyticsDashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!authService.isAuthenticated()) { navigate('/login'); return; }
-    const currentUser = authService.getCurrentUser();
-    if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
-    loadAnalytics();
-  }, [navigate]);
-
-  const loadAnalytics = async () => {
-    try {
-      setError('');
-      const result = await schoolAdminService.getAnalytics();
-      
-      if (result.success) {
-        // Transform backend data to frontend format
-        const transformed = {
-          overview: {
-            totalStudents: result.overview?.totalStudents || 0,
-            activeToday: result.overview?.activeToday || 0,
-            totalQuizzes: result.overview?.totalQuizzes || 0,
-            avgQuizScore: result.overview?.avgScore || 0
-          },
-          classPerformance: (result.classPerformance || []).map(c => ({
-            class: c._id || 'Unknown',
-            students: c.students || 0,
-            avgScore: Math.round(c.avgScore || 0),
-            avgPoints: Math.round(c.avgPoints || 0),
-            quizzesCompleted: c.totalQuizzes || 0,
+    const loadAnalytics = async () => {
+      try {
+        setError('');
+        const result = await schoolAdminService.getAnalytics();
+        
+        if (result.success) {
+          // Transform backend data to frontend format
+          const transformed = {
+            overview: {
+              totalStudents: result.overview?.totalStudents || 0,
+              activeToday: result.overview?.activeToday || 0,
+              totalQuizzes: result.overview?.totalQuizzes || 0,
+              avgQuizScore: result.overview?.avgScore || 0
+            },
+            classPerformance: (result.classPerformance || []).map(c => ({
+              class: c._id || 'Unknown',
+              students: c.students || 0,
+              avgScore: Math.round(c.avgScore || 0),
+              avgPoints: Math.round(c.avgPoints || 0),
+              quizzesCompleted: c.totalQuizzes || 0,
             trend: 'stable'
           })),
           topStudents: (result.topStudents || []).map((s, i) => ({
@@ -81,6 +75,12 @@ export default function AnalyticsDashboard() {
     }
   };
 
+  if (!authService.isAuthenticated()) { navigate('/login'); return; }
+  const currentUser = authService.getCurrentUser();
+  if (currentUser.role?.toLowerCase() !== 'school-admin') { navigate('/login'); return; }
+  loadAnalytics();
+}, [navigate]);
+
   const getTimeSince = (dateString) => {
     if (!dateString) return 'Never';
     const now = new Date();
@@ -96,12 +96,6 @@ export default function AnalyticsDashboard() {
     if (score >= 80) return '#16a34a';
     if (score >= 70) return '#d97706';
     return '#dc2626';
-  };
-
-  const getTrendIcon = (trend) => {
-    if (trend === 'up') return '📈';
-    if (trend === 'down') return '📉';
-    return '➡️';
   };
 
   if (loading) {

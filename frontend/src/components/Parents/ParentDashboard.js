@@ -18,12 +18,12 @@ export default function ParentDashboard() {
   const [hoveredItem, setHoveredItem] = useState(null);
   
   // Parent and children data
-  const [parentData, setParentData] = useState(null);
+  const [, setParentData] = useState(null);
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   
   // Selected child's data
-  const [childStats, setChildStats] = useState(null);
+  const [, setChildStats] = useState(null);
   const [childActivities, setChildActivities] = useState([]);
   const [statsLoading, setStatsLoading] = useState(false);
 
