@@ -223,10 +223,6 @@ export default function StudentDashboard() {
     // 1️⃣2️⃣ My Badges
     {
       id: 'badges',
-      title: 'My Badges',
-      description: 'View your earned achievement badges',
-    {
-      id: 'badges',
       title: 'Badges & Shop',
       description: 'View earned badges and spend points',
       icon: '🏆',
