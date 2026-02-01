@@ -14,6 +14,7 @@ const Testimonial = require('../models/Testimonial');
 const { authMiddleware } = require('../middleware/auth');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
+const { analyzeSentiment } = require('../utils/sentimentKeywords');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
@@ -1162,55 +1163,8 @@ router.post('/testimonials', authMiddleware, async (req, res) => {
       });
     }
 
-    // Perform enhanced sentiment analysis prioritizing text content
-    const sentimentResult = sentiment.analyze(message);
-    let sentimentScore = sentimentResult.score;
-    
-    // Define strong negative and positive keywords
-    const negativeKeywords = [
-      'bad', 'terrible', 'awful', 'horrible', 'worst', 'hate', 'dislike',
-      'poor', 'disappointing', 'frustrated', 'useless', 'waste', 'broken',
-      'annoying', 'confusing', 'difficult', 'hard', 'problem', 'issue',
-      'not good', 'not great', 'not recommended', 'dont recommend', 'avoid',
-      'terrible experience', 'bad experience', 'worst experience', 'never again',
-      'regret', 'unhappy', 'dissatisfied', 'disappointed'
-    ];
-    
-    const positiveKeywords = [
-      'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love',
-      'best', 'awesome', 'brilliant', 'outstanding', 'perfect', 'superb',
-      'highly recommend', 'recommend', 'impressed', 'exceeded expectations',
-      'great experience', 'amazing experience', 'wonderful experience',
-      'satisfied', 'happy', 'pleased', 'delighted', 'thrilled'
-    ];
-    
-    // Check for strong keywords in the message (case-insensitive)
-    const lowerMessage = message.toLowerCase();
-    let keywordBoost = 0;
-    
-    for (const keyword of negativeKeywords) {
-      if (lowerMessage.includes(keyword)) {
-        keywordBoost -= 3; // Strong negative boost for each keyword
-      }
-    }
-    
-    for (const keyword of positiveKeywords) {
-      if (lowerMessage.includes(keyword)) {
-        keywordBoost += 3; // Strong positive boost for each keyword
-      }
-    }
-    
-    // Apply keyword boost to sentiment score (text has more weight than rating)
-    sentimentScore += keywordBoost;
-    
-    // Only use rating as a minor adjustment (10% weight), text content is 90%
-    const ratingAdjustment = (rating - 3) * 0.5; // Small adjustment based on rating
-    sentimentScore += ratingAdjustment;
-    
-    // Determine sentiment label based on final score
-    let sentimentLabel = 'neutral';
-    if (sentimentScore > 1) sentimentLabel = 'positive';
-    else if (sentimentScore < -1) sentimentLabel = 'negative';
+    // Perform enhanced sentiment analysis using shared utility
+    const sentimentAnalysis = analyzeSentiment(message, rating, sentiment);
 
     const testimonialDoc = await Testimonial.create({
       student_id: req.user.id,
@@ -1221,8 +1175,8 @@ router.post('/testimonials', authMiddleware, async (req, res) => {
       message,
       approved: false,
       user_role: 'Parent',
-      sentiment_score: sentimentScore,
-      sentiment_label: sentimentLabel,
+      sentiment_score: sentimentAnalysis.score,
+      sentiment_label: sentimentAnalysis.label,
     });
 
     res.status(201).json({
