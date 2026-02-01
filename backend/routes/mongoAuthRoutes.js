@@ -81,6 +81,11 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
+    // Check if account is active
+    if (user.accountActive === false) {
+      return res.status(401).json({ success: false, error: 'Account is inactive. Please contact your administrator.' });
+    }
+
     // FIXED: Check both 'password' and 'password_hash' fields
     const storedPassword = user.password || user.password_hash;
     if (!storedPassword) {

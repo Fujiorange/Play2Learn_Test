@@ -6,7 +6,6 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,7 +13,7 @@ export default function LoginPage() {
   const handleSubmit = async () => {
     setError('');
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
@@ -24,7 +23,7 @@ export default function LoginPage() {
     try {
       console.log('📤 Attempting login...');
       
-      const result = await authService.login(email, password, role);
+      const result = await authService.login(email, password);
 
       console.log('📥 Login result:', result);
 
@@ -279,7 +278,6 @@ export default function LoginPage() {
 
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [roleFocused, setRoleFocused] = useState(false);
   const [buttonHovered, setButtonHovered] = useState(false);
 
   return (
@@ -352,28 +350,6 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Login As</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                onFocus={() => setRoleFocused(true)}
-                onBlur={() => setRoleFocused(false)}
-                disabled={loading}
-                style={{
-                  ...styles.select,
-                  ...(roleFocused ? styles.inputFocus : {}),
-                }}
-              >
-                <option value="">Select your role</option>
-                <option value="student">Student</option>
-                <option value="parent">Parent</option>
-                <option value="teacher">Teacher</option>
-                <option value="school-admin">School Admin</option>
-                <option value="platform-admin">Platform Admin</option>
-              </select>
             </div>
 
             <button
