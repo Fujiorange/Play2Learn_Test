@@ -77,10 +77,11 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
     }
   }
   
-  // Add minor adjustment based on rating
-  // Rating contributes a small offset: (rating - 3) * 0.5
-  // Examples: 1-star = -1.0, 3-star = 0.0, 5-star = +1.0
-  // This is much smaller than keyword impacts (±3 per keyword)
+  // Add rating adjustment
+  // Rating contributes: (rating - 3) × 0.5, range: [-1.0, +1.0]
+  // Each keyword contributes: ±3.0
+  // With keywords present: keywords dominate (3× stronger per match)
+  // Without keywords: rating becomes the primary sentiment indicator
   const ratingAdjustment = (rating - 3) * 0.5;
   sentimentScore += ratingAdjustment;
   
