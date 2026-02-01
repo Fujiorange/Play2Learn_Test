@@ -129,7 +129,7 @@ export default function StudentDashboard() {
     );
   }
 
-  // ✅ CORRECT ORDER: Menu items following user's exact numbering
+  // ✅ FIXED: Removed duplicate Skill Matrix entry
   const menuItems = [
     // 1️⃣ My Profile
     {
@@ -139,7 +139,7 @@ export default function StudentDashboard() {
       icon: '👤',
       action: () => navigate('/student/profile'),
     },
-    // 2️⃣ View Results
+    // 2️⃣ Adaptive Quizzes
     {
       id: 'adaptive-quiz',
       title: 'Adaptive Quizzes',
@@ -147,6 +147,7 @@ export default function StudentDashboard() {
       icon: '🎲',
       action: () => navigate('/student/adaptive-quizzes'),
     },
+    // 3️⃣ Skill Matrix (KEPT THIS ONE)
     {
       id: 'skills',
       title: 'Skill Matrix',
@@ -154,7 +155,7 @@ export default function StudentDashboard() {
       icon: '📊',
       action: () => navigate('/student/skills'),
     },
-    // 2️⃣ View Results
+    // 4️⃣ View Results
     {
       id: 'results',
       title: 'View Results',
@@ -162,7 +163,7 @@ export default function StudentDashboard() {
       icon: '📝',
       action: () => navigate('/student/results'),
     },
-    // 3️⃣ Track Progress
+    // 5️⃣ Track Progress
     {
       id: 'progress',
       title: 'Track Progress',
@@ -170,7 +171,7 @@ export default function StudentDashboard() {
       icon: '📈',
       action: () => navigate('/student/progress'),
     },
-    // 4️⃣ Leaderboard
+    // 6️⃣ Leaderboard
     {
       id: 'leaderboard',
       title: 'Leaderboard',
@@ -178,15 +179,8 @@ export default function StudentDashboard() {
       icon: '🏆',
       action: () => navigate('/student/leaderboard'),
     },
-    // 5️⃣ Skill Matrix
-    {
-      id: 'skills',
-      title: 'Skill Matrix',
-      description: 'See your unlocked math skills',
-      icon: '📊',
-      action: () => navigate('/student/skills'),
-    },
-    // 6️⃣ Attempt Quiz
+    // ❌ REMOVED: Duplicate Skill Matrix was here (line 182-188)
+    // 7️⃣ Attempt Quiz
     {
       id: 'quiz',
       title: 'Attempt Quiz',
@@ -194,7 +188,7 @@ export default function StudentDashboard() {
       icon: '🎯',
       action: () => navigate('/student/quiz/attempt'),
     },
-    // 7️⃣ School Announcements
+    // 8️⃣ School Announcements
     {
       id: 'announcements',
       title: 'School Announcements',
@@ -202,7 +196,7 @@ export default function StudentDashboard() {
       icon: '📢',
       action: () => navigate('/student/announcements'),
     },
-    // 8️⃣ Write Testimonial
+    // 9️⃣ Write Testimonial
     {
       id: 'testimonial',
       title: 'Write Testimonial',
@@ -210,7 +204,7 @@ export default function StudentDashboard() {
       icon: '💬',
       action: () => navigate('/student/testimonial'),
     },
-    // 9️⃣ Create Support Ticket
+    // 🔟 Create Support Ticket
     {
       id: 'support',
       title: 'Create Support Ticket',
@@ -218,7 +212,7 @@ export default function StudentDashboard() {
       icon: '🛠️',
       action: () => navigate('/student/support'),
     },
-    // 🔟 Track Support Ticket
+    // 1️⃣1️⃣ Track Support Ticket
     {
       id: 'trackTicket',
       title: 'Track Support Ticket',
@@ -226,7 +220,7 @@ export default function StudentDashboard() {
       icon: '📩',
       action: () => navigate('/student/support/tickets'),
     },
-    // 1️⃣1️⃣ Reward Shop
+    // 1️⃣2️⃣ Reward Shop
     {
       id: 'shop',
       title: 'Reward Shop',
@@ -234,7 +228,7 @@ export default function StudentDashboard() {
       icon: '🛒',
       action: () => navigate('/student/shop'),
     },
-    // 1️⃣2️⃣ Badges & Shop
+    // 1️⃣3️⃣ Badges & Shop
     {
       id: 'badges',
       title: 'Badges & Shop',
