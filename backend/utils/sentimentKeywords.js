@@ -33,6 +33,10 @@ const positiveKeywords = [
  * @returns {object} - { score: number, label: string }
  */
 function analyzeSentiment(message, rating, sentimentAnalyzer) {
+  // Constants for sentiment thresholds
+  const SARCASM_DETECTION_THRESHOLD = 10; // Overwhelmingly positive score that may indicate sarcasm
+  const NEGATIVE_SARCASM_THRESHOLD = -10; // Overwhelmingly negative score
+  
   // Base sentiment from library
   const sentimentResult = sentimentAnalyzer.analyze(message);
   let sentimentScore = sentimentResult.score;
@@ -89,14 +93,14 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
   let sentimentLabel = 'neutral';
   
   // For extreme low ratings (1-2 stars), it should almost always be negative
-  // Only mark as neutral if sentiment is OVERWHELMINGLY positive (e.g., sarcasm detection)
+  // Only mark as neutral if sentiment is overwhelmingly positive (possible sarcasm)
   if (rating <= 2) {
-    sentimentLabel = sentimentScore > 10 ? 'neutral' : 'negative';
+    sentimentLabel = sentimentScore > SARCASM_DETECTION_THRESHOLD ? 'neutral' : 'negative';
   } 
   // For extreme high ratings (4-5 stars), it should almost always be positive
-  // Only mark as neutral if sentiment is OVERWHELMINGLY negative
+  // Only mark as neutral if sentiment is overwhelmingly negative
   else if (rating >= 4) {
-    sentimentLabel = sentimentScore < -10 ? 'neutral' : 'positive';
+    sentimentLabel = sentimentScore < NEGATIVE_SARCASM_THRESHOLD ? 'neutral' : 'positive';
   } 
   // For neutral rating (3 stars), use sentiment score
   else {

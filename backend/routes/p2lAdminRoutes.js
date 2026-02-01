@@ -709,10 +709,13 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
       // Continue even if email fails - password is reset
     }
     
+    // Return temp password for one-time viewing by P2L admin
+    // Note: This is intentional - P2L admin needs the password to share with the school admin
+    // The password is only returned once and should be viewed immediately
     res.json({
       success: true,
       message: 'Password reset successfully',
-      tempPassword: tempPassword, // Return temp password so P2L admin can share it
+      tempPassword: tempPassword,
       adminId: admin._id,
       email: admin.email,
       name: admin.name

@@ -30,7 +30,6 @@ function MaintenanceBanner({ userRole }) {
       const data = await response.json();
       
       if (data.success) {
-        console.log('Maintenance broadcasts fetched:', data.broadcasts.length);
         setBroadcasts(data.broadcasts || []);
       } else {
         console.error('Maintenance broadcast fetch unsuccessful:', data.error);
