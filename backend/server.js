@@ -1,5 +1,5 @@
 // backend/server.js - Play2Learn Backend
-// backend/server.js - Play2Learn Backend - WITH PARENT ROUTES
+// ✅ FIXED: Added public announcements endpoint
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
@@ -51,7 +51,7 @@ app.use(express.json());
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/play2learn';
 
 console.log('🚀 Starting Play2Learn Server...');
-console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
+console.log('🌐 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔗 MongoDB:', MONGODB_URI.includes('localhost') ? 'Local' : 'Atlas Cloud');
 
 // ==================== JWT CONFIGURATION ====================
@@ -150,6 +150,70 @@ app.get('/api/public/maintenance', async (req, res) => {
   }
 });
 
+// ==================== PUBLIC ANNOUNCEMENTS ENDPOINT ====================
+// ✅ NEW: Public endpoint for students to view school announcements (no authentication required)
+app.get('/school-admin/announcements/public', async (req, res) => {
+  try {
+    const { audience } = req.query;
+    
+    console.log('📢 Fetching public announcements for:', audience || 'all');
+    
+    const db = mongoose.connection.db;
+    const now = new Date();
+    
+    // Base filter: not expired
+    let filter = {
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ]
+    };
+    
+    // Add audience filter if specified
+    if (audience && audience !== 'all') {
+      const audienceNormalized = audience.toLowerCase();
+      const audienceMatches = ['all']; // Always include 'all' audience
+      
+      if (audienceNormalized.includes('student')) {
+        audienceMatches.push('student', 'students');
+      } else if (audienceNormalized.includes('teacher')) {
+        audienceMatches.push('teacher', 'teachers');
+      } else if (audienceNormalized.includes('parent')) {
+        audienceMatches.push('parent', 'parents');
+      } else {
+        audienceMatches.push(audienceNormalized);
+      }
+      
+      filter = {
+        $and: [
+          { $or: [
+            { expiresAt: { $gt: now } },
+            { expiresAt: null },
+            { expiresAt: { $exists: false } }
+          ]},
+          { $or: [
+            { audience: { $in: audienceMatches } },
+            { audience: { $exists: false } }
+          ]}
+        ]
+      };
+    }
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    console.log(`✅ Found ${announcements.length} announcements for ${audience || 'all'}`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('❌ Get public announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
 // ==================== REQUEST LOGGING ====================
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString().split('T')[1]} - ${req.method} ${req.path}`);
@@ -229,8 +293,9 @@ app.get('/', (req, res) => {
       health: '/api/health',
       auth: '/api/auth/*',
       student: '/api/mongo/student/*',
-      parent: '/api/mongo/parent/*', // ✅ ADDED
-      admin: '/school-admin/*'
+      parent: '/api/mongo/parent/*',
+      admin: '/school-admin/*',
+      announcements: '/school-admin/announcements/public' // ✅ NEW
     },
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
@@ -270,7 +335,7 @@ async function startServer() {
       console.log('╔═══════════════════════════════════════════════╗');
       console.log('║          🚀 Play2Learn Server               ║');
       console.log(`║          📍 Port: ${PORT}                       ║`);
-      console.log(`║          🌍 URL: ${process.env.NODE_ENV === 'production' ? 'https://play2learn-test.onrender.com' : `http://localhost:${PORT}`} ║`);
+      console.log(`║          🌐 URL: ${process.env.NODE_ENV === 'production' ? 'https://play2learn-test.onrender.com' : `http://localhost:${PORT}`} ║`);
       console.log('║          🗄️  Database: ✅ Connected           ║');
       console.log('║          🔐 JWT: ' + 
         (process.env.JWT_SECRET ? '✅ Set' : '❌ Using default') + 
