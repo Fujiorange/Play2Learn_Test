@@ -31,8 +31,8 @@ export default function LoginPage() {
         console.log('✅ Login successful!');
         console.log('👤 User role:', result.user.role);
         
-        // Redirect based on user role (case-insensitive)
-        const userRole = result.user.role.toLowerCase();
+        // Redirect based on user role (case-insensitive, handles spaces and variants)
+        const userRole = result.user.role.toLowerCase().replace(/\s+/g, '-');
         
         console.log('🔀 Navigating to:', userRole);
         
@@ -40,9 +40,9 @@ export default function LoginPage() {
           navigate('/platform-admin');
         } else if (userRole === 'school-admin') {
           navigate('/school-admin');
-        } else if (userRole === 'teacher') {
+        } else if (userRole === 'teacher' || userRole === 'trial-teacher') {
           navigate('/teacher');
-        } else if (userRole === 'student') {
+        } else if (userRole === 'student' || userRole === 'trial-student') {
           navigate('/student');
         } else if (userRole === 'parent') {
           navigate('/parent');
