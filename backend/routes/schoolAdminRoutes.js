@@ -250,11 +250,13 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
 });
 
 // ==================== GET USERS (FIXED!) ====================
-router.get('/users', authenticateToken, async (req, res) => {
+router.get('/users', authenticateSchoolAdmin, async (req, res) => {
   try {
+    const schoolAdmin = req.schoolAdmin;
     const { gradeLevel, subject, role } = req.query;
     
-    const filter = {};
+    // Filter by school ID to ensure school admin only sees their school's users
+    const filter = { schoolId: schoolAdmin.schoolId };
     
     // Filter by role
     if (role) {
@@ -1237,13 +1239,20 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
 });
 
 // ==================== DELETE USER ====================
-router.delete('/users/:id', authenticateToken, async (req, res) => {
+router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
   try {
+    const schoolAdmin = req.schoolAdmin;
+    
     // First find the user to get their role and class assignments
     const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Verify the user belongs to the school admin's school
+    if (user.schoolId !== schoolAdmin.schoolId) {
+      return res.status(403).json({ success: false, error: 'You can only delete users from your school' });
     }
     
     // If user is a teacher, remove them from all assigned classes
@@ -1273,19 +1282,26 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
 });
 
 // ==================== UPDATE USER STATUS ====================
-router.put('/users/:id/status', authenticateToken, async (req, res) => {
+router.put('/users/:id/status', authenticateSchoolAdmin, async (req, res) => {
   try {
+    const schoolAdmin = req.schoolAdmin;
     const { isActive } = req.body;
     
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { accountActive: isActive },
-      { new: true }
-    );
+    // First find the user to verify school ownership
+    const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
+    
+    // Verify the user belongs to the school admin's school
+    if (user.schoolId !== schoolAdmin.schoolId) {
+      return res.status(403).json({ success: false, error: 'You can only update users from your school' });
+    }
+    
+    // Update the user status
+    user.accountActive = isActive;
+    await user.save();
     
     res.json({ success: true, message: 'User status updated successfully' });
   } catch (error) {
@@ -1326,13 +1342,20 @@ router.put('/users/:id/role', authenticateToken, async (req, res) => {
 
 // ==================== RESET USER PASSWORD ====================
 // Updated to generate random password and set requirePasswordChange flag
-router.put('/users/:id/password', authenticateToken, async (req, res) => {
+router.put('/users/:id/password', authenticateSchoolAdmin, async (req, res) => {
   try {
+    const schoolAdmin = req.schoolAdmin;
+    
     // Find the user first
     const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Verify the user belongs to the school admin's school
+    if (user.schoolId !== schoolAdmin.schoolId) {
+      return res.status(403).json({ success: false, error: 'You can only reset passwords for users from your school' });
     }
     
     // Generate a new temporary password based on role
