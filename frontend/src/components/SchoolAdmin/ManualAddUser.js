@@ -404,7 +404,7 @@ export default function ManualAddUser() {
             )}
             
             <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px', marginTop: '16px' }}>
-              ⚠️ Please share these credentials securely with the user{createdParent ? 's' : ''}. They will be prompted to change their password on first login.
+              ⚠️ Please share these credentials securely with {createdParent ? 'the users' : 'the user'}. They will be prompted to change their password on first login.
             </p>
             
             <div style={styles.buttonGroup}>

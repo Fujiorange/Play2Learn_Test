@@ -1492,7 +1492,7 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
       console.error('❌ Invalid school ID format:', schoolAdmin.schoolId, err);
       return res.status(400).json({ 
         success: false, 
-        error: `Invalid school ID format: ${schoolAdmin.schoolId}` 
+        error: 'Invalid school ID format' 
       });
     }
     
