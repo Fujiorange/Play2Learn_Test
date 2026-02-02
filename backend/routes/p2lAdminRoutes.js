@@ -1960,5 +1960,105 @@ router.delete('/maintenance/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// ==================== USER MANAGEMENT ====================
+// Get all users with optional filtering by school and role
+router.get('/users', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { schoolId, role } = req.query;
+    
+    // Build filter object
+    const filter = {};
+    if (schoolId) {
+      filter.schoolId = schoolId;
+    }
+    if (role) {
+      filter.role = role;
+    }
+
+    const users = await User.find(filter)
+      .select('_id name email role schoolId accountActive createdAt')
+      .sort({ createdAt: -1 });
+
+    // Get school names for users with schoolId
+    const schoolIds = [...new Set(users.filter(u => u.schoolId).map(u => u.schoolId))];
+    const schools = await School.find({ _id: { $in: schoolIds } }).select('_id organization_name');
+    const schoolMap = {};
+    schools.forEach(s => {
+      schoolMap[s._id.toString()] = s.organization_name;
+    });
+
+    // Add school name to users
+    const usersWithSchool = users.map(user => ({
+      ...user.toObject(),
+      schoolName: user.schoolId ? (schoolMap[user.schoolId] || 'Unknown') : 'N/A'
+    }));
+
+    res.json({
+      success: true,
+      data: usersWithSchool
+    });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch users' 
+    });
+  }
+});
+
+// Get all schools for dropdown filter
+router.get('/users/schools', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const schools = await School.find().select('_id organization_name');
+    res.json({
+      success: true,
+      data: schools
+    });
+  } catch (error) {
+    console.error('Get schools for users error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch schools' 
+    });
+  }
+});
+
+// Bulk delete users
+router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User IDs array is required' 
+      });
+    }
+
+    // Prevent deletion of admin users that are currently logged in
+    const currentAdminId = req.user._id.toString();
+    if (ids.includes(currentAdminId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cannot delete your own account' 
+      });
+    }
+
+    const result = await User.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} user(s)`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Bulk delete users error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete users' 
+    });
+  }
+});
+
 // Other Admin Functions...
 module.exports = router;

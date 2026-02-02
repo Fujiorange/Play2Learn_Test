@@ -308,6 +308,23 @@ export const getLandingPageTestimonials = async () => {
   return apiCall('/api/p2ladmin/testimonials/landing-page');
 };
 
+// ==================== USER MANAGEMENT ====================
+export const getAllUsers = async (filters = {}) => {
+  const queryString = new URLSearchParams(filters).toString();
+  return apiCall(`/api/p2ladmin/users${queryString ? `?${queryString}` : ''}`);
+};
+
+export const getUserSchools = async () => {
+  return apiCall('/api/p2ladmin/users/schools');
+};
+
+export const bulkDeleteUsers = async (ids) => {
+  return apiCall('/api/p2ladmin/users/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+};
+
 // ==================== MAINTENANCE BROADCASTS ====================
 export const getMaintenanceBroadcasts = async () => {
   return apiCall('/api/p2ladmin/maintenance');
@@ -371,4 +388,7 @@ export default {
   createMaintenanceBroadcast,
   updateMaintenanceBroadcast,
   deleteMaintenanceBroadcast,
+  getAllUsers,
+  getUserSchools,
+  bulkDeleteUsers,
 };

@@ -83,6 +83,11 @@ function P2LAdminDashboard() {
         </div>
 
         <div className="management-grid">
+          <Link to="/p2ladmin/users" className="management-card">
+            <h3>👥 User Management</h3>
+            <p>View and manage all users in the database</p>
+          </Link>
+
           <Link to="/p2ladmin/landing-page" className="management-card">
             <h3>📄 Landing Page Manager</h3>
             <p>Manage modular blocks for the landing page</p>
