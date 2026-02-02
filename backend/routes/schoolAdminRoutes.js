@@ -1095,6 +1095,42 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       });
     }
     
+    // Validate that students can only be linked to one parent
+    if (role === 'Parent' && linkedStudents && Array.isArray(linkedStudents) && linkedStudents.length > 0) {
+      // Check if any of the students are already linked to another parent
+      const existingParents = await User.find({
+        role: 'Parent',
+        'linkedStudents.studentId': { $in: linkedStudents }
+      });
+      
+      if (existingParents.length > 0) {
+        const alreadyLinkedStudents = [];
+        for (const student of linkedStudents) {
+          const parentWithStudent = existingParents.find(p => 
+            p.linkedStudents.some(ls => ls.studentId.toString() === student.toString())
+          );
+          if (parentWithStudent) {
+            const studentDoc = await User.findById(student);
+            alreadyLinkedStudents.push({
+              studentName: studentDoc ? studentDoc.name : 'Unknown',
+              parentEmail: parentWithStudent.email
+            });
+          }
+        }
+        
+        if (alreadyLinkedStudents.length > 0) {
+          const errorMsg = alreadyLinkedStudents.map(s => 
+            `${s.studentName} is already linked to parent ${s.parentEmail}`
+          ).join('; ');
+          
+          return res.status(409).json({
+            success: false,
+            error: `Cannot create parent account: ${errorMsg}. Each student can only be linked to one parent.`
+          });
+        }
+      }
+    }
+    
     // Generate temporary password
     const tempPassword = generateTempPassword(role);
     
