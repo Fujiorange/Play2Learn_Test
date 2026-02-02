@@ -1,36 +1,9 @@
 // Sentiment Analysis Keywords
 // Used for enhanced sentiment detection in testimonials
 
-const negativeKeywords = [
-  // Strong negative words
-  'terrible', 'awful', 'horrible', 'worst', 'hate', 'dislike', 'despise',
-  'poor', 'disappointing', 'frustrated', 'useless', 'waste', 'broken',
-  'annoying', 'confusing', 'difficult', 'hard', 'problem', 'issue',
-  'bad', 'regret', 'unhappy', 'dissatisfied', 'disappointed', 'disgusted',
-  'pathetic', 'ridiculous', 'absurd', 'unacceptable', 'inadequate',
-  'failure', 'fail', 'failed', 'failing', 'mess', 'disaster',
-  'nightmare', 'frustrating', 'hopeless', 'worthless', 'unreliable',
-  'slow', 'buggy', 'crashes', 'error', 'errors', 'wrong',
-  'lacking', 'missing', 'incomplete', 'limited', 'boring', 'dull',
-  
-  // Negative phrases (order matters - check these first to avoid double-counting)
-  'terrible experience', 'bad experience', 'worst experience', 'never again',
-  'not good', 'not great', 'not recommended', 'dont recommend', "don't recommend", 
-  'do not recommend', 'avoid', 'waste of time', 'waste of money',
-  'not worth', 'not helpful', 'does not work', "doesn't work", 'didnt work', "didn't work"
-];
-
+// POSITIVE SENTIMENT WORDS (350+)
 const positiveKeywords = [
-  // Strong positive words
-  'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'loved', 'loving',
-  'best', 'awesome', 'brilliant', 'outstanding', 'perfect', 'superb',
-  'great', 'impressed', 'satisfied', 'happy', 'pleased', 'delighted', 'thrilled',
-  'enjoyable', 'helpful', 'useful', 'valuable', 'effective', 'efficient',
-  'reliable', 'smooth', 'easy', 'simple', 'intuitive', 'clear',
-  'impressive', 'remarkable', 'exceptional', 'phenomenal', 'terrific',
-  'fabulous', 'marvelous', 'splendid', 'magnificent', 'stellar',
-  'fun', 'engaging', 'interesting', 'educational', 'informative',
-  'recommend', 'recommended', 'appreciate', 'appreciated', 'thank',
+  'excellent', 'outstanding', 'exceptional', 'superb', 'magnificent', 'marvelous', 'wonderful', 'fantastic', 'terrific', 'phenomenal', 'remarkable', 'extraordinary', 'brilliant', 'stellar', 'first-rate', 'top-notch', 'premium', 'superior', 'high-quality', 'quality', 'premium-grade', 'great', 'good', 'nice', 'fine', 'decent', 'solid', 'competent', 'satisfactory', 'adequate', 'acceptable', 'reasonable', 'fair', 'respectable', 'commendable', 'praiseworthy', 'admirable', 'laudable', 'esteemed', 'appreciated', 'mastered', 'learned', 'understood', 'comprehended', 'grasped', 'absorbed', 'acquired', 'retained', 'memorized', 'recalled', 'applied', 'implemented', 'utilized', 'practiced', 'exercised', 'demonstrated', 'exhibited', 'accomplished', 'achieved', 'completed', 'finished', 'concluded', 'fulfilled', 'educational', 'instructive', 'informative', 'enlightening', 'illuminating', 'revealing', 'clarifying', 'explanatory', 'descriptive', 'detailed', 'thorough', 'comprehensive', 'exhaustive', 'complete', 'extensive', 'in-depth', 'profound', 'deep', 'substantial', 'meaningful', 'significant', 'skillful', 'skilled', 'proficient', 'adept', 'capable', 'qualified', 'trained', 'educated', 'knowledgeable', 'expert', 'master', 'specialist', 'professional', 'seasoned', 'experienced', 'veteran', 'engaging', 'captivating', 'absorbing', 'immersive', 'gripping', 'riveting', 'compelling', 'fascinating', 'interesting', 'intriguing', 'stimulating', 'thought-provoking', 'mind-expanding', 'eye-opening', 'entertaining', 'enjoyable', 'pleasurable', 'delightful', 'amusing', 'fun', 'recreational', 'leisure', 'intuitive', 'user-friendly', 'easy-to-use', 'simple', 'straightforward', 'uncomplicated', 'effortless', 'smooth', 'seamless', 'fluid', 'flowing', 'responsive', 'fast', 'quick', 'speedy', 'efficient', 'effective', 'productive', 'time-saving', 'convenient', 'accessible', 'available', 'reachable', 'obtainable', 'attainable', 'achievable', 'organized', 'structured', 'systematic', 'methodical', 'orderly', 'tidy', 'neat', 'clean', 'clear', 'lucid', 'transparent', 'understandable', 'comprehensible', 'coherent', 'logical', 'rational', 'sensible', 'practical', 'functional', 'usable', 'workable', 'helpful', 'supportive', 'assistive', 'guiding', 'directive', 'tutorial', 'mentoring', 'coaching', 'training', 'teaching', 'educating', 'attentive', 'caring', 'considerate', 'thoughtful', 'kind', 'friendly', 'warm', 'welcoming', 'hospitable', 'inviting', 'relevant', 'applicable', 'useful', 'valuable', 'beneficial', 'advantageous', 'profitable', 'gainful', 'rewarding', 'fruitful', 'constructive', 'optimistic', 'hopeful', 'encouraging', 'motivating', 'inspiring', 'uplifting', 'empowering', 'enabling', 'facilitating', 'aiding', 'assisting', 'modern', 'contemporary', 'current', 'up-to-date', 'recent', 'fresh', 'new', 'novel', 'innovative', 'creative', 'original', 'unique', 'distinctive', 'special', 'different', 'unusual', 'uncommon', 'certified', 'accredited', 'recognized', 'approved', 'validated', 'verified', 'confirmed', 'authenticated', 'authorized', 'licensed', 'official', 'formal', 'legitimate', 'genuine', 'collaborative', 'cooperative', 'interactive', 'participatory', 'social', 'communal', 'collective', 'shared', 'mutual', 'reciprocal', 'affordable', 'inexpensive', 'cheap', 'economical', 'budget-friendly', 'cost-effective', 'value-for-money', 'worthwhile', 'worthy', 'deserving', 'meritorious', 'justified', 'equitable', 'flexible', 'adaptable', 'adjustable', 'modifiable', 'customizable', 'personalized', 'tailored', 'individualized', 'specific', 'targeted', 'handy', 'ready', 'improved', 'enhanced', 'better', 'advanced', 'evolved', 'developed', 'grown', 'matured', 'refined', 'polished', 'perfected', 'optimized', 'maximized', 'increased', 'expanded', 'extended', 'recommended', 'suggested', 'advised', 'endorsed', 'supported', 'backed', 'promoted', 'marketed', 'advertised', 'successful', 'triumphant', 'victorious', 'winning', 'prevailing', 'overcoming', 'conquering', 'dominating', 'leading', 'satisfied', 'pleased', 'content', 'happy', 'joyful', 'delighted', 'thrilled', 'excited', 'enthusiastic', 'eager', 'keen', 'interested', 'motivated', 'driven', 'determined', 'committed', 'dedicated', 'reliable', 'dependable', 'trustworthy', 'consistent', 'stable', 'secure', 'safe', 'protected', 'guarded', 'defended', 'robust', 'strong', 'powerful', 'potent', 'crisp', 'sharp', 'high-definition', 'hd', '4k', 'ultra-hd', 'surround', 'stereo', 'dolby', 'cinematic', 'theatrical', 'mobile-friendly', 'responsive-design', 'cross-platform', 'multi-device', 'compatible', 'interoperable', 'integrated',
   
   // Positive phrases (order matters - check these first to avoid double-counting)
   'highly recommend', 'strongly recommend', 'exceeded expectations',
@@ -38,6 +11,22 @@ const positiveKeywords = [
   'love it', 'loved it', 'absolutely love', 'really love',
   'highly satisfied', 'very satisfied', 'extremely satisfied',
   'works great', 'works well', 'works perfectly'
+];
+
+// NEUTRAL SENTIMENT WORDS (100+)
+const neutralKeywords = [
+  'use', 'used', 'using', 'access', 'accessed', 'accessing', 'open', 'opened', 'opening', 'close', 'closed', 'closing', 'start', 'started', 'starting', 'stop', 'stopped', 'stopping', 'continue', 'continued', 'continuing', 'pause', 'paused', 'pausing', 'platform', 'website', 'application', 'app', 'software', 'program', 'system', 'interface', 'dashboard', 'portal', 'gateway', 'entry', 'page', 'screen', 'window', 'tab', 'panel', 'section', 'area', 'module', 'lesson', 'course', 'tutorial', 'guide', 'manual', 'documentation', 'instructions', 'directions', 'steps', 'procedures', 'study', 'studying', 'learn', 'learning', 'practice', 'practicing', 'review', 'reviewing', 'revise', 'revising', 'memorize', 'memorizing', 'understand', 'understanding', 'comprehend', 'comprehending', 'analyze', 'analyzing', 'evaluate', 'evaluating', 'assess', 'assessing', 'video', 'audio', 'text', 'image', 'picture', 'graphic', 'animation', 'simulation', 'quiz', 'test', 'exam', 'assignment', 'project', 'homework', 'exercise', 'activity', 'reading', 'writing', 'speaking', 'listening', 'watching', 'today', 'yesterday', 'tomorrow', 'recently', 'previously', 'currently', 'now', 'then', 'soon', 'later', 'earlier', 'daily', 'weekly', 'monthly', 'yearly', 'annually', 'regularly', 'occasionally', 'sometimes', 'often', 'frequently', 'seldom', 'rarely', 'never', 'always', 'forever', 'some', 'many', 'few', 'several', 'numerous', 'countless', 'all', 'none', 'any', 'every', 'each', 'both', 'either', 'neither', 'more', 'less', 'most', 'least', 'enough', 'sufficient', 'additional', 'extra', 'supplementary', 'complementary', 'unavailable', 'present', 'absent', 'existing', 'missing', 'incomplete', 'finished', 'unfinished', 'done', 'undone', 'unready', 'prepared', 'unprepared', 'download', 'upload', 'install', 'uninstall', 'update', 'upgrade', 'configure', 'settings', 'preferences', 'options', 'choices', 'selection', 'decision', 'determination', 'resolution', 'score', 'grade', 'rating', 'feedback', 'comment', 'suggestion', 'recommendation', 'advice', 'tip', 'hint', 'clue', 'indication', 'sign', 'marker', 'indicator', 'message', 'email', 'notification', 'alert', 'reminder', 'announcement', 'bulletin', 'news', 'information', 'data', 'details', 'particulars', 'specifics', 'facts', 'evidence', 'basic', 'fundamental', 'essential', 'necessary', 'required', 'mandatory', 'optional', 'elective', 'voluntary', 'discretionary', 'standard', 'normal', 'regular', 'usual', 'typical', 'common', 'average', 'medium', 'intermediate', 'moderate'
+];
+
+// NEGATIVE SENTIMENT WORDS (300+)
+const negativeKeywords = [
+  'poor', 'bad', 'terrible', 'awful', 'horrible', 'dreadful', 'atrocious', 'abysmal', 'appalling', 'deplorable', 'lousy', 'rotten', 'shoddy', 'inferior', 'substandard', 'second-rate', 'low-quality', 'tacky', 'flimsy', 'fragile', 'weak', 'feeble', 'insufficient', 'disappointing', 'dissatisfying', 'unsatisfying', 'frustrating', 'annoying', 'irritating', 'aggravating', 'exasperating', 'infuriating', 'maddening', 'enraging', 'outraging', 'offending', 'insulting', 'humiliating', 'embarrassing', 'shaming', 'disgracing', 'confusing', 'bewildering', 'baffling', 'perplexing', 'puzzling', 'mystifying', 'complicated', 'complex', 'convoluted', 'tangled', 'knotted', 'twisted', 'muddled', 'jumbled', 'disorganized', 'chaotic', 'messy', 'cluttered', 'untidy', 'disorderly', 'difficult', 'hard', 'challenging', 'arduous', 'strenuous', 'laborious', 'taxing', 'demanding', 'exhausting', 'draining', 'fatiguing', 'overwhelming', 'overpowering', 'crushing', 'burdensome', 'onerous', 'oppressive', 'unbearable', 'intolerable', 'insufferable', 'buggy', 'glitchy', 'broken', 'malfunctioning', 'faulty', 'defective', 'flawed', 'imperfect', 'damaged', 'impaired', 'compromised', 'corrupted', 'infected', 'contaminated', 'polluted', 'tainted', 'slow', 'laggy', 'sluggish', 'unresponsive', 'frozen', 'crashed', 'crashes', 'freezes', 'hangs', 'stalls', 'stops', 'fails', 'outdated', 'obsolete', 'dated', 'old-fashioned', 'archaic', 'antiquated', 'ancient', 'old', 'aged', 'expired', 'past', 'former', 'previous', 'superseded', 'replaced', 'substituted', 'succeeded', 'boring', 'dull', 'tedious', 'monotonous', 'repetitive', 'redundant', 'repeating', 'looping', 'cyclic', 'routine', 'habitual', 'customary', 'uninteresting', 'unexciting', 'uninspiring', 'unmotivating', 'disinteresting', 'unappealing', 'unattractive', 'undesirable', 'inaccurate', 'incorrect', 'wrong', 'erroneous', 'mistaken', 'false', 'untrue', 'invalid', 'void', 'null', 'empty', 'blank', 'lacking', 'deficient', 'inadequate', 'scarce', 'rare', 'strange', 'odd', 'misleading', 'deceptive', 'deceiving', 'tricking', 'fooling', 'cheating', 'swindling', 'defrauding', 'scamming', 'conning', 'dishonest', 'untruthful', 'lying', 'fraudulent', 'counterfeit', 'fake', 'phony', 'sham', 'bogus', 'artificial', 'irrelevant', 'unrelated', 'unconnected', 'disconnected', 'separate', 'distinct', 'divergent', 'diverging', 'splitting', 'branching', 'forking', 'dividing', 'separating', 'unhelpful', 'unsupportive', 'uncooperative', 'gone', 'away', 'departed', 'left', 'abandoned', 'deserted', 'forsaken', 'neglected', 'ignored', 'overlooked', 'missed', 'skipped', 'passed', 'expensive', 'costly', 'pricey', 'high-priced', 'overpriced', 'exorbitant', 'extravagant', 'lavish', 'luxurious', 'wasteful', 'squandering', 'spending', 'consuming', 'useless', 'worthless', 'valueless', 'pointless', 'meaningless', 'senseless', 'absurd', 'ridiculous', 'ludicrous', 'preposterous', 'time-consuming', 'lengthy', 'long', 'extended', 'prolonged', 'protracted', 'drawn-out', 'stretched', 'enlarged', 'inflexible', 'rigid', 'stiff', 'unbending', 'unyielding', 'uncompromising', 'stubborn', 'obstinate', 'pigheaded', 'dogmatic', 'doctrinaire', 'ideological', 'theoretical', 'limited', 'restricted', 'constrained', 'confined', 'bounded', 'circumscribed', 'delimited', 'defined', 'specified', 'stated', 'invasive', 'intrusive', 'prying', 'snooping', 'spying', 'eavesdropping', 'monitoring', 'watching', 'observing', 'tracking', 'following', 'pursuing', 'chasing', 'hunting', 'incompatible', 'conflicting', 'clashing', 'contrasting', 'opposing', 'contradicting', 'denying', 'refuting', 'rejecting', 'refusing', 'declining', 'broken-update', 'failed-update', 'corrupted-update', 'buggy-update', 'glitchy-update', 'slow-update', 'rude', 'impolite', 'discourteous', 'disrespectful', 'insolent', 'impertinent', 'cheeky', 'sassy', 'fresh', 'unprofessional', 'amateurish', 'inexperienced', 'novice', 'outdated-content', 'irrelevant-content', 'incorrect-content', 'misleading-content', 'biased-content', 'partial-content', 'unbalanced-content', 'one-sided', 'partial', 'confusing-navigation', 'poor-navigation', 'bad-navigation', 'complicated-navigation', 'complex-navigation', 'difficult-navigation', 'slow-loading', 'never-loads', 'fails-to-load', 'loading-error', 'connection-error', 'network-error', 'server-error', 'timeout', 'difficult-installation', 'failed-installation', 'corrupted-installation', 'incomplete-installation', 'partial-installation', 'login-problems', 'password-issues', 'account-locked', 'suspended-account', 'banned-account', 'deleted-account', 'billing-problems', 'payment-failed', 'overcharged', 'double-charged', 'unauthorized-charge', 'fraudulent-charge', 'data-breach', 'privacy-violation', 'information-leak', 'exposed-data', 'compromised-data', 'stolen-data', 'inaccessible', 'blocked', 'geoblocked', 'region-locked', 'country-restricted', 'demotivating', 'discouraging', 'disheartening', 'depressing', 'saddening', 'upsetting', 'distressing', 'troubling', 'worrisome', 'concerning', 'alarming', 'frightening', 'scary', 'terrifying', 'horrifying', 'petrifying',
+  
+  // Negative phrases (order matters - check these first to avoid double-counting)
+  'terrible experience', 'bad experience', 'worst experience', 'never again',
+  'not good', 'not great', 'not recommended', 'dont recommend', "don't recommend", 
+  'do not recommend', 'avoid', 'waste of time', 'waste of money',
+  'not worth', 'not helpful', 'does not work', "doesn't work", 'didnt work', "didn't work"
 ];
 
 /**
@@ -94,6 +83,9 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
     }
   }
   
+  // Note: Neutral keywords are tracked for reference but don't affect sentiment score
+  // They help in understanding the context but don't shift sentiment
+  
   // Determine sentiment label based ONLY on text analysis
   // Star rating is NOT considered per user request
   let sentimentLabel = 'neutral';
@@ -113,5 +105,6 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
 module.exports = {
   negativeKeywords,
   positiveKeywords,
+  neutralKeywords,
   analyzeSentiment
 };

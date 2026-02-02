@@ -21,7 +21,6 @@ function LandingPageManager() {
   const [testimonialFilters, setTestimonialFilters] = useState({
     minRating: '',
     sentiment: '',
-    approved: '',
     userRole: ''
   });
   const [formData, setFormData] = useState({
@@ -67,9 +66,9 @@ function LandingPageManager() {
     }
   };
 
-  const handleTestimonialApproval = async (id, approved, displayOnLanding) => {
+  const handleTestimonialToggleLanding = async (id, displayOnLanding) => {
     try {
-      const result = await updateTestimonial(id, { approved, display_on_landing: displayOnLanding });
+      const result = await updateTestimonial(id, { display_on_landing: displayOnLanding });
       if (result.success) {
         fetchTestimonials(); // Refresh list
       } else {
@@ -564,19 +563,6 @@ function LandingPageManager() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Approval Status</label>
-                  <select
-                    value={testimonialFilters.approved}
-                    onChange={(e) => setTestimonialFilters({ ...testimonialFilters, approved: e.target.value })}
-                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
-                  >
-                    <option value="">All</option>
-                    <option value="false">Pending Approval</option>
-                    <option value="true">Approved</option>
-                  </select>
-                </div>
-                
-                <div className="form-group">
                   <label>User Type</label>
                   <select
                     value={testimonialFilters.userRole}
@@ -632,8 +618,8 @@ function LandingPageManager() {
                       style={{
                         padding: '16px',
                         marginBottom: '12px',
-                        background: testimonial.approved ? '#f0fdf4' : '#fef3c7',
-                        border: `2px solid ${testimonial.approved ? '#86efac' : '#fcd34d'}`,
+                        background: testimonial.display_on_landing ? '#f0fdf4' : '#fef3c7',
+                        border: `2px solid ${testimonial.display_on_landing ? '#86efac' : '#fcd34d'}`,
                         borderRadius: '8px'
                       }}
                     >
@@ -653,32 +639,15 @@ function LandingPageManager() {
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
                             type="button"
-                            onClick={() => handleTestimonialApproval(testimonial.id, !testimonial.approved, testimonial.display_on_landing)}
-                            style={{
-                              padding: '6px 12px',
-                              background: testimonial.approved ? '#ef4444' : '#10b981',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}
-                          >
-                            {testimonial.approved ? '❌ Unapprove' : '✅ Approve'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleTestimonialApproval(testimonial.id, testimonial.approved, !testimonial.display_on_landing)}
-                            disabled={!testimonial.approved}
+                            onClick={() => handleTestimonialToggleLanding(testimonial.id, !testimonial.display_on_landing)}
                             style={{
                               padding: '6px 12px',
                               background: testimonial.display_on_landing ? '#f59e0b' : '#3b82f6',
                               color: 'white',
                               border: 'none',
                               borderRadius: '4px',
-                              cursor: testimonial.approved ? 'pointer' : 'not-allowed',
-                              fontSize: '12px',
-                              opacity: testimonial.approved ? 1 : 0.5
+                              cursor: 'pointer',
+                              fontSize: '12px'
                             }}
                           >
                             {testimonial.display_on_landing ? '🌐 On Landing' : '📄 Add to Landing'}
@@ -1117,7 +1086,7 @@ function LandingPageManager() {
               <div style={{ textAlign: 'center', padding: '40px', background: '#f9fafb', borderRadius: '8px' }}>
                 <p style={{ color: '#6b7280' }}>
                   💡 Testimonials are managed dynamically from student and parent submissions.
-                  <br/>Use the filter system above to approve and display testimonials on the landing page.
+                  <br/>Use the filter system above to display testimonials on the landing page.
                 </p>
               </div>
             </div>

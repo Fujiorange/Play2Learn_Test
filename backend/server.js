@@ -104,16 +104,15 @@ app.get('/api/public/landing-page', async (req, res) => {
       });
     }
 
-    // Get approved testimonials that should be displayed on landing page
-    const approvedTestimonials = await Testimonial.find({
-      approved: true,
+    // Get testimonials that should be displayed on landing page
+    const displayTestimonials = await Testimonial.find({
       display_on_landing: true
     })
       .sort({ created_at: -1 })
       .limit(10);
 
     // Transform testimonials to the format expected by the frontend
-    const testimonialData = approvedTestimonials.map(t => ({
+    const testimonialData = displayTestimonials.map(t => ({
       name: t.student_name,
       role: t.user_role,
       quote: t.message,
@@ -124,7 +123,7 @@ app.get('/api/public/landing-page', async (req, res) => {
     // Clone blocks and inject testimonials into testimonial blocks
     const blocks = (landingPage.blocks || []).map(block => {
       if (block.type === 'testimonials') {
-        // Inject approved testimonials into the testimonial block
+        // Inject display testimonials into the testimonial block
         return {
           ...block,
           custom_data: {

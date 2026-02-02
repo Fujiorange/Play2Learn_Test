@@ -1460,16 +1460,15 @@ router.get('/landing', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    // Get approved testimonials that should be displayed on landing page
-    const approvedTestimonials = await Testimonial.find({
-      approved: true,
+    // Get testimonials that should be displayed on landing page
+    const displayTestimonials = await Testimonial.find({
       display_on_landing: true
     })
       .sort({ created_at: -1 })
       .limit(10);
 
     // Transform testimonials to the format expected by the frontend
-    const testimonialData = approvedTestimonials.map(t => ({
+    const testimonialData = displayTestimonials.map(t => ({
       name: t.student_name,
       role: t.user_role,
       quote: t.message,
@@ -1480,7 +1479,7 @@ router.get('/landing', authenticateP2LAdmin, async (req, res) => {
     // Clone blocks and inject testimonials into testimonial blocks
     const blocks = (landingPage.blocks || []).map(block => {
       if (block.type === 'testimonials') {
-        // Inject approved testimonials into the testimonial block for preview
+        // Inject display testimonials into the testimonial block for preview
         return {
           ...block.toObject ? block.toObject() : block,
           custom_data: {
@@ -1681,7 +1680,6 @@ router.get('/landing/pricing-plans', authenticateP2LAdmin, async (req, res) => {
 router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
   try {
     const testimonials = await Testimonial.find({ 
-      approved: true, 
       display_on_landing: true 
     })
       .sort({ created_at: -1 })
@@ -1766,11 +1764,11 @@ router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Update testimonial approval and display status
+// Update testimonial display status
 router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { approved, display_on_landing } = req.body;
+    const { display_on_landing } = req.body;
 
     const testimonial = await Testimonial.findById(id);
     if (!testimonial) {
@@ -1780,22 +1778,8 @@ router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    if (approved !== undefined) {
-      testimonial.approved = approved;
-      // If unapproving, automatically remove from landing page
-      if (!approved) {
-        testimonial.display_on_landing = false;
-      }
-    }
-    
-    // Only allow setting display_on_landing to true if testimonial is approved
+    // Allow setting display_on_landing regardless of approval status
     if (display_on_landing !== undefined) {
-      if (display_on_landing && !testimonial.approved) {
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot display unapproved testimonials on landing page'
-        });
-      }
       testimonial.display_on_landing = display_on_landing;
     }
 
