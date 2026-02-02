@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
@@ -58,13 +58,22 @@ export default function StudentList() {
     }
   };
 
-  const filteredStudents = students.filter(student => {
+  const filteredStudents = useMemo(() => students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = filterClass === 'all' || student.class === filterClass;
     return matchesSearch && matchesClass;
-  });
+  }), [students, searchTerm, filterClass]);
 
-  const uniqueClasses = ['all', ...myClasses];
+  const uniqueClasses = useMemo(() => ['all', ...myClasses], [myClasses]);
+
+  const averagePoints = useMemo(() => {
+    if (students.length === 0) return 0;
+    return Math.round(students.reduce((acc, s) => acc + (s.points || 0), 0) / students.length);
+  }, [students]);
+
+  const activeStudentsCount = useMemo(() => {
+    return students.filter(s => s.accountActive !== false).length;
+  }, [students]);
 
   const styles = {
     container: {
@@ -292,13 +301,11 @@ export default function StudentList() {
           </div>
           <div style={styles.statCard}>
             <div style={styles.statLabel}>Active Students</div>
-            <div style={styles.statValue}>{students.filter(s => s.accountActive !== false).length}</div>
+            <div style={styles.statValue}>{activeStudentsCount}</div>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statLabel}>Average Points</div>
-            <div style={styles.statValue}>
-              {students.length > 0 ? Math.round(students.reduce((acc, s) => acc + (s.points || 0), 0) / students.length) : 0}
-            </div>
+            <div style={styles.statValue}>{averagePoints}</div>
           </div>
         </div>
 

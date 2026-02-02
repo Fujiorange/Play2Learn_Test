@@ -100,6 +100,9 @@ import DisableUser from './components/SchoolAdmin/DisableUser';
 import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
 import PointsManagement from './components/SchoolAdmin/PointsManagement';
 
+// ⭐ NEW IMPORT - School Admin Teacher Assignment
+import TeacherAssignment from './components/SchoolAdmin/TeacherAssignment';
+
 // P2LAdmin Components
 import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
 import SchoolManagement from './components/P2LAdmin/SchoolManagement';
@@ -247,6 +250,9 @@ function App() {
           <Route path="/school-admin/users/disable" element={<DisableUser />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
+          
+          {/* ⭐ NEW ROUTE - School Admin Teacher Assignment */}
+          <Route path="/school-admin/teachers/assignments" element={<TeacherAssignment />} />
 
           {/* ========== P2LADMIN ROUTES ========== */}
           {/* Redirect /platform-admin to /p2ladmin/dashboard */}

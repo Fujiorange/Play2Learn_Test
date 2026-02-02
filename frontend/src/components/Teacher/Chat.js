@@ -206,7 +206,7 @@ export default function Chat() {
                       key={msg._id}
                       style={{
                         ...styles.messageBubble,
-                        ...(msg.senderId === currentUser?._id || msg.senderRole === 'Teacher' ? styles.sentMessage : styles.receivedMessage)
+                        ...(msg.senderId?.toString() === currentUser?._id?.toString() ? styles.sentMessage : styles.receivedMessage)
                       }}
                     >
                       <div>{msg.message}</div>
