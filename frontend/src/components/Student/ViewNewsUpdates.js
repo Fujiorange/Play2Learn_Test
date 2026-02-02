@@ -1,6 +1,7 @@
 // Student News & Updates Component
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getDismissedBroadcasts } from '../../utils/userUtils';
 import './ViewNewsUpdates.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
@@ -12,22 +13,10 @@ function ViewNewsUpdates() {
   const [loading, setLoading] = useState(true);
   const [dismissedIds, setDismissedIds] = useState([]);
 
-  // Get user ID for per-user dismissal tracking
-  const getUserId = () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      return user.id || user._id || null;
-    } catch {
-      return null;
-    }
-  };
-
   useEffect(() => {
     fetchBroadcasts();
     // Load dismissed broadcasts from localStorage with user-specific key
-    const userId = getUserId();
-    const storageKey = userId ? `dismissedBroadcasts_${userId}` : 'dismissedBroadcasts';
-    const dismissed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    const dismissed = getDismissedBroadcasts();
     setDismissedIds(dismissed);
   }, []);
 

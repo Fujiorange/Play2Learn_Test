@@ -1,5 +1,6 @@
 // Maintenance Broadcast Banner Component
 import React, { useState, useEffect } from 'react';
+import { getUserId, getDismissedBroadcasts, saveDismissedBroadcasts } from '../../utils/userUtils';
 import './MaintenanceBanner.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
@@ -10,22 +11,10 @@ function MaintenanceBanner({ userRole }) {
   const [dismissedIds, setDismissedIds] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Get user ID for per-user dismissal tracking
-  const getUserId = () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      return user.id || user._id || null;
-    } catch {
-      return null;
-    }
-  };
-
   useEffect(() => {
     fetchBroadcasts();
     // Load dismissed broadcasts from localStorage with user-specific key
-    const userId = getUserId();
-    const storageKey = userId ? `dismissedBroadcasts_${userId}` : 'dismissedBroadcasts';
-    const dismissed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    const dismissed = getDismissedBroadcasts();
     setDismissedIds(dismissed);
   }, []);
 
@@ -56,11 +45,7 @@ function MaintenanceBanner({ userRole }) {
   const handleDismiss = (broadcastId) => {
     const newDismissed = [...dismissedIds, broadcastId];
     setDismissedIds(newDismissed);
-    
-    // Save with user-specific key
-    const userId = getUserId();
-    const storageKey = userId ? `dismissedBroadcasts_${userId}` : 'dismissedBroadcasts';
-    localStorage.setItem(storageKey, JSON.stringify(newDismissed));
+    saveDismissedBroadcasts(newDismissed);
   };
 
   if (loading || broadcasts.length === 0) {
