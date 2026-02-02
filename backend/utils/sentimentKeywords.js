@@ -12,7 +12,8 @@ const positiveKeywords = [
   // Basic positive adjectives
   'great', 'good', 'nice', 'fine', 'decent', 'solid', 'competent', 'satisfactory', 
   'adequate', 'acceptable', 'reasonable', 'fair', 'respectable', 'commendable', 
-  'praiseworthy', 'admirable', 'laudable', 'esteemed', 'appreciated',
+  'praiseworthy', 'admirable', 'laudable', 'esteemed', 'appreciated', 'like', 'love',
+  'enjoy', 'enjoyed', 'enjoying',
   
   // Learning and comprehension
   'mastered', 'learned', 'understood', 'comprehended', 'grasped', 'absorbed', 
@@ -354,13 +355,13 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
   
   // Helper function to check if a keyword is preceded by a negation word
   const isPrecededByNegation = (index, keyword) => {
-    // Look at up to 3 words before the keyword
-    const beforeText = lowerMessage.substring(Math.max(0, index - 20), index).trim();
+    // Look at up to 5 words (or 30 characters) before the keyword for better context
+    const beforeText = lowerMessage.substring(Math.max(0, index - 30), index).trim();
     const words = beforeText.split(/\s+/);
     
-    // Check the last 1-3 words for negation
-    const recentWords = words.slice(-3);
-    return recentWords.some(word => negationWords.includes(word.replace(/[^\w]/g, '')));
+    // Check the last 1-5 words for negation to handle longer phrases
+    const recentWords = words.slice(-5);
+    return recentWords.some(word => negationWords.includes(word.replace(/[^\w']/g, '')));
   };
   
   // Check negative keywords (phrases first, then single words)
