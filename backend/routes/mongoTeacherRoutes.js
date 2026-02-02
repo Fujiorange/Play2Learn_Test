@@ -76,10 +76,17 @@ router.get('/dashboard', async (req, res) => {
     // Get assigned classes and subjects
     const assignedClasses = teacher.assignedClasses || [];
     const assignedSubjects = teacher.assignedSubjects || [];
+    const schoolId = teacher.schoolId;
     
-    // Count students in assigned classes
+    // Count students in assigned classes AND same school
     let totalStudents = 0;
-    if (assignedClasses.length > 0) {
+    if (assignedClasses.length > 0 && schoolId) {
+      totalStudents = await User.countDocuments({
+        role: 'Student',
+        class: { $in: assignedClasses },
+        schoolId: schoolId
+      });
+    } else if (assignedClasses.length > 0) {
       totalStudents = await User.countDocuments({
         role: 'Student',
         class: { $in: assignedClasses }
@@ -96,11 +103,16 @@ router.get('/dashboard', async (req, res) => {
       ]
     });
     
-    // Get recent quiz attempts from students in assigned classes
-    const students = await User.find({
+    // Get recent quiz attempts from students in assigned classes (same school)
+    const studentFilter = {
       role: 'Student',
       class: { $in: assignedClasses }
-    }).select('_id');
+    };
+    if (schoolId) {
+      studentFilter.schoolId = schoolId;
+    }
+    
+    const students = await User.find(studentFilter).select('_id');
     
     const studentIds = students.map(s => s._id);
     
@@ -223,6 +235,7 @@ router.get('/students', async (req, res) => {
   try {
     const teacher = req.teacher;
     const assignedClasses = teacher.assignedClasses || [];
+    const schoolId = teacher.schoolId;
     
     if (assignedClasses.length === 0) {
       return res.json({ success: true, students: [], message: 'No classes assigned' });
@@ -230,10 +243,16 @@ router.get('/students', async (req, res) => {
     
     const { className, search } = req.query;
     
+    // ✅ FIX: Filter by both class AND schoolId
     let filter = {
       role: 'Student',
       class: { $in: assignedClasses }
     };
+    
+    // Add schoolId filter if teacher has a schoolId
+    if (schoolId) {
+      filter.schoolId = schoolId;
+    }
     
     if (className && className !== 'all') {
       filter.class = className;
@@ -244,7 +263,7 @@ router.get('/students', async (req, res) => {
     }
     
     const students = await User.find(filter)
-      .select('name email class gradeLevel profile_picture accountActive createdAt')
+      .select('name email class gradeLevel profile_picture accountActive createdAt schoolId')
       .sort({ name: 1 });
     
     // Get math profiles for all students
@@ -286,6 +305,7 @@ router.get('/students/:studentId', async (req, res) => {
     const { studentId } = req.params;
     const teacher = req.teacher;
     const assignedClasses = teacher.assignedClasses || [];
+    const schoolId = teacher.schoolId;
     
     const student = await User.findById(studentId)
       .select('-password -verificationToken');
@@ -296,6 +316,11 @@ router.get('/students/:studentId', async (req, res) => {
     
     // Verify teacher has access to this student's class
     if (!assignedClasses.includes(student.class)) {
+      return res.status(403).json({ success: false, error: 'Access denied to this student' });
+    }
+    
+    // ✅ FIX: Also verify student belongs to same school
+    if (schoolId && student.schoolId && student.schoolId !== schoolId) {
       return res.status(403).json({ success: false, error: 'Access denied to this student' });
     }
     
@@ -389,12 +414,18 @@ router.get('/leaderboard', async (req, res) => {
   try {
     const teacher = req.teacher;
     const assignedClasses = teacher.assignedClasses || [];
+    const schoolId = teacher.schoolId;
     const { className } = req.query;
     
+    // ✅ FIX: Filter by schoolId as well
     let filter = {
       role: 'Student',
       class: { $in: assignedClasses }
     };
+    
+    if (schoolId) {
+      filter.schoolId = schoolId;
+    }
     
     if (className && className !== 'all' && assignedClasses.includes(className)) {
       filter.class = className;
@@ -434,11 +465,18 @@ router.get('/class-performance', async (req, res) => {
   try {
     const teacher = req.teacher;
     const assignedClasses = teacher.assignedClasses || [];
+    const schoolId = teacher.schoolId;
     
     const classStats = [];
     
     for (const className of assignedClasses) {
-      const students = await User.find({ role: 'Student', class: className }).select('_id');
+      // ✅ FIX: Filter by schoolId as well
+      const studentFilter = { role: 'Student', class: className };
+      if (schoolId) {
+        studentFilter.schoolId = schoolId;
+      }
+      
+      const students = await User.find(studentFilter).select('_id');
       const studentIds = students.map(s => s._id);
       
       const mathProfiles = await MathProfile.find({ student_id: { $in: studentIds } });
@@ -599,16 +637,23 @@ router.get('/conversations', async (req, res) => {
     const teacherId = req.user.userId;
     const teacher = req.teacher;
     const assignedClasses = teacher.assignedClasses || [];
+    const schoolId = teacher.schoolId;
     
-    // Get students in assigned classes
-    const students = await User.find({
+    // ✅ FIX: Filter students by both class AND schoolId
+    const studentFilter = {
       role: 'Student',
       class: { $in: assignedClasses }
-    }).select('_id name class');
+    };
+    if (schoolId) {
+      studentFilter.schoolId = schoolId;
+    }
+    
+    // Get students in assigned classes
+    const students = await User.find(studentFilter).select('_id name class');
     
     const studentIds = students.map(s => s._id);
     
-    // Get parents of these students
+    // Get parents of these students (linked to students from this school)
     const parents = await User.find({
       role: 'Parent',
       'linkedStudents.studentId': { $in: studentIds }

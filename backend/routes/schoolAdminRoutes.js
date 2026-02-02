@@ -117,38 +117,53 @@ async function checkLicenseAvailability(schoolId, role) {
 const getDb = () => mongoose.connection.db;
 
 // ==================== DASHBOARD STATS (FIXED!) ====================
-router.get('/dashboard-stats', authenticateToken, async (req, res) => {
+router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
   try {
-    console.log('📊 Fetching dashboard stats...');
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
     
-    // ✅ FIX: Query the 'users' collection with role field, not separate collections!
+    console.log('📊 Fetching dashboard stats for school:', schoolId);
+    
+    if (!schoolId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School admin is not associated with a school' 
+      });
+    }
+    
+    // ✅ FIX: Filter by schoolId to only count users from this school
     const [
       totalStudents,
       totalTeachers,
-      totalParents,
-      totalUsers
+      totalClasses
     ] = await Promise.all([
-      User.countDocuments({ role: 'Student' }),
-      User.countDocuments({ role: 'Teacher' }),
-      User.countDocuments({ role: 'Parent' }),
-      User.countDocuments()
+      User.countDocuments({ role: 'Student', schoolId: schoolId }),
+      User.countDocuments({ role: 'Teacher', schoolId: schoolId }),
+      Class.countDocuments({ school_id: new mongoose.Types.ObjectId(schoolId) })
     ]);
+    
+    // Get parents linked to students from this school
+    const schoolStudents = await User.find({ role: 'Student', schoolId: schoolId }).select('_id');
+    const studentIds = schoolStudents.map(s => s._id);
+    const totalParents = await User.countDocuments({
+      role: 'Parent',
+      'linkedStudents.studentId': { $in: studentIds }
+    });
 
-    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents`);
+    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents for school ${schoolId}`);
 
-    // Get recent registrations (last 7 days)
+    // Get recent registrations (last 7 days) for this school
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
     const recentRegistrations = await User.countDocuments({
+      schoolId: schoolId,
       createdAt: { $gte: sevenDaysAgo }
     });
 
-    // Get active users (last 30 days login)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+    // Get active users for this school
     const activeUsers = await User.countDocuments({
+      schoolId: schoolId,
       accountActive: true
     });
 
@@ -158,11 +173,16 @@ router.get('/dashboard-stats', authenticateToken, async (req, res) => {
         students: totalStudents,
         teachers: totalTeachers,
         parents: totalParents,
-        totalUsers: totalUsers,
+        totalUsers: totalStudents + totalTeachers + totalParents,
         activeUsers: activeUsers,
         recentRegistrations: recentRegistrations,
-        classes: 0, // Will implement when class management is ready
-      }
+        classes: totalClasses,
+      },
+      // Also return for frontend compatibility
+      total_students: totalStudents,
+      total_teachers: totalTeachers,
+      total_parents: totalParents,
+      total_classes: totalClasses
     });
   } catch (error) {
     console.error('❌ Dashboard stats error:', error);
@@ -250,10 +270,20 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
 });
 
 // ==================== GET USERS (FIXED!) ====================
-router.get('/users', authenticateToken, async (req, res) => {
+router.get('/users', authenticateSchoolAdmin, async (req, res) => {
   try {
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
     const { gradeLevel, subject, role } = req.query;
     
+    if (!schoolId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School admin is not associated with a school' 
+      });
+    }
+    
+    // ✅ FIX: Always filter by schoolId for students and teachers
     const filter = {};
     
     // Filter by role
@@ -270,6 +300,18 @@ router.get('/users', authenticateToken, async (req, res) => {
     if (subject) {
       filter.subject = subject;
     }
+    
+    // ✅ Filter by schoolId for students and teachers
+    // For parents, we need to filter by linked students from this school
+    if (role === 'Parent') {
+      // Get all student IDs from this school
+      const schoolStudents = await User.find({ role: 'Student', schoolId: schoolId }).select('_id');
+      const studentIds = schoolStudents.map(s => s._id);
+      filter['linkedStudents.studentId'] = { $in: studentIds };
+    } else {
+      // For students, teachers, and all users filter by schoolId
+      filter.schoolId = schoolId;
+    }
 
     console.log('🔍 Fetching users with filter:', filter);
 
@@ -277,7 +319,7 @@ router.get('/users', authenticateToken, async (req, res) => {
       .select('-password')
       .sort({ createdAt: -1 });
 
-    console.log(`✅ Found ${users.length} users`);
+    console.log(`✅ Found ${users.length} users for school ${schoolId}`);
 
     res.json({
       success: true,
@@ -293,6 +335,8 @@ router.get('/users', authenticateToken, async (req, res) => {
         accountActive: user.accountActive,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
+        schoolId: user.schoolId,
+        linkedStudents: user.linkedStudents
       }))
     });
   } catch (error) {
@@ -847,6 +891,35 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           });
           continue;
         }
+        
+        // ✅ FIX: Verify student belongs to the same school as the admin
+        if (student.schoolId !== schoolAdmin.schoolId) {
+          console.log(`⚠️  Skipping - Student belongs to different school`);
+          results.failed++;
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: `Student ${parentData.studentEmail} does not belong to your school.`
+          });
+          continue;
+        }
+        
+        // ✅ FIX: Check if student already has a parent linked (max 1 parent per student)
+        const existingParentForStudent = await User.findOne({
+          role: 'Parent',
+          'linkedStudents.studentId': student._id
+        });
+        
+        if (existingParentForStudent && existingParentForStudent.email.toLowerCase() !== parentData.parentEmail.toLowerCase().trim()) {
+          console.log(`⚠️  Skipping - Student already has a different parent linked: ${existingParentForStudent.email}`);
+          results.failed++;
+          results.errors.push({
+            row: rowNum,
+            parentEmail: parentData.parentEmail,
+            error: `Student ${student.name} already has a parent account linked (${existingParentForStudent.email}). Each student can only have 1 parent.`
+          });
+          continue;
+        }
 
         console.log(`✅ Found student: ${student.name} (${student.email})`);
 
@@ -1083,6 +1156,40 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
           success: false,
           error: licenseCheck.error
         });
+      }
+    }
+    
+    // ✅ FIX: For parents, validate linked students belong to school and check 1 parent per student limit
+    if (role === 'Parent' && linkedStudents && linkedStudents.length > 0) {
+      for (const studentId of linkedStudents) {
+        // Check student exists and belongs to same school
+        const student = await User.findById(studentId);
+        if (!student || student.role !== 'Student') {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid student ID: ${studentId}`
+          });
+        }
+        
+        if (student.schoolId !== schoolAdmin.schoolId) {
+          return res.status(403).json({
+            success: false,
+            error: `Student ${student.name} does not belong to your school`
+          });
+        }
+        
+        // Check if student already has a parent linked
+        const existingParentForStudent = await User.findOne({
+          role: 'Parent',
+          'linkedStudents.studentId': student._id
+        });
+        
+        if (existingParentForStudent) {
+          return res.status(400).json({
+            success: false,
+            error: `Student ${student.name} already has a parent account linked (${existingParentForStudent.email}). Each student can only have 1 parent.`
+          });
+        }
       }
     }
     
