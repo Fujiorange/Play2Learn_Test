@@ -398,6 +398,13 @@ router.get("/dashboard", async (req, res) => {
     const user = await User.findById(studentId);
     const { effective: effectiveStreak } = computeEffectiveStreak(mathProfile);
 
+    // ✅ NEW: Get earned badges count to show as achievements
+    const db = mongoose.connection.db;
+    const earnedBadges = await db.collection('student_badges')
+      .find({ student_email: user?.email })
+      .toArray();
+    const achievementsCount = earnedBadges.length || 0;
+
     res.json({
       success: true,
       dashboard: {
@@ -407,6 +414,7 @@ router.get("/dashboard", async (req, res) => {
         gradeLevel: user?.gradeLevel || 'Primary 1',
         streak: effectiveStreak || 0,
         placementCompleted: mathProfile.placement_completed || false,
+        achievements: achievementsCount,
       },
       data: {
         points: mathProfile.total_points || 0,
@@ -414,6 +422,7 @@ router.get("/dashboard", async (req, res) => {
         level: mathProfile.current_profile || 1,
         gradeLevel: user?.gradeLevel || 'Primary 1',
         streak: effectiveStreak || 0,
+        achievements: achievementsCount,
       }
     });
   } catch (error) {

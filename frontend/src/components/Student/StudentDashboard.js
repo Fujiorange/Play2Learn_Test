@@ -69,7 +69,7 @@ export default function StudentDashboard() {
           points,
           level,
           levelProgress: ((points % 500) / 500) * 100,
-          achievements: dashboardInfo.achievements?.length || 0,
+          achievements: dashboardInfo.achievements || 0,
           rank: userRank,
           completedQuizzes,
           grade_level: gradeLevel,
