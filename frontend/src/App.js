@@ -31,6 +31,9 @@ import WriteTestimonial from './components/Teacher/WriteTestimonial';
 import TeacherCreateTicket from './components/Teacher/CreateTicket';
 import TeacherTrackTicket from './components/Teacher/TrackTicket';
 
+// ⭐ NEW IMPORT - Teacher News & Updates
+import TeacherViewNewsUpdates from './components/Teacher/ViewNewsUpdates';
+
 // Student Components
 import StudentDashboard from './components/Student/StudentDashboard';
 import StudentViewProfile from './components/Student/ViewProfile';
@@ -54,7 +57,10 @@ import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
 // ⭐ NEW IMPORT - Student Announcements
 import StudentViewAnnouncements from './components/Student/ViewAnnouncements';
 
-// â­ NEW IMPORTS - Student Rewards System
+// ⭐ NEW IMPORT - Student News & Updates
+import StudentViewNewsUpdates from './components/Student/ViewNewsUpdates';
+
+// ⭐ NEW IMPORTS - Student Rewards System
 import StudentViewRewardShop from './components/Student/ViewRewardShop';
 import StudentViewBadges from './components/Student/ViewBadges';
 
@@ -75,6 +81,9 @@ import ParentTrackSupportTicket from './components/Parents/TrackSupportTicket';
 // ⭐ NEW IMPORTS - Parent Modules
 import ParentViewChildSkillMatrix from './components/Parents/ViewChildSkillMatrix';
 import ParentViewAnnouncements from './components/Parents/ViewAnnouncements';
+
+// ⭐ NEW IMPORT - Parent News & Updates
+import ParentViewNewsUpdates from './components/Parents/ViewNewsUpdates';
 
 // SchoolAdmin Components
 import SchoolAdminDashboard from './components/SchoolAdmin/SchoolAdminDashboard';
@@ -154,6 +163,9 @@ function App() {
           <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
           <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
           <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
+          
+          {/* ⭐ NEW ROUTE - Teacher News & Updates */}
+          <Route path="/teacher/news" element={<TeacherViewNewsUpdates />} />
 
           {/* ========== STUDENT ROUTES ========== */}
           <Route path="/student" element={<StudentDashboard />} />
@@ -168,6 +180,9 @@ function App() {
 
           {/* ⭐ NEW ROUTE - Student Announcements */}
           <Route path="/student/announcements" element={<StudentViewAnnouncements />} />
+          
+          {/* ⭐ NEW ROUTE - Student News & Updates */}
+          <Route path="/student/news" element={<StudentViewNewsUpdates />} />
 
           {/* â­ NEW ROUTES - Student Rewards System */}
           <Route path="/student/shop" element={<StudentViewRewardShop />} />
@@ -205,6 +220,9 @@ function App() {
           {/* ⭐ Parent Module Routes */}
           <Route path="/parent/children/skills" element={<ParentViewChildSkillMatrix />} />
           <Route path="/parent/announcements" element={<ParentViewAnnouncements />} />
+          
+          {/* ⭐ NEW ROUTE - Parent News & Updates */}
+          <Route path="/parent/news" element={<ParentViewNewsUpdates />} />
           
           <Route path="/parent/feedback" element={<ParentViewFeedback />} />
           <Route path="/parent/chat" element={<ParentChatWithTeacher />} />

@@ -1,5 +1,6 @@
 // Maintenance Broadcast Banner Component
 import React, { useState, useEffect } from 'react';
+import { getUserId, getDismissedBroadcasts, saveDismissedBroadcasts } from '../../utils/userUtils';
 import './MaintenanceBanner.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
@@ -12,18 +13,27 @@ function MaintenanceBanner({ userRole }) {
 
   useEffect(() => {
     fetchBroadcasts();
-    // Load dismissed broadcasts from localStorage
-    const dismissed = JSON.parse(localStorage.getItem('dismissedBroadcasts') || '[]');
+    // Load dismissed broadcasts from localStorage with user-specific key
+    const dismissed = getDismissedBroadcasts();
     setDismissedIds(dismissed);
   }, []);
 
   const fetchBroadcasts = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/public/maintenance`);
+      
+      if (!response.ok) {
+        console.error('Maintenance broadcast fetch failed:', response.status, response.statusText);
+        setLoading(false);
+        return;
+      }
+      
       const data = await response.json();
       
       if (data.success) {
         setBroadcasts(data.broadcasts || []);
+      } else {
+        console.error('Maintenance broadcast fetch unsuccessful:', data.error);
       }
     } catch (error) {
       console.error('Failed to fetch maintenance broadcasts:', error);
@@ -35,7 +45,7 @@ function MaintenanceBanner({ userRole }) {
   const handleDismiss = (broadcastId) => {
     const newDismissed = [...dismissedIds, broadcastId];
     setDismissedIds(newDismissed);
-    localStorage.setItem('dismissedBroadcasts', JSON.stringify(newDismissed));
+    saveDismissedBroadcasts(newDismissed);
   };
 
   if (loading || broadcasts.length === 0) {
@@ -48,8 +58,11 @@ function MaintenanceBanner({ userRole }) {
     if (dismissedIds.includes(broadcast._id)) return false;
     
     // Check if broadcast targets this user role
-    if (broadcast.target_roles.includes('all')) return true;
-    if (userRole && broadcast.target_roles.includes(userRole)) return true;
+    // Show broadcasts targeted to 'all' regardless of user login status
+    if (broadcast.target_roles && broadcast.target_roles.includes('all')) return true;
+    
+    // If user is logged in, check if their role is targeted
+    if (userRole && broadcast.target_roles && broadcast.target_roles.includes(userRole)) return true;
     
     return false;
   });

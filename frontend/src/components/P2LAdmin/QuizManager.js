@@ -45,10 +45,28 @@ function QuizManager() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({ 
-      ...formData, 
-      [name]: type === 'checkbox' ? checked : value 
-    });
+    const newValue = type === 'checkbox' ? checked : value;
+    
+    // Auto-sync quiz_type and is_adaptive for consistency
+    if (name === 'quiz_type') {
+      setFormData({ 
+        ...formData, 
+        quiz_type: value,
+        is_adaptive: value === 'adaptive' // Auto-enable adaptive mode for adaptive quizzes
+      });
+    } else if (name === 'is_adaptive') {
+      setFormData({ 
+        ...formData, 
+        is_adaptive: checked,
+        // If enabling adaptive mode, set quiz_type to adaptive
+        quiz_type: checked ? 'adaptive' : formData.quiz_type
+      });
+    } else {
+      setFormData({ 
+        ...formData, 
+        [name]: newValue
+      });
+    }
   };
 
   const handleQuestionToggle = (questionId) => {
@@ -230,11 +248,14 @@ function QuizManager() {
                     name="is_adaptive"
                     checked={formData.is_adaptive}
                     onChange={handleInputChange}
+                    disabled={formData.quiz_type === 'placement'}
                   />
                   {' '}Enable Adaptive Mode
                 </label>
                 <p className="help-text">
-                  Adaptive quizzes adjust difficulty based on student performance
+                  {formData.quiz_type === 'placement' 
+                    ? 'Placement quizzes do not use adaptive mode' 
+                    : 'Adaptive quizzes adjust difficulty based on student performance'}
                 </p>
               </div>
 

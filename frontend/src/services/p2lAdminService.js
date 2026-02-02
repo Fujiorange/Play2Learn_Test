@@ -162,6 +162,12 @@ export const deleteSchoolAdmin = async (id) => {
   });
 };
 
+export const resetSchoolAdminPassword = async (id) => {
+  return apiCall(`/api/p2ladmin/school-admins/${id}/reset-password`, {
+    method: 'POST',
+  });
+};
+
 // ==================== QUESTIONS ====================
 export const getQuestions = async (filters = {}) => {
   const queryString = new URLSearchParams(filters).toString();
@@ -343,6 +349,7 @@ export default {
   createSchoolAdmins,
   updateSchoolAdmin,
   deleteSchoolAdmin,
+  resetSchoolAdminPassword,
   getQuestions,
   getQuestion,
   createQuestion,

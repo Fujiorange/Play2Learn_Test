@@ -83,6 +83,7 @@ function authenticateToken(req, res, next) {
 // ==================== PUBLIC LANDING PAGE ENDPOINT ====================
 // Public endpoint to fetch landing page blocks (no authentication required)
 const LandingPage = require('./models/LandingPage');
+const Testimonial = require('./models/Testimonial');
 
 app.get('/api/public/landing-page', async (req, res) => {
   try {
@@ -103,9 +104,44 @@ app.get('/api/public/landing-page', async (req, res) => {
       });
     }
 
+    // Get testimonials that should be displayed on landing page
+    const displayTestimonials = await Testimonial.find({
+      display_on_landing: true
+    })
+      .sort({ created_at: -1 })
+      .limit(10);
+
+    // Transform testimonials to the format expected by the frontend
+    const testimonialData = displayTestimonials.map(t => ({
+      name: t.student_name,
+      role: t.user_role,
+      quote: t.message,
+      rating: t.rating,
+      image: t.image_url || null
+    }));
+
+    // Clone blocks and inject testimonials into testimonial blocks
+    // Use toObject() to properly serialize Mongoose subdocuments
+    const blocks = (landingPage.blocks || []).map(block => {
+      // Convert Mongoose subdocument to plain object for proper serialization
+      const plainBlock = block.toObject ? block.toObject() : block;
+      
+      if (plainBlock.type === 'testimonials') {
+        // Inject display testimonials into the testimonial block
+        return {
+          ...plainBlock,
+          custom_data: {
+            ...(plainBlock.custom_data || {}),
+            testimonials: testimonialData
+          }
+        };
+      }
+      return plainBlock;
+    });
+
     res.json({
       success: true,
-      blocks: landingPage.blocks || []
+      blocks: blocks
     });
   } catch (error) {
     console.error('Get public landing page error:', error);

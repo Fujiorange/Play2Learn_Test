@@ -14,6 +14,7 @@ const Testimonial = require('../models/Testimonial');
 const { authMiddleware } = require('../middleware/auth');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
+const { analyzeSentiment } = require('../utils/sentimentKeywords');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
@@ -1162,12 +1163,8 @@ router.post('/testimonials', authMiddleware, async (req, res) => {
       });
     }
 
-    // Perform sentiment analysis
-    const sentimentResult = sentiment.analyze(message);
-    const sentimentScore = sentimentResult.score;
-    let sentimentLabel = 'neutral';
-    if (sentimentScore > 0) sentimentLabel = 'positive';
-    else if (sentimentScore < 0) sentimentLabel = 'negative';
+    // Perform enhanced sentiment analysis using shared utility
+    const sentimentAnalysis = analyzeSentiment(message, rating, sentiment);
 
     const testimonialDoc = await Testimonial.create({
       student_id: req.user.id,
@@ -1178,8 +1175,8 @@ router.post('/testimonials', authMiddleware, async (req, res) => {
       message,
       approved: false,
       user_role: 'Parent',
-      sentiment_score: sentimentScore,
-      sentiment_label: sentimentLabel,
+      sentiment_score: sentimentAnalysis.score,
+      sentiment_label: sentimentAnalysis.label,
     });
 
     res.status(201).json({

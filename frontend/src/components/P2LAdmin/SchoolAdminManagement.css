@@ -291,6 +291,22 @@
   background: #218838;
 }
 
+.btn-reset-password {
+  flex: 1;
+  background: #ff9800;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.btn-reset-password:hover {
+  background: #e68900;
+}
+
 .btn-delete {
   flex: 1;
   background: #dc3545;

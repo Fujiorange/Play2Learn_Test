@@ -1,11 +1,12 @@
 // Landing Page Manager Component
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   getLandingPage, 
   saveLandingPage,
   getTestimonials,
-  updateTestimonial 
+  updateTestimonial,
+  deleteTestimonial 
 } from '../../services/p2lAdminService';
 import './LandingPageManager.css';
 
@@ -18,10 +19,10 @@ function LandingPageManager() {
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(false);
   const [testimonialError, setTestimonialError] = useState('');
+  const [testimonialsLoaded, setTestimonialsLoaded] = useState(false); // Track if testimonials have been loaded
   const [testimonialFilters, setTestimonialFilters] = useState({
     minRating: '',
     sentiment: '',
-    approved: '',
     userRole: ''
   });
   const [formData, setFormData] = useState({
@@ -49,13 +50,14 @@ function LandingPageManager() {
     }
   };
 
-  const fetchTestimonials = async () => {
+  const fetchTestimonials = useCallback(async () => {
     setLoadingTestimonials(true);
     setTestimonialError('');
     try {
       const response = await getTestimonials(testimonialFilters);
       if (response.success) {
         setTestimonials(response.testimonials || []);
+        setTestimonialsLoaded(true); // Mark as loaded
       } else {
         setTestimonialError(response.error || 'Failed to load testimonials');
       }
@@ -65,11 +67,11 @@ function LandingPageManager() {
     } finally {
       setLoadingTestimonials(false);
     }
-  };
+  }, [testimonialFilters]);
 
-  const handleTestimonialApproval = async (id, approved, displayOnLanding) => {
+  const handleTestimonialToggleLanding = async (id, displayOnLanding) => {
     try {
-      const result = await updateTestimonial(id, { approved, display_on_landing: displayOnLanding });
+      const result = await updateTestimonial(id, { display_on_landing: displayOnLanding });
       if (result.success) {
         fetchTestimonials(); // Refresh list
       } else {
@@ -80,6 +82,34 @@ function LandingPageManager() {
       alert('Failed to update testimonial. Please try again.');
     }
   };
+
+  const handleDeleteTestimonial = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this testimonial? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const result = await deleteTestimonial(id);
+      if (result.success) {
+        alert('Testimonial deleted successfully!');
+        fetchTestimonials(); // Refresh list
+      } else {
+        alert(result.error || 'Failed to delete testimonial');
+      }
+    } catch (error) {
+      console.error('Failed to delete testimonial:', error);
+      alert('Failed to delete testimonial. Please try again.');
+    }
+  };
+
+  // Auto-fetch testimonials when filters change (only after initial load)
+  useEffect(() => {
+    // Only auto-fetch if testimonials have been loaded at least once
+    // This prevents unnecessary API calls on component mount
+    if (testimonialsLoaded) {
+      fetchTestimonials();
+    }
+  }, [testimonialFilters, testimonialsLoaded, fetchTestimonials]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -564,19 +594,6 @@ function LandingPageManager() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Approval Status</label>
-                  <select
-                    value={testimonialFilters.approved}
-                    onChange={(e) => setTestimonialFilters({ ...testimonialFilters, approved: e.target.value })}
-                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
-                  >
-                    <option value="">All</option>
-                    <option value="false">Pending Approval</option>
-                    <option value="true">Approved</option>
-                  </select>
-                </div>
-                
-                <div className="form-group">
                   <label>User Type</label>
                   <select
                     value={testimonialFilters.userRole}
@@ -632,8 +649,8 @@ function LandingPageManager() {
                       style={{
                         padding: '16px',
                         marginBottom: '12px',
-                        background: testimonial.approved ? '#f0fdf4' : '#fef3c7',
-                        border: `2px solid ${testimonial.approved ? '#86efac' : '#fcd34d'}`,
+                        background: testimonial.display_on_landing ? '#f0fdf4' : '#fef3c7',
+                        border: `2px solid ${testimonial.display_on_landing ? '#86efac' : '#fcd34d'}`,
                         borderRadius: '8px'
                       }}
                     >
@@ -653,10 +670,10 @@ function LandingPageManager() {
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
                             type="button"
-                            onClick={() => handleTestimonialApproval(testimonial.id, !testimonial.approved, testimonial.display_on_landing)}
+                            onClick={() => handleTestimonialToggleLanding(testimonial.id, !testimonial.display_on_landing)}
                             style={{
                               padding: '6px 12px',
-                              background: testimonial.approved ? '#ef4444' : '#10b981',
+                              background: testimonial.display_on_landing ? '#f59e0b' : '#3b82f6',
                               color: 'white',
                               border: 'none',
                               borderRadius: '4px',
@@ -664,24 +681,23 @@ function LandingPageManager() {
                               fontSize: '12px'
                             }}
                           >
-                            {testimonial.approved ? '❌ Unapprove' : '✅ Approve'}
+                            {testimonial.display_on_landing ? '🌐 On Landing' : '📄 Add to Landing'}
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleTestimonialApproval(testimonial.id, testimonial.approved, !testimonial.display_on_landing)}
-                            disabled={!testimonial.approved}
+                            onClick={() => handleDeleteTestimonial(testimonial.id)}
                             style={{
                               padding: '6px 12px',
-                              background: testimonial.display_on_landing ? '#f59e0b' : '#3b82f6',
+                              background: '#ef4444',
                               color: 'white',
                               border: 'none',
                               borderRadius: '4px',
-                              cursor: testimonial.approved ? 'pointer' : 'not-allowed',
-                              fontSize: '12px',
-                              opacity: testimonial.approved ? 1 : 0.5
+                              cursor: 'pointer',
+                              fontSize: '12px'
                             }}
+                            title="Delete testimonial"
                           >
-                            {testimonial.display_on_landing ? '🌐 On Landing' : '📄 Add to Landing'}
+                            🗑️ Delete
                           </button>
                         </div>
                       </div>
@@ -1117,7 +1133,7 @@ function LandingPageManager() {
               <div style={{ textAlign: 'center', padding: '40px', background: '#f9fafb', borderRadius: '8px' }}>
                 <p style={{ color: '#6b7280' }}>
                   💡 Testimonials are managed dynamically from student and parent submissions.
-                  <br/>Use the filter system above to approve and display testimonials on the landing page.
+                  <br/>Use the filter system above to display testimonials on the landing page.
                 </p>
               </div>
             </div>

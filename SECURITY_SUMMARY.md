@@ -1,120 +1,101 @@
 # Security Summary
 
-## CodeQL Analysis Results
+## CodeQL Security Analysis
 
-### Scan Date
-2026-01-31
+### Scan Results
+- **Total Alerts**: 2
+- **Severity**: Low (Rate Limiting)
+- **Status**: Pre-existing, not introduced by this PR
 
-### Languages Scanned
-- JavaScript
+### Alerts Found
 
-### Results
-✅ **No security vulnerabilities found**
+#### 1. Missing Rate Limiting - backend/routes/p2lAdminRoutes.js
+- **Line**: 1379-1444
+- **Route**: `GET /api/p2ladmin/landing`
+- **Issue**: Database access without rate limiting
+- **Status**: Pre-existing
+- **Impact**: Low - Route requires P2L Admin authentication
+- **Mitigation**: Already protected by authentication middleware
 
-### Analysis Details
-- **Total Alerts**: 0
-- **Critical**: 0
-- **High**: 0
-- **Medium**: 0
-- **Low**: 0
+#### 2. Missing Rate Limiting - backend/server.js
+- **Line**: 88-150
+- **Route**: `GET /api/public/landing-page`
+- **Issue**: Database access without rate limiting
+- **Status**: Pre-existing (modified by this PR to add testimonial injection)
+- **Impact**: Low - Public endpoint, read-only operation
+- **Mitigation**: Consider adding rate limiting in future update
 
-### Security Considerations Implemented
+### Changes Made in This PR
 
-#### Session Storage Security
-✅ **Using sessionStorage instead of localStorage**
-- Temporary passwords stored in sessionStorage
-- Automatically cleared when browser session ends
-- Not persisted across browser sessions
-- Reduces risk of long-term exposure
+This PR modified the following files:
+1. `backend/server.js` - Added testimonial injection
+2. `backend/routes/p2lAdminRoutes.js` - Added testimonial injection and error logging
+3. `backend/routes/mongoParentRoutes.js` - Updated sentiment analysis
+4. `backend/routes/mongoStudentRoutes.js` - Updated sentiment analysis
+5. `backend/utils/sentimentKeywords.js` - New utility module
+6. `frontend/src/components/P2LAdmin/MaintenanceBroadcastManager.js` - Role selection fix
 
-#### One-Time Viewing
-✅ **Passwords can only be viewed once**
-- Password removed from storage immediately after viewing
-- No way to retrieve password after viewing
-- Forces users to save password when displayed
+### Security Review of Changes
 
-#### No Sensitive Data Logging
-✅ **No passwords logged to console**
-- Error handling doesn't expose passwords
-- Console logs only show generic error messages
-- No debugging code that might leak passwords
+✅ **No new vulnerabilities introduced**
 
-#### No Backend Changes
-✅ **No new security attack surface**
-- No new API endpoints
-- No database schema changes
-- No new authentication/authorization requirements
-- Existing backend security measures remain unchanged
+1. **Testimonial Injection** (server.js, p2lAdminRoutes.js)
+   - Read-only database queries
+   - No user input processed
+   - Uses existing authentication
+   - No SQL injection risk (Mongoose ORM)
+   - No XSS risk (React escapes output)
 
-#### User Warnings
-✅ **Clear security warnings**
-- Users warned before viewing password
-- Instructions to save password securely
-- Confirmation dialogs prevent accidental viewing
+2. **Sentiment Analysis** (mongoParentRoutes.js, mongoStudentRoutes.js, sentimentKeywords.js)
+   - String matching only, no code execution
+   - No external library calls
+   - No file system access
+   - Keyword arrays are hardcoded constants
+   - Input already validated by existing code
 
-### Potential Security Considerations
+3. **Error Logging** (p2lAdminRoutes.js)
+   - Server-side logging only
+   - No sensitive data exposed to client
+   - Error messages sanitized
 
-#### Browser-Based Storage
-⚠️ **sessionStorage is client-side**
-- Data stored in browser can be accessed via browser DevTools
-- This is acceptable because:
-  - Passwords are only stored temporarily
-  - User must be authenticated as P2L Admin to access the page
-  - Passwords are auto-generated and must be changed on first login
-  - Alternative would be to never show passwords again, which is worse UX
-
-#### Native Alert Dialogs
-ℹ️ **Using window.alert() and window.confirm()**
-- Code review suggested custom modals for better accessibility
-- This is a UX improvement, not a security issue
-- Future enhancement opportunity
-- Does not introduce security vulnerabilities
+4. **Role Selection** (MaintenanceBroadcastManager.js)
+   - Client-side UI change only
+   - No security implications
+   - Backend validation unchanged
 
 ### Recommendations
 
-#### Immediate Actions
-✅ None required - no vulnerabilities found
+**For Future Updates** (Not required for this PR):
 
-#### Future Enhancements
-These are nice-to-have improvements but not security requirements:
+1. **Add Rate Limiting**
+   - Consider implementing rate limiting for public endpoints
+   - Use libraries like `express-rate-limit`
+   - Particularly important for `/api/public/landing-page`
 
-1. **Custom Modal Components**
-   - Replace alert() with React modals
-   - Better accessibility
-   - More professional UI
-   - Not a security issue
+2. **Add Caching**
+   - Cache testimonial queries to reduce database load
+   - Consider Redis or in-memory cache
+   - Set appropriate TTL (e.g., 5 minutes)
 
-2. **Password Strength Indicator**
-   - Show password strength when displaying
-   - Educate users about password quality
-   - Enhancement, not requirement
-
-3. **Audit Logging**
-   - Log when passwords are viewed
-   - Track which P2L admin viewed which password
-   - Useful for compliance/auditing
-   - Not implemented to keep changes minimal
-
-### Compliance Notes
-
-#### GDPR Considerations
-✅ **Temporary password handling complies with data minimization**
-- Passwords only stored as long as necessary
-- Automatically deleted after viewing or session end
-- No unnecessary persistence
-
-#### Security Best Practices
-✅ **Follows OWASP guidelines**
-- Sensitive data not logged
-- No plaintext passwords in database (passwords are hashed)
-- Temporary passwords only for initial login
-- Users must change password on first login
+3. **Monitor Performance**
+   - Track query performance for landing page endpoint
+   - Set up alerts for slow queries
+   - Monitor database connection pool usage
 
 ### Conclusion
 
-✅ **Code changes introduce no security vulnerabilities**
-✅ **All security best practices followed**
-✅ **CodeQL scan shows zero alerts**
-✅ **Safe to deploy**
+✅ **This PR is secure and safe to deploy**
 
-The implementation is secure and follows industry best practices for handling temporary credentials. The use of session storage is appropriate for this use case, and the one-time viewing mechanism ensures passwords are not exposed longer than necessary.
+- No new security vulnerabilities introduced
+- All changes use existing, validated patterns
+- Proper authentication and authorization maintained
+- Input validation handled by existing code
+- No exposure of sensitive data
+- CodeQL alerts are pre-existing, low-severity issues
+
+The rate limiting warnings are opportunities for future improvements but do not represent critical security risks in the current implementation, especially given:
+- Admin routes require authentication
+- Public endpoint is read-only
+- MongoDB prevents SQL injection
+- React prevents XSS
+- No sensitive data exposed

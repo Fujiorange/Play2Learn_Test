@@ -50,16 +50,34 @@ function MaintenanceBroadcastManager() {
 
   const handleRoleChange = (e) => {
     const value = e.target.value;
+    const isChecked = e.target.checked;
+    
     if (value === 'all') {
-      setFormData({ ...formData, target_roles: ['all'] });
-    } else {
-      const roles = formData.target_roles.includes('all') ? [] : [...formData.target_roles];
-      if (e.target.checked) {
-        roles.push(value);
+      // Toggle "All Users" - if checked, set to ['all'], if unchecked, clear all
+      if (isChecked) {
+        setFormData({ ...formData, target_roles: ['all'] });
       } else {
-        const index = roles.indexOf(value);
-        if (index > -1) roles.splice(index, 1);
+        // Allow unchecking "All Users" to select specific roles
+        setFormData({ ...formData, target_roles: [] });
       }
+    } else {
+      // Handle individual role selection
+      let roles = formData.target_roles.includes('all') ? [] : [...formData.target_roles];
+      
+      if (isChecked) {
+        // Add the role if not already present
+        if (!roles.includes(value)) {
+          roles.push(value);
+        }
+      } else {
+        // Remove the role
+        const index = roles.indexOf(value);
+        if (index > -1) {
+          roles.splice(index, 1);
+        }
+      }
+      
+      // If no roles selected, default to 'all'
       setFormData({ ...formData, target_roles: roles.length > 0 ? roles : ['all'] });
     }
   };

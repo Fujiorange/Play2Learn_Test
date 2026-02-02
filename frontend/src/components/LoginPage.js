@@ -118,6 +118,11 @@ export default function LoginPage() {
       alignItems: 'center',
       gap: '12px',
       marginBottom: '40px',
+      cursor: 'pointer',
+      transition: 'opacity 0.3s',
+    },
+    logoHover: {
+      opacity: 0.7,
     },
     logoIcon: {
       width: '40px',
@@ -316,10 +321,12 @@ export default function LoginPage() {
     <div style={styles.container}>
       <div style={styles.card}>
         <div style={styles.loginSection}>
-          <div style={styles.logo}>
-            <div style={styles.logoIcon}>P</div>
-            <div style={styles.logoText}>Play2Learn</div>
-          </div>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <div style={styles.logo}>
+              <div style={styles.logoIcon}>P</div>
+              <div style={styles.logoText}>Play2Learn</div>
+            </div>
+          </Link>
 
           <h1 style={styles.title}>Welcome back!</h1>
           <p style={styles.subtitle}>

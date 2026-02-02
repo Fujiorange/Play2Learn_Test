@@ -1,7 +1,7 @@
 // School Admin Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getSchools, createSchoolAdmins, getSchoolAdmins, updateSchoolAdmin, deleteSchoolAdmin } from '../../services/p2lAdminService';
+import { getSchools, createSchoolAdmins, getSchoolAdmins, updateSchoolAdmin, deleteSchoolAdmin, resetSchoolAdminPassword } from '../../services/p2lAdminService';
 import './SchoolAdminManagement.css';
 
 function SchoolAdminManagement() {
@@ -203,6 +203,43 @@ function SchoolAdminManagement() {
     }
   };
 
+  const handleResetPassword = async (admin) => {
+    if (!window.confirm(`Are you sure you want to reset the password for ${admin.name}?\n\nA new temporary password will be generated and the admin will be required to change it on first login.`)) {
+      return;
+    }
+    
+    try {
+      const response = await resetSchoolAdminPassword(admin._id);
+      
+      if (response.success) {
+        // Store temp password for one-time viewing
+        const newTempPasswords = {
+          ...tempPasswords,
+          [admin._id]: {
+            password: response.tempPassword,
+            email: response.email,
+            name: response.name,
+            createdAt: new Date().toISOString()
+          }
+        };
+        setTempPasswords(newTempPasswords);
+        sessionStorage.setItem('schoolAdminTempPasswords', JSON.stringify(newTempPasswords));
+        
+        alert(
+          `Password reset successfully!\n\n` +
+          `A new temporary password has been generated and sent to ${admin.email}.\n` +
+          `You can view the temporary password once by clicking the "View Temp Password" button.`
+        );
+        
+        // Refresh the admin list to show the updated status
+        fetchSchoolAdmins(selectedSchool);
+      }
+    } catch (error) {
+      console.error('Failed to reset password:', error);
+      alert(error.message || 'Failed to reset password');
+    }
+  };
+
   const cancelEdit = () => {
     setEditingAdmin(null);
     setEditForm({ name: '', email: '', contact: '', accountActive: true });
@@ -278,6 +315,13 @@ function SchoolAdminManagement() {
                             👁️ View Temp Password
                           </button>
                         )}
+                        <button 
+                          onClick={() => handleResetPassword(admin)}
+                          className="btn-reset-password"
+                          title="Reset password and generate new temporary password"
+                        >
+                          🔑 Reset Password
+                        </button>
                         <button 
                           onClick={() => handleEditAdmin(admin)}
                           className="btn-edit"

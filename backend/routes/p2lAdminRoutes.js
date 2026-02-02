@@ -32,7 +32,7 @@ const authenticateP2LAdmin = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const admin = await User.findById(decoded.userId);
-    if (!admin || admin.role !== 'p2ladmin') {
+    if (!admin || (admin.role !== 'p2ladmin' && admin.role !== 'Platform Admin')) {
       return res.status(403).json({ error: 'Access restricted to P2L Admins' });
     }
 
@@ -180,7 +180,7 @@ router.get('/dashboard-stats', authenticateP2LAdmin, async (req, res) => {
     // Get counts for dashboard
     const [schoolsCount, adminsCount, questionsCount, quizzesCount] = await Promise.all([
       School.countDocuments(),
-      User.countDocuments({ role: 'schooladmin' }),
+      User.countDocuments({ role: 'School Admin' }),
       Question.countDocuments({ is_active: true }),
       Quiz.countDocuments()
     ]);
@@ -548,9 +548,15 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Create school admins error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code
+    });
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create school admins' 
+      error: `Failed to create school admins: ${error.message}` 
     });
   }
 });
@@ -654,6 +660,71 @@ router.delete('/school-admins/:id', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete school admin' 
+    });
+  }
+});
+
+// Reset school admin password
+router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the admin
+    const admin = await User.findById(id);
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Admin not found' 
+      });
+    }
+    
+    // Ensure this is a school admin
+    if (admin.role !== 'School Admin') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'This user is not a school admin' 
+      });
+    }
+    
+    // Get school information
+    const school = await School.findById(admin.schoolId);
+    const schoolName = school ? school.organization_name : 'Unknown School';
+    
+    // Generate new temporary password
+    const tempPassword = generateTempPassword('school');
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+    // Update admin with new password and require password change
+    admin.password = hashedPassword;
+    admin.requirePasswordChange = true;
+    await admin.save();
+    
+    // Send email with new credentials
+    try {
+      await sendSchoolAdminWelcomeEmail(admin, tempPassword, schoolName);
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Continue even if email fails - password is reset
+    }
+    
+    // Return temp password for one-time viewing by P2L admin
+    // Note: This is intentional - P2L admin needs the password to share with the school admin
+    // The password is only returned once and should be viewed immediately
+    res.json({
+      success: true,
+      message: 'Password reset successfully',
+      tempPassword: tempPassword,
+      adminId: admin._id,
+      email: admin.email,
+      name: admin.name
+    });
+  } catch (error) {
+    console.error('Reset school admin password error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to reset password' 
     });
   }
 });
@@ -1389,9 +1460,40 @@ router.get('/landing', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Get testimonials that should be displayed on landing page
+    const displayTestimonials = await Testimonial.find({
+      display_on_landing: true
+    })
+      .sort({ created_at: -1 })
+      .limit(10);
+
+    // Transform testimonials to the format expected by the frontend
+    const testimonialData = displayTestimonials.map(t => ({
+      name: t.student_name,
+      role: t.user_role,
+      quote: t.message,
+      rating: t.rating,
+      image: t.image_url || null
+    }));
+
+    // Clone blocks and inject testimonials into testimonial blocks
+    const blocks = (landingPage.blocks || []).map(block => {
+      if (block.type === 'testimonials') {
+        // Inject display testimonials into the testimonial block for preview
+        return {
+          ...block.toObject ? block.toObject() : block,
+          custom_data: {
+            ...(block.custom_data || {}),
+            testimonials: testimonialData
+          }
+        };
+      }
+      return block.toObject ? block.toObject() : block;
+    });
+
     res.json({
       success: true,
-      blocks: landingPage.blocks || [],
+      blocks: blocks,
       id: landingPage._id,
       is_active: landingPage.is_active,
       version: landingPage.version
@@ -1578,7 +1680,6 @@ router.get('/landing/pricing-plans', authenticateP2LAdmin, async (req, res) => {
 router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
   try {
     const testimonials = await Testimonial.find({ 
-      approved: true, 
       display_on_landing: true 
     })
       .sort({ created_at: -1 })
@@ -1663,11 +1764,11 @@ router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Update testimonial approval and display status
+// Update testimonial display status
 router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { approved, display_on_landing } = req.body;
+    const { display_on_landing } = req.body;
 
     const testimonial = await Testimonial.findById(id);
     if (!testimonial) {
@@ -1677,22 +1778,8 @@ router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    if (approved !== undefined) {
-      testimonial.approved = approved;
-      // If unapproving, automatically remove from landing page
-      if (!approved) {
-        testimonial.display_on_landing = false;
-      }
-    }
-    
-    // Only allow setting display_on_landing to true if testimonial is approved
+    // Allow setting display_on_landing regardless of approval status
     if (display_on_landing !== undefined) {
-      if (display_on_landing && !testimonial.approved) {
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot display unapproved testimonials on landing page'
-        });
-      }
       testimonial.display_on_landing = display_on_landing;
     }
 

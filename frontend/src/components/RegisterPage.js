@@ -136,6 +136,11 @@ export default function RegisterPage() {
       alignItems: 'center',
       gap: '12px',
       marginBottom: '40px',
+      cursor: 'pointer',
+      transition: 'opacity 0.3s',
+    },
+    logoHover: {
+      opacity: 0.7,
     },
     logoIcon: {
       width: '40px',
@@ -326,10 +331,12 @@ export default function RegisterPage() {
     <div style={styles.container}>
       <div style={styles.card}>
         <div style={styles.registerSection}>
-          <div style={styles.logo}>
-            <div style={styles.logoIcon}>P</div>
-            <span style={styles.logoText}>Play2Learn</span>
-          </div>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <div style={styles.logo}>
+              <div style={styles.logoIcon}>P</div>
+              <span style={styles.logoText}>Play2Learn</span>
+            </div>
+          </Link>
 
           <div style={styles.trialBadge}>
             ✨ FREE TRIAL
