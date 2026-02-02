@@ -864,7 +864,9 @@ router.get("/math-progress", async (req, res) => {
         ? Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes)
         : 0;
 
-    const totalPoints = quizzes.reduce((sum, q) => sum + (q.points_earned || 0), 0);
+    // âœ… FIXED: Use total_points from MathProfile (source of truth) instead of recalculating
+    // This ensures consistency with Dashboard and Shop, accounting for both earned and spent points
+    const totalPoints = mathProfile ? (mathProfile.total_points || 0) : 0;
 
     res.json({
       success: true,
