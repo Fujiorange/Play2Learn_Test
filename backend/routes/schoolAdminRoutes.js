@@ -113,6 +113,24 @@ async function checkLicenseAvailability(schoolId, role) {
   return { available: true, school };
 }
 
+// ==================== STUDENT-PARENT LINK HELPER ====================
+// Check if a student is already linked to a parent
+async function checkStudentLinkedToParent(studentId) {
+  const existingParent = await User.findOne({
+    role: 'Parent',
+    'linkedStudents.studentId': studentId
+  });
+  
+  if (existingParent) {
+    return { 
+      isLinked: true, 
+      parentEmail: existingParent.email 
+    };
+  }
+  
+  return { isLinked: false };
+}
+
 // ⭐ Helper to get MongoDB database (for announcements)
 const getDb = () => mongoose.connection.db;
 
@@ -1303,15 +1321,11 @@ router.post('/users/create-or-link-parent', authenticateSchoolAdmin, async (req,
       }
       
       // Check if student is already linked to another parent
-      const existingParentForStudent = await User.findOne({
-        role: 'Parent',
-        'linkedStudents.studentId': studentId
-      });
-      
-      if (existingParentForStudent) {
+      const linkCheck = await checkStudentLinkedToParent(studentId);
+      if (linkCheck.isLinked) {
         return res.status(409).json({
           success: false,
-          error: `This student is already linked to another parent (${existingParentForStudent.email}). Each student can only have one parent account.`
+          error: `This student is already linked to another parent (${linkCheck.parentEmail}). Each student can only have one parent account.`
         });
       }
       
@@ -1340,15 +1354,11 @@ router.post('/users/create-or-link-parent', authenticateSchoolAdmin, async (req,
     }
     
     // Check if student is already linked to another parent
-    const existingParentForStudent = await User.findOne({
-      role: 'Parent',
-      'linkedStudents.studentId': studentId
-    });
-    
-    if (existingParentForStudent) {
+    const linkCheck = await checkStudentLinkedToParent(studentId);
+    if (linkCheck.isLinked) {
       return res.status(409).json({
         success: false,
-        error: `This student is already linked to another parent (${existingParentForStudent.email}). Each student can only have one parent account.`
+        error: `This student is already linked to another parent (${linkCheck.parentEmail}). Each student can only have one parent account.`
       });
     }
     
