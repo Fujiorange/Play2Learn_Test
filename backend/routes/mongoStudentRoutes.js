@@ -1019,7 +1019,7 @@ router.post("/support-tickets", async (req, res) => {
       category: category || 'general',
       message: finalMessage,
       status: 'open',
-      priority: req.body.priority || 'medium',
+      priority: req.body.priority || 'normal',
     });
 
     res.status(201).json({
@@ -1161,8 +1161,6 @@ router.get("/testimonials", async (req, res) => {
     res.status(500).json({ success: false, error: "Failed to load testimonials" });
   }
 });
-
-module.exports = router;
 
 // ==================== REWARD SHOP ENDPOINTS ====================
 
@@ -1426,5 +1424,4 @@ router.get("/badges/progress", async (req, res) => {
   }
 });
 
-module.exports = router;
 module.exports = router;

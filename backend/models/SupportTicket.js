@@ -8,7 +8,7 @@ const supportTicketSchema = new mongoose.Schema({
   category: { type: String, default: 'general' },
   message: { type: String, required: true },
   status: { type: String, enum: ['open', 'in-progress', 'resolved', 'closed'], default: 'open' },
-  priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+  priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
   resolved_at: { type: Date },
