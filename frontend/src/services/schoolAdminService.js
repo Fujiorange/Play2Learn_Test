@@ -35,6 +35,30 @@ const schoolAdminService = {
     }
   },
 
+  // ==================== SCHOOL & LICENSE INFO ====================
+  async getSchoolInfo() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/school-info`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch school info');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getSchoolInfo error:', error);
+      return { success: false, error: error.message || 'Failed to load school info' };
+    }
+  },
+
   // ==================== USER MANAGEMENT ====================
   async getUsers(filters = {}) {
     try {

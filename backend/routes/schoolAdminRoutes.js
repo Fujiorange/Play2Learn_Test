@@ -173,6 +173,81 @@ router.get('/dashboard-stats', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== GET SCHOOL LICENSE INFO ====================
+router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    
+    if (!schoolAdmin.schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'School admin is not associated with a school'
+      });
+    }
+    
+    const school = await School.findById(schoolAdmin.schoolId);
+    
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        error: 'School not found'
+      });
+    }
+    
+    // Get actual current counts from Users collection
+    const [currentTeachers, currentStudents] = await Promise.all([
+      User.countDocuments({ schoolId: schoolAdmin.schoolId, role: 'Teacher' }),
+      User.countDocuments({ schoolId: schoolAdmin.schoolId, role: 'Student' })
+    ]);
+    
+    // Update school counts if they differ (sync)
+    if (school.current_teachers !== currentTeachers || school.current_students !== currentStudents) {
+      school.current_teachers = currentTeachers;
+      school.current_students = currentStudents;
+      await school.save();
+    }
+    
+    res.json({
+      success: true,
+      school: {
+        id: school._id,
+        organization_name: school.organization_name,
+        organization_type: school.organization_type,
+        plan: school.plan,
+        plan_info: {
+          teacher_limit: school.plan_info.teacher_limit,
+          student_limit: school.plan_info.student_limit,
+          price: school.plan_info.price
+        },
+        current_teachers: currentTeachers,
+        current_students: currentStudents,
+        is_active: school.is_active
+      },
+      license: {
+        plan: school.plan,
+        teachers: {
+          current: currentTeachers,
+          limit: school.plan_info.teacher_limit,
+          available: school.plan_info.teacher_limit - currentTeachers,
+          limitReached: currentTeachers >= school.plan_info.teacher_limit
+        },
+        students: {
+          current: currentStudents,
+          limit: school.plan_info.student_limit,
+          available: school.plan_info.student_limit - currentStudents,
+          limitReached: currentStudents >= school.plan_info.student_limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get school info error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get school information'
+    });
+  }
+});
+
 // ==================== GET USERS (FIXED!) ====================
 router.get('/users', authenticateToken, async (req, res) => {
   try {

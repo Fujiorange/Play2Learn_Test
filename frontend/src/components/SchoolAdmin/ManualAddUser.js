@@ -16,6 +16,8 @@ export default function ManualAddUser() {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [licenseInfo, setLicenseInfo] = useState(null);
+  const [loadingLicense, setLoadingLicense] = useState(true);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -28,11 +30,38 @@ export default function ManualAddUser() {
       navigate('/login');
       return;
     }
+
+    // Fetch license info on component mount
+    fetchLicenseInfo();
   }, [navigate]);
+
+  const fetchLicenseInfo = async () => {
+    setLoadingLicense(true);
+    try {
+      const result = await schoolAdminService.getSchoolInfo();
+      if (result.success) {
+        setLicenseInfo(result.license);
+      } else {
+        console.error('Failed to fetch license info:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching license info:', error);
+    } finally {
+      setLoadingLicense(false);
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setMessage({ type: '', text: '' });
+  };
+
+  // Check if role selection is disabled due to license limits
+  const isRoleDisabled = (role) => {
+    if (!licenseInfo) return false;
+    if (role === 'teacher' && licenseInfo.teachers.limitReached) return true;
+    if (role === 'student' && licenseInfo.students.limitReached) return true;
+    return false;
   };
 
   const handleSubmit = async (e) => {
@@ -41,6 +70,24 @@ export default function ManualAddUser() {
     if (!formData.name || !formData.email || !formData.password || !formData.role) {
       setMessage({ type: 'error', text: 'Please fill in all required fields' });
       return;
+    }
+
+    // Check license limits before submission
+    if (licenseInfo) {
+      if (formData.role === 'teacher' && licenseInfo.teachers.limitReached) {
+        setMessage({ 
+          type: 'error', 
+          text: `Teacher limit reached (${licenseInfo.teachers.current}/${licenseInfo.teachers.limit}). Please upgrade your plan to add more teachers.` 
+        });
+        return;
+      }
+      if (formData.role === 'student' && licenseInfo.students.limitReached) {
+        setMessage({ 
+          type: 'error', 
+          text: `Student limit reached (${licenseInfo.students.current}/${licenseInfo.students.limit}). Please upgrade your plan to add more students.` 
+        });
+        return;
+      }
     }
 
     setLoading(true);
@@ -59,6 +106,8 @@ export default function ManualAddUser() {
 
       if (result.success) {
         setMessage({ type: 'success', text: 'User created successfully!' });
+        // Refresh license info after successful creation
+        fetchLicenseInfo();
         setTimeout(() => {
           setFormData({ 
             name: '', 
@@ -108,6 +157,15 @@ export default function ManualAddUser() {
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     note: { fontSize: '13px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' },
+    licenseCard: { background: '#f0f9ff', border: '2px solid #bae6fd', borderRadius: '12px', padding: '20px', marginBottom: '24px' },
+    licenseTitle: { fontSize: '16px', fontWeight: '700', color: '#0369a1', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' },
+    licenseGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
+    licenseItem: { background: 'white', padding: '12px', borderRadius: '8px' },
+    licenseLabel: { fontSize: '12px', color: '#6b7280', marginBottom: '4px' },
+    licenseValue: { fontSize: '18px', fontWeight: '700' },
+    limitReached: { color: '#dc2626' },
+    limitOk: { color: '#16a34a' },
+    warningBanner: { background: '#fef3c7', border: '2px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontSize: '14px' },
   };
 
   return (
@@ -129,6 +187,59 @@ export default function ManualAddUser() {
         <p style={styles.pageSubtitle}>
           Create a new account for students, teachers, or parents. Platform scope: Primary 1 Mathematics only.
         </p>
+
+        {/* License Information Card */}
+        {!loadingLicense && licenseInfo && (
+          <div style={styles.licenseCard}>
+            <div style={styles.licenseTitle}>
+              📋 License Status ({licenseInfo.plan.charAt(0).toUpperCase() + licenseInfo.plan.slice(1)} Plan)
+            </div>
+            <div style={styles.licenseGrid}>
+              <div style={styles.licenseItem}>
+                <div style={styles.licenseLabel}>Teachers</div>
+                <div style={{
+                  ...styles.licenseValue,
+                  ...(licenseInfo.teachers.limitReached ? styles.limitReached : styles.limitOk)
+                }}>
+                  {licenseInfo.teachers.current} / {licenseInfo.teachers.limit}
+                  {licenseInfo.teachers.limitReached && ' ⚠️'}
+                </div>
+                <div style={styles.licenseLabel}>
+                  {licenseInfo.teachers.available > 0 
+                    ? `${licenseInfo.teachers.available} slots available` 
+                    : 'No slots available'}
+                </div>
+              </div>
+              <div style={styles.licenseItem}>
+                <div style={styles.licenseLabel}>Students</div>
+                <div style={{
+                  ...styles.licenseValue,
+                  ...(licenseInfo.students.limitReached ? styles.limitReached : styles.limitOk)
+                }}>
+                  {licenseInfo.students.current} / {licenseInfo.students.limit}
+                  {licenseInfo.students.limitReached && ' ⚠️'}
+                </div>
+                <div style={styles.licenseLabel}>
+                  {licenseInfo.students.available > 0 
+                    ? `${licenseInfo.students.available} slots available` 
+                    : 'No slots available'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Warning banner if any limit is reached */}
+        {licenseInfo && (licenseInfo.teachers.limitReached || licenseInfo.students.limitReached) && (
+          <div style={styles.warningBanner}>
+            ⚠️ {licenseInfo.teachers.limitReached && licenseInfo.students.limitReached 
+              ? 'Both teacher and student limits have been reached.' 
+              : licenseInfo.teachers.limitReached 
+                ? 'Teacher limit has been reached.' 
+                : 'Student limit has been reached.'
+            } Contact your administrator to upgrade your plan.
+          </div>
+        )}
 
         <div style={styles.card}>
           <form onSubmit={handleSubmit}>
@@ -189,10 +300,19 @@ export default function ManualAddUser() {
                 style={styles.select}
               >
                 <option value="">Select role</option>
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
+                <option value="student" disabled={isRoleDisabled('student')}>
+                  Student {isRoleDisabled('student') ? '(Limit Reached)' : ''}
+                </option>
+                <option value="teacher" disabled={isRoleDisabled('teacher')}>
+                  Teacher {isRoleDisabled('teacher') ? '(Limit Reached)' : ''}
+                </option>
                 <option value="parent">Parent</option>
               </select>
+              {formData.role && isRoleDisabled(formData.role) && (
+                <p style={{ ...styles.note, color: '#dc2626' }}>
+                  ⚠️ This role has reached its license limit. Please upgrade your plan.
+                </p>
+              )}
             </div>
 
             <div style={styles.formGroup}>
