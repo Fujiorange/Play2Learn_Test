@@ -1153,7 +1153,15 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
           emailSent = true;
         }
       } else if (role === 'Parent') {
-        await sendParentWelcomeEmail(newUser, tempPassword, schoolName);
+        // Get the linked student's name if available
+        let studentName = 'your child';
+        if (linkedStudents && linkedStudents.length > 0) {
+          const linkedStudent = await User.findById(linkedStudents[0]).select('name');
+          if (linkedStudent) {
+            studentName = linkedStudent.name;
+          }
+        }
+        await sendParentWelcomeEmail(newUser, tempPassword, studentName, schoolName);
         emailSent = true;
       }
     } catch (emailError) {
