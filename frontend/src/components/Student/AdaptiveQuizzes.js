@@ -35,7 +35,8 @@ function AdaptiveQuizzes() {
       const attemptsData = await attemptsRes.json();
 
       if (quizzesData.success) {
-        setQuizzes(quizzesData.data);
+        // Only show launched quizzes
+        setQuizzes(quizzesData.data || []);
       }
 
       if (attemptsData.success) {
@@ -54,6 +55,7 @@ function AdaptiveQuizzes() {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'Not set';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -76,7 +78,7 @@ function AdaptiveQuizzes() {
       <header className="page-header">
         <div>
           <h1>🎯 Adaptive Quizzes</h1>
-          <p className="page-subtitle">Quizzes that adapt to your skill level</p>
+          <p className="page-subtitle">Quizzes that adapt to your skill level - launched by your teacher</p>
         </div>
         <button 
           className="btn-back"
@@ -109,6 +111,9 @@ function AdaptiveQuizzes() {
             <div className="no-data">
               <div className="no-data-icon">📝</div>
               <p>No adaptive quizzes available yet.</p>
+              <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+                Your teacher will launch quizzes when they are ready for you.
+              </p>
             </div>
           ) : (
             quizzes.map((quiz) => (
@@ -137,10 +142,19 @@ function AdaptiveQuizzes() {
                   </div>
                 </div>
 
+                {quiz.launch_end_date && (
+                  <div className="quiz-deadline">
+                    <span className="stat-icon">⏰</span>
+                    <span className="stat-text">
+                      Deadline: {formatDate(quiz.launch_end_date)}
+                    </span>
+                  </div>
+                )}
+
                 <div className="difficulty-distribution">
                   <div className="distribution-label">Difficulty Levels:</div>
                   <div className="distribution-bars">
-                    {Object.entries(quiz.difficulty_distribution).map(([level, count]) => (
+                    {Object.entries(quiz.difficulty_distribution || {}).map(([level, count]) => (
                       count > 0 && (
                         <div key={level} className="distribution-bar">
                           <span className={`level-indicator level-${level}`}>

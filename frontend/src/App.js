@@ -34,6 +34,9 @@ import TeacherTrackTicket from './components/Teacher/TrackTicket';
 // ⭐ NEW IMPORT - Teacher News & Updates
 import TeacherViewNewsUpdates from './components/Teacher/ViewNewsUpdates';
 
+// ⭐ NEW IMPORT - Teacher Quiz Assignment
+import TeacherQuizAssignment from './components/Teacher/QuizAssignment';
+
 // Student Components
 import StudentDashboard from './components/Student/StudentDashboard';
 import StudentViewProfile from './components/Student/ViewProfile';
@@ -96,6 +99,9 @@ import ResetPassword from './components/SchoolAdmin/ResetPassword';
 import DisableUser from './components/SchoolAdmin/DisableUser';
 import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
 import PointsManagement from './components/SchoolAdmin/PointsManagement';
+
+// ⭐ NEW IMPORT - School Admin Teacher Assignment
+import TeacherAssignment from './components/SchoolAdmin/TeacherAssignment';
 
 // P2LAdmin Components
 import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
@@ -166,6 +172,9 @@ function App() {
           
           {/* ⭐ NEW ROUTE - Teacher News & Updates */}
           <Route path="/teacher/news" element={<TeacherViewNewsUpdates />} />
+          
+          {/* ⭐ NEW ROUTE - Teacher Quiz Assignment */}
+          <Route path="/teacher/quiz-assignment" element={<TeacherQuizAssignment />} />
 
           {/* ========== STUDENT ROUTES ========== */}
           <Route path="/student" element={<StudentDashboard />} />
@@ -241,6 +250,9 @@ function App() {
           <Route path="/school-admin/users/disable" element={<DisableUser />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
+          
+          {/* ⭐ NEW ROUTE - School Admin Teacher Assignment */}
+          <Route path="/school-admin/teachers/assignments" element={<TeacherAssignment />} />
 
           {/* ========== P2LADMIN ROUTES ========== */}
           {/* Redirect /platform-admin to /p2ladmin/dashboard */}

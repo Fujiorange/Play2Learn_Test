@@ -18,6 +18,15 @@ const quizSchema = new mongoose.Schema({
     difficulty_progression: { type: String, enum: ['gradual', 'immediate', 'ml-based'], default: 'gradual' },
     starting_difficulty: { type: Number, enum: [1, 2, 3, 4, 5], default: 1 }
   },
+  // Quiz launch system - Teachers/School Admin can launch quizzes
+  is_launched: { type: Boolean, default: false },
+  launched_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  launched_at: { type: Date, default: null },
+  launched_for_classes: [{ type: String }], // Array of class names
+  launched_for_school: { type: String, default: null }, // School ID for placement quizzes
+  launch_start_date: { type: Date, default: null },
+  launch_end_date: { type: Date, default: null },
+  
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

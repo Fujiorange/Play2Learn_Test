@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function StudentList() {
   const navigate = useNavigate();
@@ -8,42 +12,68 @@ export default function StudentList() {
   const [students, setStudents] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClass, setFilterClass] = useState('all');
+  const [myClasses, setMyClasses] = useState([]);
+  const [error, setError] = useState('');
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
-    const loadStudents = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        // Simulated student data - replace with actual API call
-        const mockStudents = [
-          { id: 1, name: 'John Doe', class: 'Primary 5A', grade: 'Primary 5', points: 850, level: 12, status: 'active' },
-          { id: 2, name: 'Jane Smith', class: 'Primary 5A', grade: 'Primary 5', points: 920, level: 15, status: 'active' },
-          { id: 3, name: 'Mike Johnson', class: 'Primary 5B', grade: 'Primary 5', points: 780, level: 10, status: 'active' },
-          { id: 4, name: 'Sarah Williams', class: 'Primary 5A', grade: 'Primary 5', points: 1050, level: 18, status: 'active' },
-          { id: 5, name: 'David Brown', class: 'Primary 5B', grade: 'Primary 5', points: 690, level: 8, status: 'active' },
-        ];
-        
-        setStudents(mockStudents);
-      } catch (error) {
-        console.error('Error loading students:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadStudents();
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    loadData();
   }, [navigate]);
 
-  const filteredStudents = students.filter(student => {
+  const loadData = async () => {
+    try {
+      const [studentsRes, classesRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/mongo/teacher/students`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        }),
+        fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        })
+      ]);
+
+      const [studentsData, classesData] = await Promise.all([
+        studentsRes.json(),
+        classesRes.json()
+      ]);
+
+      if (studentsData.success) {
+        setStudents(studentsData.students || []);
+      } else {
+        setError(studentsData.error || 'Failed to load students');
+      }
+
+      if (classesData.success) {
+        setMyClasses(classesData.classes || []);
+      }
+    } catch (error) {
+      console.error('Error loading students:', error);
+      setError('Failed to load students');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredStudents = useMemo(() => students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = filterClass === 'all' || student.class === filterClass;
     return matchesSearch && matchesClass;
-  });
+  }), [students, searchTerm, filterClass]);
 
-  const uniqueClasses = ['all', ...new Set(students.map(s => s.class))];
+  const uniqueClasses = useMemo(() => ['all', ...myClasses], [myClasses]);
+
+  const averagePoints = useMemo(() => {
+    if (students.length === 0) return 0;
+    return Math.round(students.reduce((acc, s) => acc + (s.points || 0), 0) / students.length);
+  }, [students]);
+
+  const activeStudentsCount = useMemo(() => {
+    return students.filter(s => s.accountActive !== false).length;
+  }, [students]);
 
   const styles = {
     container: {
@@ -171,6 +201,10 @@ export default function StudentList() {
       background: '#d1fae5',
       color: '#065f46',
     },
+    inactiveStatus: {
+      background: '#fee2e2',
+      color: '#991b1b',
+    },
     actionButton: {
       padding: '6px 16px',
       background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -199,6 +233,13 @@ export default function StudentList() {
       color: '#6b7280',
       fontWeight: '600',
     },
+    errorAlert: {
+      padding: '12px 16px',
+      background: '#fee2e2',
+      color: '#991b1b',
+      borderRadius: '8px',
+      marginBottom: '20px',
+    },
   };
 
   if (loading) {
@@ -224,6 +265,8 @@ export default function StudentList() {
               ← Back to Dashboard
             </button>
           </div>
+
+          {error && <div style={styles.errorAlert}>{error}</div>}
 
           <div style={styles.filterSection}>
             <input
@@ -258,13 +301,11 @@ export default function StudentList() {
           </div>
           <div style={styles.statCard}>
             <div style={styles.statLabel}>Active Students</div>
-            <div style={styles.statValue}>{students.filter(s => s.status === 'active').length}</div>
+            <div style={styles.statValue}>{activeStudentsCount}</div>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statLabel}>Average Points</div>
-            <div style={styles.statValue}>
-              {Math.round(students.reduce((acc, s) => acc + s.points, 0) / students.length)}
-            </div>
+            <div style={styles.statValue}>{averagePoints}</div>
           </div>
         </div>
 
@@ -285,7 +326,7 @@ export default function StudentList() {
               <tbody>
                 {filteredStudents.map(student => (
                   <tr
-                    key={student.id}
+                    key={student._id}
                     style={styles.studentRow}
                     onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
@@ -293,13 +334,16 @@ export default function StudentList() {
                     <td style={styles.td}>
                       <strong>{student.name}</strong>
                     </td>
-                    <td style={styles.td}>{student.class}</td>
-                    <td style={styles.td}>{student.grade}</td>
-                    <td style={styles.td}>{student.points.toLocaleString()}</td>
-                    <td style={styles.td}>Level {student.level}</td>
+                    <td style={styles.td}>{student.class || '-'}</td>
+                    <td style={styles.td}>{student.gradeLevel || '-'}</td>
+                    <td style={styles.td}>{(student.points || 0).toLocaleString()}</td>
+                    <td style={styles.td}>Level {student.level || 1}</td>
                     <td style={styles.td}>
-                      <span style={{...styles.statusBadge, ...styles.activeStatus}}>
-                        {student.status}
+                      <span style={{
+                        ...styles.statusBadge, 
+                        ...(student.accountActive !== false ? styles.activeStatus : styles.inactiveStatus)
+                      }}>
+                        {student.accountActive !== false ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td style={styles.td}>
@@ -320,9 +364,14 @@ export default function StudentList() {
             <div style={styles.emptyState}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
               <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
-                No students found
+                {myClasses.length === 0 ? 'No classes assigned' : 'No students found'}
               </p>
-              <p>Try adjusting your search or filter criteria</p>
+              <p>
+                {myClasses.length === 0 
+                  ? 'Please contact your school administrator to assign classes to you.'
+                  : 'Try adjusting your search or filter criteria'
+                }
+              </p>
             </div>
           )}
         </div>

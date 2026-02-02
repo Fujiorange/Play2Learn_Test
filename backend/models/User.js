@@ -30,6 +30,9 @@ const userSchema = new mongoose.Schema({
 
   // Teacher-specific
   subject: { type: String, default: null },
+  // Teacher-specific: Multiple classes and subjects
+  assignedClasses: [{ type: String }],
+  assignedSubjects: [{ type: String }],
 
   // Parent-specific
   linkedStudents: [

@@ -16,6 +16,7 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const School = require('../models/School');
+const Class = require('../models/Class');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
@@ -169,6 +170,81 @@ router.get('/dashboard-stats', authenticateToken, async (req, res) => {
       success: false, 
       error: 'Failed to load dashboard stats',
       details: error.message 
+    });
+  }
+});
+
+// ==================== GET SCHOOL LICENSE INFO ====================
+router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    
+    if (!schoolAdmin.schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'School admin is not associated with a school'
+      });
+    }
+    
+    const school = await School.findById(schoolAdmin.schoolId);
+    
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        error: 'School not found'
+      });
+    }
+    
+    // Get actual current counts from Users collection
+    const [currentTeachers, currentStudents] = await Promise.all([
+      User.countDocuments({ schoolId: schoolAdmin.schoolId, role: 'Teacher' }),
+      User.countDocuments({ schoolId: schoolAdmin.schoolId, role: 'Student' })
+    ]);
+    
+    // Update school counts if they differ (sync)
+    if (school.current_teachers !== currentTeachers || school.current_students !== currentStudents) {
+      school.current_teachers = currentTeachers;
+      school.current_students = currentStudents;
+      await school.save();
+    }
+    
+    res.json({
+      success: true,
+      school: {
+        id: school._id,
+        organization_name: school.organization_name,
+        organization_type: school.organization_type,
+        plan: school.plan,
+        plan_info: {
+          teacher_limit: school.plan_info.teacher_limit,
+          student_limit: school.plan_info.student_limit,
+          price: school.plan_info.price
+        },
+        current_teachers: currentTeachers,
+        current_students: currentStudents,
+        is_active: school.is_active
+      },
+      license: {
+        plan: school.plan,
+        teachers: {
+          current: currentTeachers,
+          limit: school.plan_info.teacher_limit,
+          available: Math.max(0, school.plan_info.teacher_limit - currentTeachers),
+          limitReached: currentTeachers >= school.plan_info.teacher_limit
+        },
+        students: {
+          current: currentStudents,
+          limit: school.plan_info.student_limit,
+          available: Math.max(0, school.plan_info.student_limit - currentStudents),
+          limitReached: currentStudents >= school.plan_info.student_limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get school info error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get school information'
     });
   }
 });
@@ -419,6 +495,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           dateOfBirth: parsedDateOfBirth,
           emailVerified: true,
           accountActive: true,
+          requirePasswordChange: true, // User must change password on first login
           createdBy: 'school-admin',
           createdAt: new Date()
         });
@@ -602,6 +679,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           gender: teacherData.gender?.trim() || null,
           emailVerified: true,
           accountActive: true,
+          requirePasswordChange: true, // User must change password on first login
           createdBy: 'school-admin'
         });
 
@@ -862,6 +940,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           ],
           emailVerified: true,
           accountActive: true,
+          requirePasswordChange: true, // User must change password on first login
           createdBy: 'school-admin',
           createdAt: new Date()
         });
@@ -958,12 +1037,32 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 // ==================== MANUAL CREATE USER ====================
 router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { name, email, role, gradeLevel, subject, gender, class: className, parentEmail } = req.body;
+    const { name, email, role: rawRole, gradeLevel, subject, gender, class: className, parentEmail } = req.body;
     
-    if (!name || !email || !role) {
+    if (!name || !email || !rawRole) {
       return res.status(400).json({ 
         success: false, 
         error: 'Name, email, and role are required' 
+      });
+    }
+    
+    // Normalize role to match User model enum (capitalize first letter)
+    const roleMap = {
+      'student': 'Student',
+      'teacher': 'Teacher',
+      'parent': 'Parent',
+      'Student': 'Student',
+      'Teacher': 'Teacher',
+      'Parent': 'Parent'
+    };
+    const role = roleMap[rawRole] || rawRole;
+    
+    // Validate that role is valid
+    const validRoles = ['Student', 'Teacher', 'Parent'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role: ${rawRole}. Valid roles are: student, teacher, parent`
       });
     }
     
@@ -1015,6 +1114,7 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       class: className || null,
       emailVerified: true,
       accountActive: true,
+      requirePasswordChange: true, // User must change password on first login
       createdBy: 'school-admin',
     });
     
@@ -1071,11 +1171,31 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
 // ==================== DELETE USER ====================
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
-    const result = await User.findByIdAndDelete(req.params.id);
+    // First find the user to get their role and class assignments
+    const user = await User.findById(req.params.id);
     
-    if (!result) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
+    
+    // If user is a teacher, remove them from all assigned classes
+    if (user.role === 'Teacher') {
+      await Class.updateMany(
+        { teachers: user._id },
+        { $pull: { teachers: user._id } }
+      );
+    }
+    
+    // If user is a student, remove them from their assigned class
+    if (user.role === 'Student') {
+      await Class.updateMany(
+        { students: user._id },
+        { $pull: { students: user._id } }
+      );
+    }
+    
+    // Now delete the user
+    await User.findByIdAndDelete(req.params.id);
     
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
@@ -1137,30 +1257,38 @@ router.put('/users/:id/role', authenticateToken, async (req, res) => {
 });
 
 // ==================== RESET USER PASSWORD ====================
+// Updated to generate random password and set requirePasswordChange flag
 router.put('/users/:id/password', authenticateToken, async (req, res) => {
   try {
-    const { password } = req.body;
-    
-    if (!password || password.length < 8) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Password must be at least 8 characters' 
-      });
-    }
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { password: hashedPassword },
-      { new: true }
-    );
+    // Find the user first
+    const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
-    res.json({ success: true, message: 'Password reset successfully' });
+    // Generate a new temporary password based on role
+    const rolePrefix = user.role === 'Teacher' ? 'TEA' : 
+                       user.role === 'Student' ? 'STU' : 
+                       user.role === 'Parent' ? 'PAR' : 'USR';
+    const tempPassword = generateTempPassword(rolePrefix);
+    
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+    // Update user with new password and set requirePasswordChange flag
+    user.password = hashedPassword;
+    user.requirePasswordChange = true;
+    await user.save();
+    
+    // Return temp password for one-time viewing by school admin
+    res.json({ 
+      success: true, 
+      message: 'Password reset successfully',
+      tempPassword: tempPassword,
+      userId: user._id,
+      email: user.email,
+      name: user.name
+    });
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ success: false, error: 'Failed to reset password' });
@@ -1168,52 +1296,232 @@ router.put('/users/:id/password', authenticateToken, async (req, res) => {
 });
 
 // ==================== GET CLASSES ====================
-router.get('/classes', authenticateToken, async (req, res) => {
+// ==================== CLASS MANAGEMENT ROUTES ====================
+
+// GET all classes for the school
+router.get('/classes', authenticateSchoolAdmin, async (req, res) => {
   try {
-    // Get unique classes
-    const classes = await User.aggregate([
-      { $match: { role: 'Student', class: { $ne: null } } },
-      { $group: { 
-        _id: { class: '$class', gradeLevel: '$gradeLevel' },
-        studentCount: { $sum: 1 }
-      }},
-      { $project: {
-        _id: 0,
-        id: '$_id.class',
-        name: '$_id.class',
-        grade: '$_id.gradeLevel',
-        subject: 'Mathematics',
-        students: '$studentCount',
-        teacher: 'Not assigned'
-      }}
-    ]);
+    const schoolAdmin = req.schoolAdmin;
+    const { grade, subject } = req.query;
     
-    res.json({ success: true, classes });
+    // Build filter
+    const filter = { school_id: schoolAdmin.schoolId };
+    if (grade) filter.grade = grade;
+    if (subject) filter.subjects = subject;
+    
+    // Get classes with populated teachers and students
+    const classes = await Class.find(filter)
+      .populate('teachers', 'name email')
+      .populate('students', 'name email')
+      .sort({ createdAt: -1 });
+    
+    // Format response
+    const formattedClasses = classes.map(cls => ({
+      id: cls._id,
+      name: cls.class_name,
+      grade: cls.grade,
+      subjects: cls.subjects,
+      subject: cls.subjects[0] || 'Mathematics',
+      students: cls.students.length,
+      studentList: cls.students,
+      teachers: cls.teachers.length,
+      teacherList: cls.teachers,
+      teacher: cls.teachers.length > 0 ? cls.teachers.map(t => t.name).join(', ') : 'Not assigned',
+      is_active: cls.is_active,
+      createdAt: cls.createdAt
+    }));
+    
+    res.json({ success: true, classes: formattedClasses });
   } catch (error) {
     console.error('Get classes error:', error);
     res.status(500).json({ success: false, error: 'Failed to load classes' });
   }
 });
 
-// ==================== CREATE CLASS ====================
-router.post('/classes', authenticateToken, async (req, res) => {
+// GET available teachers for class assignment
+// NOTE: This route MUST be defined BEFORE /classes/:id to avoid route collision
+router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { name, grade, subject } = req.body;
+    const schoolAdmin = req.schoolAdmin;
+    
+    const teachers = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      role: 'Teacher',
+      accountActive: true
+    }).select('name email assignedClasses');
+    
+    res.json({
+      success: true,
+      teachers: teachers.map(t => ({
+        id: t._id,
+        name: t.name,
+        email: t.email,
+        assignedClasses: t.assignedClasses || []
+      }))
+    });
+  } catch (error) {
+    console.error('Get available teachers error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load teachers' });
+  }
+});
+
+// GET available students for class assignment
+// NOTE: This route MUST be defined BEFORE /classes/:id to avoid route collision
+router.get('/classes/available/students', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { unassigned } = req.query;
+    
+    const filter = {
+      schoolId: schoolAdmin.schoolId,
+      role: 'Student',
+      accountActive: true
+    };
+    
+    // Optionally filter to only unassigned students
+    if (unassigned === 'true') {
+      filter.class = { $in: [null, ''] };
+    }
+    
+    const students = await User.find(filter).select('name email class');
+    
+    res.json({
+      success: true,
+      students: students.map(s => ({
+        id: s._id,
+        name: s.name,
+        email: s.email,
+        currentClass: s.class
+      }))
+    });
+  } catch (error) {
+    console.error('Get available students error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load students' });
+  }
+});
+
+// GET single class by ID
+router.get('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    
+    const classData = await Class.findOne({ 
+      _id: req.params.id,
+      school_id: schoolAdmin.schoolId 
+    })
+      .populate('teachers', 'name email')
+      .populate('students', 'name email');
+    
+    if (!classData) {
+      return res.status(404).json({ success: false, error: 'Class not found' });
+    }
+    
+    res.json({
+      success: true,
+      class: {
+        id: classData._id,
+        name: classData.class_name,
+        grade: classData.grade,
+        subjects: classData.subjects,
+        students: classData.students,
+        teachers: classData.teachers,
+        is_active: classData.is_active,
+        createdAt: classData.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Get class error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load class' });
+  }
+});
+
+// CREATE new class
+router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { name, grade, subjects, teachers, students } = req.body;
     
     if (!name) {
       return res.status(400).json({ success: false, error: 'Class name is required' });
     }
     
+    // Validate that school admin has a school ID
+    if (!schoolAdmin.schoolId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School admin must be associated with a school' 
+      });
+    }
+    
+    // Convert schoolId to ObjectId if it's a string
+    let schoolObjectId;
+    try {
+      schoolObjectId = new mongoose.Types.ObjectId(schoolAdmin.schoolId);
+    } catch (err) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid school ID format' 
+      });
+    }
+    
+    // Check if class name already exists for this school
+    const existingClass = await Class.findOne({
+      class_name: name,
+      school_id: schoolObjectId
+    });
+    
+    if (existingClass) {
+      return res.status(409).json({ success: false, error: 'A class with this name already exists' });
+    }
+    
+    // Create new class
+    const newClass = new Class({
+      class_name: name,
+      grade: grade || 'Primary 1',
+      subjects: subjects || ['Mathematics'],
+      teachers: teachers || [],
+      students: students || [],
+      school_id: schoolObjectId
+    });
+    
+    await newClass.save();
+    
+    // Update users with class assignment
+    if (teachers && teachers.length > 0) {
+      await User.updateMany(
+        { _id: { $in: teachers } },
+        { $addToSet: { assignedClasses: newClass._id.toString() } }
+      );
+    }
+    
+    if (students && students.length > 0) {
+      await User.updateMany(
+        { _id: { $in: students } },
+        { class: newClass._id.toString() }
+      );
+    }
+    
+    // Populate and return
+    const populatedClass = await Class.findById(newClass._id)
+      .populate('teachers', 'name email')
+      .populate('students', 'name email');
+    
     res.status(201).json({
       success: true,
       message: 'Class created successfully',
       class: {
-        id: new mongoose.Types.ObjectId().toString(),
-        name,
-        grade: grade || 'Primary 1',
-        subject: subject || 'Mathematics',
-        students: 0,
-        teacher: 'Not assigned'
+        id: populatedClass._id,
+        name: populatedClass.class_name,
+        grade: populatedClass.grade,
+        subjects: populatedClass.subjects,
+        subject: populatedClass.subjects[0] || 'Mathematics',
+        students: populatedClass.students.length,
+        studentList: populatedClass.students,
+        teachers: populatedClass.teachers.length,
+        teacherList: populatedClass.teachers,
+        teacher: populatedClass.teachers.length > 0 ? populatedClass.teachers.map(t => t.name).join(', ') : 'Not assigned',
+        is_active: populatedClass.is_active,
+        createdAt: populatedClass.createdAt
       }
     });
   } catch (error) {
@@ -1222,7 +1530,147 @@ router.post('/classes', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+// UPDATE class
+router.put('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { name, grade, subjects, teachers, students, is_active } = req.body;
+    
+    const classData = await Class.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.schoolId
+    });
+    
+    if (!classData) {
+      return res.status(404).json({ success: false, error: 'Class not found' });
+    }
+    
+    // Check if new name already exists (if name is being changed)
+    if (name && name !== classData.class_name) {
+      const existingClass = await Class.findOne({
+        class_name: name,
+        school_id: schoolAdmin.schoolId,
+        _id: { $ne: req.params.id }
+      });
+      
+      if (existingClass) {
+        return res.status(409).json({ success: false, error: 'A class with this name already exists' });
+      }
+    }
+    
+    // Update fields
+    if (name) classData.class_name = name;
+    if (grade) classData.grade = grade;
+    if (subjects) classData.subjects = subjects;
+    if (is_active !== undefined) classData.is_active = is_active;
+    
+    // Handle teacher updates
+    if (teachers !== undefined) {
+      // Remove class from old teachers
+      const oldTeacherIds = classData.teachers.map(t => t.toString());
+      await User.updateMany(
+        { _id: { $in: oldTeacherIds } },
+        { $pull: { assignedClasses: classData._id.toString() } }
+      );
+      
+      // Add class to new teachers
+      classData.teachers = teachers;
+      if (teachers.length > 0) {
+        await User.updateMany(
+          { _id: { $in: teachers } },
+          { $addToSet: { assignedClasses: classData._id.toString() } }
+        );
+      }
+    }
+    
+    // Handle student updates
+    if (students !== undefined) {
+      // Remove class from old students
+      const oldStudentIds = classData.students.map(s => s.toString());
+      await User.updateMany(
+        { _id: { $in: oldStudentIds } },
+        { class: null }
+      );
+      
+      // Add class to new students
+      classData.students = students;
+      if (students.length > 0) {
+        await User.updateMany(
+          { _id: { $in: students } },
+          { class: classData._id.toString() }
+        );
+      }
+    }
+    
+    await classData.save();
+    
+    // Populate and return
+    const populatedClass = await Class.findById(classData._id)
+      .populate('teachers', 'name email')
+      .populate('students', 'name email');
+    
+    res.json({
+      success: true,
+      message: 'Class updated successfully',
+      class: {
+        id: populatedClass._id,
+        name: populatedClass.class_name,
+        grade: populatedClass.grade,
+        subjects: populatedClass.subjects,
+        subject: populatedClass.subjects[0] || 'Mathematics',
+        students: populatedClass.students.length,
+        studentList: populatedClass.students,
+        teachers: populatedClass.teachers.length,
+        teacherList: populatedClass.teachers,
+        teacher: populatedClass.teachers.length > 0 ? populatedClass.teachers.map(t => t.name).join(', ') : 'Not assigned',
+        is_active: populatedClass.is_active,
+        createdAt: populatedClass.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Update class error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update class' });
+  }
+});
+
+// DELETE class
+router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    
+    const classData = await Class.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.schoolId
+    });
+    
+    if (!classData) {
+      return res.status(404).json({ success: false, error: 'Class not found' });
+    }
+    
+    // Remove class from all assigned teachers
+    await User.updateMany(
+      { _id: { $in: classData.teachers } },
+      { $pull: { assignedClasses: classData._id.toString() } }
+    );
+    
+    // Remove class from all assigned students
+    await User.updateMany(
+      { _id: { $in: classData.students } },
+      { class: null }
+    );
+    
+    // Delete the class
+    await Class.findByIdAndDelete(req.params.id);
+    
+    res.json({
+      success: true,
+      message: 'Class deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete class error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete class' });
+  }
+});
 // ==================================================================================
 // ⭐ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
 // ==================================================================================
@@ -1391,6 +1839,198 @@ router.delete('/announcements/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('❌ Delete announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete announcement' });
+  }
+});
+
+// ==================== TEACHER ASSIGNMENT ====================
+
+// Assign classes and subjects to a teacher
+router.put('/teachers/:teacherId/assignments', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    const { classes, subjects } = req.body;
+    
+    const teacher = await User.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ success: false, error: 'Teacher not found' });
+    }
+    
+    if (teacher.role !== 'Teacher' && teacher.role !== 'Trial Teacher') {
+      return res.status(400).json({ success: false, error: 'User is not a teacher' });
+    }
+    
+    // Update teacher's assigned classes and subjects
+    teacher.assignedClasses = classes || [];
+    teacher.assignedSubjects = subjects || [];
+    await teacher.save();
+    
+    console.log(`📚 Teacher ${teacher.name} assigned to classes: ${classes?.join(', ')}`);
+    res.json({
+      success: true,
+      message: 'Teacher assignments updated',
+      teacher: {
+        _id: teacher._id,
+        name: teacher.name,
+        email: teacher.email,
+        assignedClasses: teacher.assignedClasses,
+        assignedSubjects: teacher.assignedSubjects
+      }
+    });
+  } catch (error) {
+    console.error('❌ Teacher assignment error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update teacher assignments' });
+  }
+});
+
+// Get teacher assignments
+router.get('/teachers/:teacherId/assignments', authenticateToken, async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    
+    const teacher = await User.findById(teacherId)
+      .select('name email assignedClasses assignedSubjects');
+    
+    if (!teacher) {
+      return res.status(404).json({ success: false, error: 'Teacher not found' });
+    }
+    
+    res.json({
+      success: true,
+      assignments: {
+        classes: teacher.assignedClasses || [],
+        subjects: teacher.assignedSubjects || []
+      }
+    });
+  } catch (error) {
+    console.error('❌ Get teacher assignments error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get teacher assignments' });
+  }
+});
+
+// Get all teachers with their assignments
+router.get('/teachers/assignments', authenticateToken, async (req, res) => {
+  try {
+    const teachers = await User.find({
+      role: { $in: ['Teacher', 'Trial Teacher'] }
+    }).select('name email assignedClasses assignedSubjects accountActive');
+    
+    res.json({
+      success: true,
+      teachers: teachers.map(t => ({
+        _id: t._id,
+        name: t.name,
+        email: t.email,
+        assignedClasses: t.assignedClasses || [],
+        assignedSubjects: t.assignedSubjects || [],
+        accountActive: t.accountActive
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Get teachers assignments error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get teachers' });
+  }
+});
+
+// ==================== PLACEMENT QUIZ MANAGEMENT ====================
+const Quiz = require('../models/Quiz');
+
+// Get available placement quizzes
+router.get('/placement-quizzes', authenticateToken, async (req, res) => {
+  try {
+    const quizzes = await Quiz.find({
+      quiz_type: 'placement',
+      is_active: true
+    }).select('title description is_launched launched_at launched_for_school createdAt');
+    
+    res.json({ success: true, quizzes });
+  } catch (error) {
+    console.error('❌ Get placement quizzes error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load placement quizzes' });
+  }
+});
+
+// Launch a placement quiz for the school
+router.post('/placement-quizzes/:quizId/launch', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const { startDate, endDate } = req.body;
+    const schoolAdmin = req.schoolAdmin;
+    
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ success: false, error: 'Quiz not found' });
+    }
+    
+    if (quiz.quiz_type !== 'placement') {
+      return res.status(400).json({ success: false, error: 'This is not a placement quiz' });
+    }
+    
+    // Get all classes in the school
+    const classes = await User.distinct('class', { 
+      role: 'Student',
+      schoolId: schoolAdmin.schoolId 
+    });
+    
+    // Update quiz with launch info
+    quiz.is_launched = true;
+    quiz.launched_by = schoolAdmin._id;
+    quiz.launched_at = new Date();
+    quiz.launched_for_school = schoolAdmin.schoolId;
+    quiz.launched_for_classes = classes;
+    quiz.launch_start_date = startDate ? new Date(startDate) : new Date();
+    quiz.launch_end_date = endDate ? new Date(endDate) : null;
+    
+    await quiz.save();
+    
+    console.log(`🎯 Placement quiz "${quiz.title}" launched for school ${schoolAdmin.schoolId}`);
+    res.json({
+      success: true,
+      message: 'Placement quiz launched successfully',
+      quiz: {
+        _id: quiz._id,
+        title: quiz.title,
+        launched_for_classes: classes,
+        launch_start_date: quiz.launch_start_date,
+        launch_end_date: quiz.launch_end_date
+      }
+    });
+  } catch (error) {
+    console.error('❌ Launch placement quiz error:', error);
+    res.status(500).json({ success: false, error: 'Failed to launch placement quiz' });
+  }
+});
+
+// Revoke placement quiz launch
+router.post('/placement-quizzes/:quizId/revoke', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const schoolAdmin = req.schoolAdmin;
+    
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ success: false, error: 'Quiz not found' });
+    }
+    
+    // Verify school admin launched this quiz
+    if (quiz.launched_for_school !== schoolAdmin.schoolId) {
+      return res.status(403).json({ success: false, error: 'You can only revoke quizzes for your school' });
+    }
+    
+    quiz.is_launched = false;
+    quiz.launched_by = null;
+    quiz.launched_at = null;
+    quiz.launched_for_school = null;
+    quiz.launched_for_classes = [];
+    quiz.launch_start_date = null;
+    quiz.launch_end_date = null;
+    
+    await quiz.save();
+    
+    console.log(`🎯 Placement quiz "${quiz.title}" revoked for school ${schoolAdmin.schoolId}`);
+    res.json({ success: true, message: 'Placement quiz launch revoked' });
+  } catch (error) {
+    console.error('❌ Revoke placement quiz error:', error);
+    res.status(500).json({ success: false, error: 'Failed to revoke placement quiz' });
   }
 });
 

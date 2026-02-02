@@ -35,6 +35,30 @@ const schoolAdminService = {
     }
   },
 
+  // ==================== SCHOOL & LICENSE INFO ====================
+  async getSchoolInfo() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/school-info`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch school info');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getSchoolInfo error:', error);
+      return { success: false, error: error.message || 'Failed to load school info' };
+    }
+  },
+
   // ==================== USER MANAGEMENT ====================
   async getUsers(filters = {}) {
     try {
@@ -179,7 +203,7 @@ const schoolAdminService = {
     }
   },
 
-  async resetUserPassword(userId, newPassword) {
+  async resetUserPassword(userId) {
     try {
       const token = this.getToken();
       if (!token) {
@@ -192,7 +216,7 @@ const schoolAdminService = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ password: newPassword })
+        body: JSON.stringify({})
       });
 
       if (!response.ok) {
@@ -263,6 +287,130 @@ const schoolAdminService = {
     } catch (error) {
       console.error('createClass error:', error);
       return { success: false, error: error.message || 'Failed to create class' };
+    }
+  },
+
+  async getClass(classId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/${classId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch class');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getClass error:', error);
+      return { success: false, error: error.message || 'Failed to load class' };
+    }
+  },
+
+  async updateClass(classId, classData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/${classId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(classData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update class');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('updateClass error:', error);
+      return { success: false, error: error.message || 'Failed to update class' };
+    }
+  },
+
+  async deleteClass(classId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/${classId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete class');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('deleteClass error:', error);
+      return { success: false, error: error.message || 'Failed to delete class' };
+    }
+  },
+
+  async getAvailableTeachers() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/available/teachers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch teachers');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getAvailableTeachers error:', error);
+      return { success: false, error: 'Failed to load teachers' };
+    }
+  },
+
+  async getAvailableStudents(unassignedOnly = false) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      let url = `${API_URL}/mongo/school-admin/classes/available/students`;
+      if (unassignedOnly) {
+        url += '?unassigned=true';
+      }
+
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch students');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getAvailableStudents error:', error);
+      return { success: false, error: 'Failed to load students' };
     }
   },
 

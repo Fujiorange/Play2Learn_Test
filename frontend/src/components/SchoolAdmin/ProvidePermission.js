@@ -38,7 +38,7 @@ export default function ProvidePermission() {
 
       if (result.success) {
         // Filter out school-admin users (can't change their roles)
-        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin');
+        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin' && u.role !== 'School Admin');
         setUsers(filteredUsers);
       } else {
         console.error('Failed to load users:', result.error);

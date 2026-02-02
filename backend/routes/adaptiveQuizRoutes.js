@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
+const User = require('../models/User');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -21,15 +22,79 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-// Get all available adaptive quizzes
+// Helper function to check if a quiz is available for a student
+const isQuizAvailableForStudent = async (quiz, userId) => {
+  // If quiz is not launched, it's not available
+  if (!quiz.is_launched) {
+    return { available: false, reason: 'Quiz has not been launched yet' };
+  }
+  
+  // Check date range if set
+  const now = new Date();
+  if (quiz.launch_start_date && now < quiz.launch_start_date) {
+    return { available: false, reason: 'Quiz has not started yet' };
+  }
+  if (quiz.launch_end_date && now > quiz.launch_end_date) {
+    return { available: false, reason: 'Quiz has ended' };
+  }
+  
+  // Get user's class
+  const user = await User.findById(userId);
+  if (!user) {
+    return { available: false, reason: 'User not found' };
+  }
+  
+  // Check if user's class is in the launched classes
+  if (quiz.launched_for_classes && quiz.launched_for_classes.length > 0) {
+    if (!quiz.launched_for_classes.includes(user.class)) {
+      return { available: false, reason: 'Quiz not available for your class' };
+    }
+  }
+  
+  return { available: true };
+};
+
+// Get all available adaptive quizzes (for students - only launched ones)
 router.get('/quizzes', authenticateToken, async (req, res) => {
   try {
-    const quizzes = await Quiz.find({ 
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
+    
+    // Build query - show only launched quizzes for the student's class
+    const now = new Date();
+    let query = { 
       quiz_type: 'adaptive',
-      is_active: true 
-    })
-    .select('title description adaptive_config questions createdAt quiz_type')
-    .sort({ createdAt: -1 });
+      is_active: true,
+      is_launched: true,
+      $or: [
+        { launch_start_date: null },
+        { launch_start_date: { $lte: now } }
+      ]
+    };
+    
+    // Add end date check
+    query.$and = [
+      {
+        $or: [
+          { launch_end_date: null },
+          { launch_end_date: { $gte: now } }
+        ]
+      }
+    ];
+    
+    // If user has a class, filter by class
+    if (user && user.class) {
+      query.$and.push({
+        $or: [
+          { launched_for_classes: { $size: 0 } }, // No specific classes
+          { launched_for_classes: user.class }     // Or includes user's class
+        ]
+      });
+    }
+    
+    const quizzes = await Quiz.find(query)
+    .select('title description adaptive_config questions createdAt quiz_type is_launched launched_at launch_start_date launch_end_date launched_for_classes')
+    .sort({ launched_at: -1 });
 
     // Count questions by difficulty for each quiz
     const quizzesWithStats = quizzes.map(quiz => {
@@ -47,7 +112,11 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
         difficulty_distribution: difficultyCount,
         target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
         difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'gradual',
-        createdAt: quiz.createdAt
+        createdAt: quiz.createdAt,
+        is_launched: quiz.is_launched,
+        launched_at: quiz.launched_at,
+        launch_start_date: quiz.launch_start_date,
+        launch_end_date: quiz.launch_end_date
       };
     });
 
@@ -82,6 +151,15 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
       return res.status(400).json({ 
         success: false, 
         error: 'This is not an adaptive quiz' 
+      });
+    }
+
+    // Check if quiz is launched and available for this student
+    const availability = await isQuizAvailableForStudent(quiz, userId);
+    if (!availability.available) {
+      return res.status(403).json({
+        success: false,
+        error: availability.reason
       });
     }
 

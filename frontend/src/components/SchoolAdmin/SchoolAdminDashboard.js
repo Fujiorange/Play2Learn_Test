@@ -241,6 +241,15 @@ export default function SchoolAdminDashboard() {
                 <span>Manage Classes</span>
                 <span style={styles.arrow}>→</span>
               </li>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'teacher-assignments' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('teacher-assignments')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/teachers/assignments')}
+              >
+                <span>👩‍🏫 Teacher Assignments</span>
+                <span style={styles.arrow}>→</span>
+              </li>
             </ul>
           </div>
 
