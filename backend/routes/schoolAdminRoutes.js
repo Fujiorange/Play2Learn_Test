@@ -1037,7 +1037,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 // ==================== MANUAL CREATE USER ====================
 router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { name, email, role: rawRole, gradeLevel, subject, gender, class: className, parentEmail } = req.body;
+    const { name, email, role: rawRole, gradeLevel, subject, gender, class: className, parentEmail, linkedStudents } = req.body;
     
     if (!name || !email || !rawRole) {
       return res.status(400).json({ 
@@ -1101,8 +1101,8 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     
-    // Create user
-    const newUser = await User.create({
+    // Prepare user data
+    const userData = {
       name,
       email,
       password: hashedPassword,
@@ -1116,7 +1116,18 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       accountActive: true,
       requirePasswordChange: true, // User must change password on first login
       createdBy: 'school-admin',
-    });
+    };
+    
+    // Add linkedStudents for Parent role
+    if (role === 'Parent' && linkedStudents && linkedStudents.length > 0) {
+      userData.linkedStudents = linkedStudents.map(studentId => ({
+        studentId: new mongoose.Types.ObjectId(studentId),
+        relationship: 'parent'
+      }));
+    }
+    
+    // Create user
+    const newUser = await User.create(userData);
     
     // Update school's current teacher/student count using atomic increment
     if (role === 'Teacher' || role === 'Student') {
@@ -1141,6 +1152,9 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
           await sendStudentCredentialsToParent(newUser, tempPassword, parentEmail, schoolName);
           emailSent = true;
         }
+      } else if (role === 'Parent') {
+        await sendParentWelcomeEmail(newUser, tempPassword, schoolName);
+        emailSent = true;
       }
     } catch (emailError) {
       console.error('Email sending error:', emailError);
@@ -1526,7 +1540,16 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Create class error:', error);
-    res.status(500).json({ success: false, error: 'Failed to create class' });
+    // Provide more specific error message
+    let errorMessage = 'Failed to create class';
+    if (error.name === 'ValidationError') {
+      errorMessage = Object.values(error.errors).map(e => e.message).join(', ');
+    } else if (error.code === 11000) {
+      errorMessage = 'A class with this name already exists';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 

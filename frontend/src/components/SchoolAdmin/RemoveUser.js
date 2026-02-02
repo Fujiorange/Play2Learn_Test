@@ -152,9 +152,9 @@ export default function RemoveUser() {
               <label style={styles.label}>Filter by Role</label>
               <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} style={styles.select}>
                 <option value="all">All Roles</option>
-                <option value="student">Students</option>
-                <option value="teacher">Teachers</option>
-                <option value="parent">Parents</option>
+                <option value="Student">Students</option>
+                <option value="Teacher">Teachers</option>
+                <option value="Parent">Parents</option>
               </select>
             </div>
           </div>

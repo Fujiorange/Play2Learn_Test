@@ -48,6 +48,7 @@ export default function ManualAddUser() {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordViewed, setPasswordViewed] = useState(false);
   const [createdUser, setCreatedUser] = useState(null);
+  const [createdParent, setCreatedParent] = useState(null); // Store parent credentials when created with student
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -220,17 +221,25 @@ export default function ManualAddUser() {
           });
           
           if (parentResult.success) {
+            // Store parent credentials to display to admin
+            setCreatedParent({
+              name: formData.parentName,
+              email: formData.parentEmail,
+              tempPassword: parentResult.user.tempPassword || parentPassword
+            });
             setMessage({ 
               type: 'success', 
-              text: `Student and parent created successfully! Parent email: ${formData.parentEmail}` 
+              text: `Student and parent created successfully!` 
             });
           } else {
+            setCreatedParent(null);
             setMessage({ 
               type: 'success', 
               text: `Student created successfully! However, parent creation failed: ${parentResult.error}` 
             });
           }
         } else {
+          setCreatedParent(null);
           setMessage({ type: 'success', text: 'User created successfully!' });
         }
         
@@ -267,6 +276,7 @@ export default function ManualAddUser() {
     setShowPassword(false);
     setPasswordViewed(false);
     setCreatedUser(null);
+    setCreatedParent(null);
     setMessage({ type: '', text: '' });
   };
 
@@ -342,7 +352,11 @@ export default function ManualAddUser() {
               Please save these credentials. The password can only be viewed once.
             </p>
             
+            {/* Student/User Credentials */}
             <div style={styles.credentialsBox}>
+              <div style={{ fontWeight: '600', color: '#1f2937', marginBottom: '12px', fontSize: '15px' }}>
+                {createdUser.role} Account Credentials
+              </div>
               <div style={{ marginBottom: '12px' }}>
                 <div style={styles.credentialsLabel}>Name</div>
                 <div style={styles.credentialsValue}>{createdUser.name}</div>
@@ -363,8 +377,34 @@ export default function ManualAddUser() {
               </div>
             </div>
             
-            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
-              ⚠️ Please share these credentials securely with the user. They will be prompted to change their password on first login.
+            {/* Parent Credentials - Only shown when parent was created with student */}
+            {createdParent && (
+              <div style={{ ...styles.credentialsBox, marginTop: '16px', background: '#f0fdf4', border: '2px solid #bbf7d0' }}>
+                <div style={{ fontWeight: '600', color: '#16a34a', marginBottom: '12px', fontSize: '15px' }}>
+                  👨‍👩‍👧 Parent Account Credentials (Linked to Student)
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={styles.credentialsLabel}>Parent Name</div>
+                  <div style={styles.credentialsValue}>{createdParent.name}</div>
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={styles.credentialsLabel}>Parent Email</div>
+                  <div style={styles.credentialsValue}>{createdParent.email}</div>
+                </div>
+                <div>
+                  <div style={styles.credentialsLabel}>Parent Temporary Password</div>
+                  <div style={{ ...styles.credentialsValue, color: '#dc2626' }}>
+                    {createdParent.tempPassword}
+                  </div>
+                </div>
+                <p style={{ fontSize: '12px', color: '#16a34a', marginTop: '12px', marginBottom: '0' }}>
+                  ✅ This parent account is linked to the student above
+                </p>
+              </div>
+            )}
+            
+            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px', marginTop: '16px' }}>
+              ⚠️ Please share these credentials securely with the user{createdParent ? 's' : ''}. They will be prompted to change their password on first login.
             </p>
             
             <div style={styles.buttonGroup}>
