@@ -540,12 +540,21 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
       }
     }
 
-    res.status(created.length > 0 ? 201 : 400).json({
-      success: created.length > 0,
+    // Prepare the response
+    const isSuccess = created.length > 0;
+    const responseData = {
+      success: isSuccess,
       message: `Created ${created.length} admin(s)${errors.length > 0 ? `, ${errors.length} failed` : ''}`,
       created: created,
       errors: errors.length > 0 ? errors : undefined
-    });
+    };
+    
+    // Add error field when no admins were created (for frontend compatibility)
+    if (!isSuccess && errors.length > 0) {
+      responseData.error = errors.map(e => `${e.email}: ${e.error}`).join('; ');
+    }
+    
+    res.status(isSuccess ? 201 : 400).json(responseData);
   } catch (error) {
     console.error('Create school admins error:', error);
     console.error('Error stack:', error.stack);

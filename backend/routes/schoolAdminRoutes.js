@@ -1338,6 +1338,68 @@ router.get('/classes', authenticateSchoolAdmin, async (req, res) => {
   }
 });
 
+// GET available teachers for class assignment
+// NOTE: This route MUST be defined BEFORE /classes/:id to avoid route collision
+router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    
+    const teachers = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      role: 'Teacher',
+      accountActive: true
+    }).select('name email assignedClasses');
+    
+    res.json({
+      success: true,
+      teachers: teachers.map(t => ({
+        id: t._id,
+        name: t.name,
+        email: t.email,
+        assignedClasses: t.assignedClasses || []
+      }))
+    });
+  } catch (error) {
+    console.error('Get available teachers error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load teachers' });
+  }
+});
+
+// GET available students for class assignment
+// NOTE: This route MUST be defined BEFORE /classes/:id to avoid route collision
+router.get('/classes/available/students', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { unassigned } = req.query;
+    
+    const filter = {
+      schoolId: schoolAdmin.schoolId,
+      role: 'Student',
+      accountActive: true
+    };
+    
+    // Optionally filter to only unassigned students
+    if (unassigned === 'true') {
+      filter.class = { $in: [null, ''] };
+    }
+    
+    const students = await User.find(filter).select('name email class');
+    
+    res.json({
+      success: true,
+      students: students.map(s => ({
+        id: s._id,
+        name: s.name,
+        email: s.email,
+        currentClass: s.class
+      }))
+    });
+  } catch (error) {
+    console.error('Get available students error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load students' });
+  }
+});
+
 // GET single class by ID
 router.get('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
   try {
@@ -1609,68 +1671,6 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to delete class' });
   }
 });
-
-// GET available teachers for class assignment
-router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, res) => {
-  try {
-    const schoolAdmin = req.schoolAdmin;
-    
-    const teachers = await User.find({
-      schoolId: schoolAdmin.schoolId,
-      role: 'Teacher',
-      accountActive: true
-    }).select('name email assignedClasses');
-    
-    res.json({
-      success: true,
-      teachers: teachers.map(t => ({
-        id: t._id,
-        name: t.name,
-        email: t.email,
-        assignedClasses: t.assignedClasses || []
-      }))
-    });
-  } catch (error) {
-    console.error('Get available teachers error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load teachers' });
-  }
-});
-
-// GET available students for class assignment
-router.get('/classes/available/students', authenticateSchoolAdmin, async (req, res) => {
-  try {
-    const schoolAdmin = req.schoolAdmin;
-    const { unassigned } = req.query;
-    
-    const filter = {
-      schoolId: schoolAdmin.schoolId,
-      role: 'Student',
-      accountActive: true
-    };
-    
-    // Optionally filter to only unassigned students
-    if (unassigned === 'true') {
-      filter.class = { $in: [null, ''] };
-    }
-    
-    const students = await User.find(filter).select('name email class');
-    
-    res.json({
-      success: true,
-      students: students.map(s => ({
-        id: s._id,
-        name: s.name,
-        email: s.email,
-        currentClass: s.class
-      }))
-    });
-  } catch (error) {
-    console.error('Get available students error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load students' });
-  }
-});
-
-module.exports = router;
 // ==================================================================================
 // ⭐ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
 // ==================================================================================
