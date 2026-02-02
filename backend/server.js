@@ -121,18 +121,22 @@ app.get('/api/public/landing-page', async (req, res) => {
     }));
 
     // Clone blocks and inject testimonials into testimonial blocks
+    // Use toObject() to properly serialize Mongoose subdocuments
     const blocks = (landingPage.blocks || []).map(block => {
-      if (block.type === 'testimonials') {
+      // Convert Mongoose subdocument to plain object for proper serialization
+      const plainBlock = block.toObject ? block.toObject() : block;
+      
+      if (plainBlock.type === 'testimonials') {
         // Inject display testimonials into the testimonial block
         return {
-          ...block,
+          ...plainBlock,
           custom_data: {
-            ...(block.custom_data || {}),
+            ...(plainBlock.custom_data || {}),
             testimonials: testimonialData
           }
         };
       }
-      return block;
+      return plainBlock;
     });
 
     res.json({

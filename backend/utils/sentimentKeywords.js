@@ -314,8 +314,10 @@ const negativeKeywords = [
   'frightening', 'scary', 'terrifying', 'horrifying', 'petrifying',
   
   // Negative phrases (check these first to avoid double-counting)
+  // Note: "not good", "not great" are NOT included here as per user requirement
+  // Negated positive words should result in NEUTRAL sentiment, not negative
   'terrible experience', 'bad experience', 'worst experience', 'never again',
-  'not good', 'not great', 'not recommended', 'dont recommend', "don't recommend", 
+  'not recommended', 'dont recommend', "don't recommend", 
   'do not recommend', 'avoid', 'waste of time', 'waste of money',
   'not worth', 'not helpful', 'does not work', "doesn't work", 'didnt work', "didn't work"
 ];
@@ -342,6 +344,9 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
   
   // Track which parts of the message have been matched to avoid double-counting
   let matchedRanges = [];
+  
+  // Track negated positive words to make them neutral
+  let negatedPositiveCount = 0;
   
   // Helper to check if a position overlaps with already matched ranges
   const isOverlapping = (start, end) => {
@@ -400,12 +405,16 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
     while (index !== -1) {
       const end = index + keyword.length;
       if (!isOverlapping(index, end)) {
-        // Check for negation before positive keyword (e.g., "not good" becomes negative)
+        // Check for negation before positive keyword (e.g., "not good")
         const hasNegation = isPrecededByNegation(index, keyword);
         
         if (hasNegation) {
-          // Negation of positive becomes negative
-          sentimentScore -= 5;
+          // Negation of positive word results in NEUTRAL sentiment
+          // The sentiment library already gave this a negative score (e.g., -3 for "not good")
+          // We need to counteract that to make it neutral
+          // Add back approximately what the sentiment library subtracted
+          sentimentScore += 3; // Counteract the sentiment library's negative adjustment
+          negatedPositiveCount++;
         } else {
           // Weight positive keywords more heavily (5 instead of 3)
           sentimentScore += 5;
