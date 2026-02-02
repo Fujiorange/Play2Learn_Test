@@ -1251,7 +1251,7 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
     }
     
     // Verify the user belongs to the school admin's school
-    if (user.schoolId !== schoolAdmin.schoolId) {
+    if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
       return res.status(403).json({ success: false, error: 'You can only delete users from your school' });
     }
     
@@ -1295,7 +1295,7 @@ router.put('/users/:id/status', authenticateSchoolAdmin, async (req, res) => {
     }
     
     // Verify the user belongs to the school admin's school
-    if (user.schoolId !== schoolAdmin.schoolId) {
+    if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
       return res.status(403).json({ success: false, error: 'You can only update users from your school' });
     }
     
@@ -1354,7 +1354,7 @@ router.put('/users/:id/password', authenticateSchoolAdmin, async (req, res) => {
     }
     
     // Verify the user belongs to the school admin's school
-    if (user.schoolId !== schoolAdmin.schoolId) {
+    if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
       return res.status(403).json({ success: false, error: 'You can only reset passwords for users from your school' });
     }
     
