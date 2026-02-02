@@ -203,7 +203,7 @@ const schoolAdminService = {
     }
   },
 
-  async resetUserPassword(userId, newPassword) {
+  async resetUserPassword(userId) {
     try {
       const token = this.getToken();
       if (!token) {
@@ -216,7 +216,7 @@ const schoolAdminService = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ password: newPassword })
+        body: JSON.stringify({})
       });
 
       if (!response.ok) {

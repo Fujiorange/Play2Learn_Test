@@ -3,7 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import schoolAdminService from '../../services/schoolAdminService';
 
-const GRADES = ['Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6'];
+const GRADES = [
+  { value: 'Primary 1', enabled: true },
+  { value: 'Primary 2', enabled: false },
+  { value: 'Primary 3', enabled: false },
+  { value: 'Primary 4', enabled: false },
+  { value: 'Primary 5', enabled: false },
+  { value: 'Primary 6', enabled: false }
+];
 const SUBJECTS = [
   { value: 'Mathematics', enabled: true },
   { value: 'Science', enabled: false },
@@ -273,13 +280,25 @@ export default function ManageClasses() {
         <label style={styles.label}>Grade Level *</label>
         <select
           value={formData.grade}
-          onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+          onChange={(e) => {
+            const selectedGrade = GRADES.find(g => g.value === e.target.value);
+            if (selectedGrade && selectedGrade.enabled) {
+              setFormData({ ...formData, grade: e.target.value });
+            }
+          }}
           style={styles.select}
         >
           {GRADES.map(grade => (
-            <option key={grade} value={grade}>{grade}</option>
+            <option 
+              key={grade.value} 
+              value={grade.value}
+              disabled={!grade.enabled}
+            >
+              {grade.value} {!grade.enabled && '(Coming Soon)'}
+            </option>
           ))}
         </select>
+        <p style={styles.note}>Only Primary 1 is enabled for now</p>
 
         <label style={styles.label}>Subjects</label>
         <div style={styles.multiSelect}>

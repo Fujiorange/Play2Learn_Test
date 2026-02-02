@@ -1147,11 +1147,31 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
 // ==================== DELETE USER ====================
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
-    const result = await User.findByIdAndDelete(req.params.id);
+    // First find the user to get their role and class assignments
+    const user = await User.findById(req.params.id);
     
-    if (!result) {
+    if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
+    
+    // If user is a teacher, remove them from all assigned classes
+    if (user.role === 'Teacher') {
+      await Class.updateMany(
+        { teachers: user._id },
+        { $pull: { teachers: user._id } }
+      );
+    }
+    
+    // If user is a student, remove them from their assigned class
+    if (user.role === 'Student') {
+      await Class.updateMany(
+        { students: user._id },
+        { $pull: { students: user._id } }
+      );
+    }
+    
+    // Now delete the user
+    await User.findByIdAndDelete(req.params.id);
     
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
@@ -1213,30 +1233,38 @@ router.put('/users/:id/role', authenticateToken, async (req, res) => {
 });
 
 // ==================== RESET USER PASSWORD ====================
+// Updated to generate random password and set requirePasswordChange flag
 router.put('/users/:id/password', authenticateToken, async (req, res) => {
   try {
-    const { password } = req.body;
-    
-    if (!password || password.length < 8) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Password must be at least 8 characters' 
-      });
-    }
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { password: hashedPassword },
-      { new: true }
-    );
+    // Find the user first
+    const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
-    res.json({ success: true, message: 'Password reset successfully' });
+    // Generate a new temporary password based on role
+    const rolePrefix = user.role === 'Teacher' ? 'TEA' : 
+                       user.role === 'Student' ? 'STU' : 
+                       user.role === 'Parent' ? 'PAR' : 'USR';
+    const tempPassword = generateTempPassword(rolePrefix);
+    
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    
+    // Update user with new password and set requirePasswordChange flag
+    user.password = hashedPassword;
+    user.requirePasswordChange = true;
+    await user.save();
+    
+    // Return temp password for one-time viewing by school admin
+    res.json({ 
+      success: true, 
+      message: 'Password reset successfully',
+      tempPassword: tempPassword,
+      userId: user._id,
+      email: user.email,
+      name: user.name
+    });
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ success: false, error: 'Failed to reset password' });

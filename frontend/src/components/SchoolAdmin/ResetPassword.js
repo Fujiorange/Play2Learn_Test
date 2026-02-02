@@ -8,9 +8,12 @@ export default function ResetPassword() {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
-  const [newPassword, setNewPassword] = useState('');
+  const [resetResult, setResetResult] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordViewed, setPasswordViewed] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -38,7 +41,7 @@ export default function ResetPassword() {
 
       if (result.success) {
         // Filter out school-admin users
-        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin');
+        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin' && u.role !== 'School Admin');
         setUsers(filteredUsers);
       } else {
         console.error('Failed to load users:', result.error);
@@ -58,26 +61,42 @@ export default function ResetPassword() {
   );
 
   const handleReset = async () => {
-    if (!newPassword || newPassword.length < 8) {
-      setMessage({ type: 'error', text: 'Password must be at least 8 characters' });
-      return;
-    }
-
+    setResetting(true);
     try {
-      // REAL API CALL - Updates database!
-      const result = await schoolAdminService.resetUserPassword(selectedUser.id, newPassword);
+      // REAL API CALL - Resets password and generates new temp password!
+      const result = await schoolAdminService.resetUserPassword(selectedUser.id);
 
       if (result.success) {
-        setMessage({ type: 'success', text: `Password reset for ${selectedUser.name}` });
-        setSelectedUser(null);
-        setNewPassword('');
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+        setResetResult({
+          tempPassword: result.tempPassword,
+          name: result.name || selectedUser.name,
+          email: result.email || selectedUser.email
+        });
+        setShowPassword(false);
+        setPasswordViewed(false);
+        setMessage({ type: 'success', text: `Password reset successfully for ${selectedUser.name}` });
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to reset password' });
+    } finally {
+      setResetting(false);
     }
+  };
+
+  const handleViewPassword = () => {
+    setShowPassword(true);
+    setPasswordViewed(true);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedUser(null);
+    setResetResult(null);
+    setShowPassword(false);
+    setPasswordViewed(false);
+    // Clear success message after a delay
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
   const styles = {
@@ -109,6 +128,17 @@ export default function ResetPassword() {
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
+    // New styles for password display
+    successCard: { background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '12px', padding: '24px', marginBottom: '16px' },
+    successTitle: { fontSize: '18px', fontWeight: '700', color: '#16a34a', marginBottom: '16px' },
+    credentialsBox: { background: 'white', border: '2px solid #d1d5db', borderRadius: '8px', padding: '16px', marginBottom: '16px' },
+    credentialsLabel: { fontSize: '12px', color: '#6b7280', marginBottom: '4px' },
+    credentialsValue: { fontSize: '16px', fontWeight: '600', color: '#1f2937', fontFamily: 'monospace' },
+    passwordSection: { background: '#f3f4f6', borderRadius: '8px', padding: '16px', marginBottom: '16px' },
+    passwordDisplay: { background: 'white', border: '2px solid #e5e7eb', borderRadius: '8px', padding: '12px 16px', fontFamily: 'monospace', fontSize: '16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    viewButton: { padding: '8px 16px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    warningText: { fontSize: '13px', color: '#dc2626', marginBottom: '16px', fontWeight: '500' },
+    infoText: { fontSize: '13px', color: '#6b7280', marginBottom: '16px' },
   };
 
   return (
@@ -127,7 +157,7 @@ export default function ResetPassword() {
 
       <main style={styles.main}>
         <h1 style={styles.pageTitle}>Reset User Password</h1>
-        <p style={styles.pageSubtitle}>Search for a Primary 1 Mathematics user and reset their password.</p>
+        <p style={styles.pageSubtitle}>Search for a user and reset their password. A new temporary password will be generated automatically.</p>
 
         <div style={styles.card}>
           {message.text && (
@@ -183,21 +213,79 @@ export default function ResetPassword() {
         </div>
       </main>
 
-      {selectedUser && (
+      {/* Confirmation Modal (before reset) */}
+      {selectedUser && !resetResult && (
         <div style={styles.modal} onClick={() => setSelectedUser(null)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.modalTitle}>Reset Password for {selectedUser.name}</h2>
-            <label style={styles.label}>New Password (min. 8 characters)</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              style={styles.input}
-            />
+            <p style={styles.infoText}>
+              This will generate a new temporary password for <strong>{selectedUser.email}</strong>.
+            </p>
+            <p style={styles.warningText}>
+              ⚠️ The user will be required to change their password on first login.
+            </p>
             <div style={styles.modalButtons}>
               <button style={styles.cancelButton} onClick={() => setSelectedUser(null)}>Cancel</button>
-              <button style={styles.saveButton} onClick={handleReset}>Reset Password</button>
+              <button 
+                style={{ ...styles.saveButton, opacity: resetting ? 0.7 : 1 }} 
+                onClick={handleReset}
+                disabled={resetting}
+              >
+                {resetting ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Modal (after reset - showing temp password) */}
+      {selectedUser && resetResult && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.successCard}>
+              <div style={styles.successTitle}>✅ Password Reset Successfully!</div>
+              <p style={{ marginBottom: '16px', color: '#374151' }}>
+                Please save these credentials. The password can only be viewed once.
+              </p>
+              
+              <div style={styles.credentialsBox}>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={styles.credentialsLabel}>Name</div>
+                  <div style={styles.credentialsValue}>{resetResult.name}</div>
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={styles.credentialsLabel}>Email</div>
+                  <div style={styles.credentialsValue}>{resetResult.email}</div>
+                </div>
+                <div>
+                  <div style={styles.credentialsLabel}>New Temporary Password</div>
+                  <div style={styles.passwordSection}>
+                    <div style={styles.passwordDisplay}>
+                      <span>
+                        {showPassword ? resetResult.tempPassword : '••••••••'}
+                      </span>
+                      {!passwordViewed && (
+                        <button style={styles.viewButton} onClick={handleViewPassword}>
+                          👁️ View Once
+                        </button>
+                      )}
+                      {passwordViewed && (
+                        <span style={{ color: '#6b7280', fontSize: '13px' }}>✓ Viewed</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+                ⚠️ Please share these credentials securely with the user. They will be prompted to change their password on first login.
+              </p>
+            </div>
+            
+            <div style={styles.modalButtons}>
+              <button style={styles.saveButton} onClick={handleCloseModal}>
+                Done
+              </button>
             </div>
           </div>
         </div>
