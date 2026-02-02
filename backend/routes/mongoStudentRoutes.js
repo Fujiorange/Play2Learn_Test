@@ -1341,7 +1341,7 @@ router.get("/badges/progress", async (req, res) => {
     console.log(`📊 Math Profile for ${userEmail}:`, mathProfile);
 
     // ✅ FIX: Use Quiz model with SAME logic as Dashboard/Progress
-    const allQuizzes = await Quiz.find({ 
+    const allQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
       quiz_type: "regular" 
     });

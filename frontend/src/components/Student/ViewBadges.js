@@ -38,6 +38,19 @@ export default function ViewBadges() {
     loadData();
   }, [navigate]);
 
+  useEffect(() => {
+    // 🔄 ADDED: Refresh badge data when window regains focus
+    // This ensures updated quiz counts are shown when returning from quiz page
+    const handleFocus = () => {
+      console.log('🔄 Window focus detected, refreshing badge data...');
+      setLoading(true);
+      loadData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   const loadData = async () => {
     try {
       const currentUser = authService.getCurrentUser();
