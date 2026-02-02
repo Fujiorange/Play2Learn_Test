@@ -228,13 +228,13 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
         teachers: {
           current: currentTeachers,
           limit: school.plan_info.teacher_limit,
-          available: school.plan_info.teacher_limit - currentTeachers,
+          available: Math.max(0, school.plan_info.teacher_limit - currentTeachers),
           limitReached: currentTeachers >= school.plan_info.teacher_limit
         },
         students: {
           current: currentStudents,
           limit: school.plan_info.student_limit,
-          available: school.plan_info.student_limit - currentStudents,
+          available: Math.max(0, school.plan_info.student_limit - currentStudents),
           limitReached: currentStudents >= school.plan_info.student_limit
         }
       }

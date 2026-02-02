@@ -292,27 +292,38 @@ export default function ManualAddUser() {
               <label style={styles.label}>
                 Role<span style={styles.required}>*</span>
               </label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                disabled={loading}
-                style={styles.select}
-              >
-                <option value="">Select role</option>
-                <option value="student" disabled={isRoleDisabled('student')}>
-                  Student {isRoleDisabled('student') ? '(Limit Reached)' : ''}
-                </option>
-                <option value="teacher" disabled={isRoleDisabled('teacher')}>
-                  Teacher {isRoleDisabled('teacher') ? '(Limit Reached)' : ''}
-                </option>
-                <option value="parent">Parent</option>
-              </select>
-              {formData.role && isRoleDisabled(formData.role) && (
-                <p style={{ ...styles.note, color: '#dc2626' }}>
-                  ⚠️ This role has reached its license limit. Please upgrade your plan.
-                </p>
-              )}
+              {(() => {
+                // Pre-compute disabled states to avoid redundant calculations
+                const studentDisabled = isRoleDisabled('student');
+                const teacherDisabled = isRoleDisabled('teacher');
+                const currentRoleDisabled = formData.role && isRoleDisabled(formData.role);
+                
+                return (
+                  <>
+                    <select
+                      name="role"
+                      value={formData.role}
+                      onChange={handleChange}
+                      disabled={loading}
+                      style={styles.select}
+                    >
+                      <option value="">Select role</option>
+                      <option value="student" disabled={studentDisabled}>
+                        Student {studentDisabled ? '(Limit Reached)' : ''}
+                      </option>
+                      <option value="teacher" disabled={teacherDisabled}>
+                        Teacher {teacherDisabled ? '(Limit Reached)' : ''}
+                      </option>
+                      <option value="parent">Parent</option>
+                    </select>
+                    {currentRoleDisabled && (
+                      <p style={{ ...styles.note, color: '#dc2626' }}>
+                        ⚠️ This role has reached its license limit. Please upgrade your plan.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div style={styles.formGroup}>
