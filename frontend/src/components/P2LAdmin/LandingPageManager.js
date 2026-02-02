@@ -1,5 +1,5 @@
 // Landing Page Manager Component
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   getLandingPage, 
@@ -19,6 +19,7 @@ function LandingPageManager() {
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(false);
   const [testimonialError, setTestimonialError] = useState('');
+  const [testimonialsLoaded, setTestimonialsLoaded] = useState(false); // Track if testimonials have been loaded
   const [testimonialFilters, setTestimonialFilters] = useState({
     minRating: '',
     sentiment: '',
@@ -49,13 +50,14 @@ function LandingPageManager() {
     }
   };
 
-  const fetchTestimonials = async () => {
+  const fetchTestimonials = useCallback(async () => {
     setLoadingTestimonials(true);
     setTestimonialError('');
     try {
       const response = await getTestimonials(testimonialFilters);
       if (response.success) {
         setTestimonials(response.testimonials || []);
+        setTestimonialsLoaded(true); // Mark as loaded
       } else {
         setTestimonialError(response.error || 'Failed to load testimonials');
       }
@@ -65,7 +67,7 @@ function LandingPageManager() {
     } finally {
       setLoadingTestimonials(false);
     }
-  };
+  }, [testimonialFilters]);
 
   const handleTestimonialToggleLanding = async (id, displayOnLanding) => {
     try {
@@ -100,14 +102,14 @@ function LandingPageManager() {
     }
   };
 
-  // Auto-fetch testimonials when filters change
+  // Auto-fetch testimonials when filters change (only after initial load)
   useEffect(() => {
-    // Only fetch if we've loaded testimonials at least once
-    if (testimonials.length > 0 || Object.values(testimonialFilters).some(v => v)) {
+    // Only auto-fetch if testimonials have been loaded at least once
+    // This prevents unnecessary API calls on component mount
+    if (testimonialsLoaded) {
       fetchTestimonials();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testimonialFilters]);
+  }, [testimonialFilters, testimonialsLoaded, fetchTestimonials]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;

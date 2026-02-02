@@ -328,6 +328,12 @@ const negativeKeywords = [
  * @returns {object} - { score: number, label: string }
  */
 function analyzeSentiment(message, rating, sentimentAnalyzer) {
+  // Constants for negation detection
+  // We look back 30 characters to capture up to 5 words of context
+  // This handles phrases like "I never had a good experience"
+  const NEGATION_LOOKBACK_CHARS = 30;
+  const MAX_NEGATION_DISTANCE_WORDS = 5;
+  
   // Base sentiment from library
   const sentimentResult = sentimentAnalyzer.analyze(message);
   let sentimentScore = sentimentResult.score;
@@ -355,12 +361,12 @@ function analyzeSentiment(message, rating, sentimentAnalyzer) {
   
   // Helper function to check if a keyword is preceded by a negation word
   const isPrecededByNegation = (index, keyword) => {
-    // Look at up to 5 words (or 30 characters) before the keyword for better context
-    const beforeText = lowerMessage.substring(Math.max(0, index - 30), index).trim();
+    // Look back in the text to find negation words
+    const beforeText = lowerMessage.substring(Math.max(0, index - NEGATION_LOOKBACK_CHARS), index).trim();
     const words = beforeText.split(/\s+/);
     
-    // Check the last 1-5 words for negation to handle longer phrases
-    const recentWords = words.slice(-5);
+    // Check recent words for negation (allows for phrases with distance between negation and keyword)
+    const recentWords = words.slice(-MAX_NEGATION_DISTANCE_WORDS);
     return recentWords.some(word => negationWords.includes(word.replace(/[^\w']/g, '')));
   };
   
