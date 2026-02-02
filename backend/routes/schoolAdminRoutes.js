@@ -495,6 +495,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           dateOfBirth: parsedDateOfBirth,
           emailVerified: true,
           accountActive: true,
+          requirePasswordChange: true, // User must change password on first login
           createdBy: 'school-admin',
           createdAt: new Date()
         });
@@ -678,6 +679,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           gender: teacherData.gender?.trim() || null,
           emailVerified: true,
           accountActive: true,
+          requirePasswordChange: true, // User must change password on first login
           createdBy: 'school-admin'
         });
 
@@ -938,6 +940,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           ],
           emailVerified: true,
           accountActive: true,
+          requirePasswordChange: true, // User must change password on first login
           createdBy: 'school-admin',
           createdAt: new Date()
         });
@@ -1091,6 +1094,7 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       class: className || null,
       emailVerified: true,
       accountActive: true,
+      requirePasswordChange: true, // User must change password on first login
       createdBy: 'school-admin',
     });
     
