@@ -1037,12 +1037,32 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 // ==================== MANUAL CREATE USER ====================
 router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { name, email, role, gradeLevel, subject, gender, class: className, parentEmail } = req.body;
+    const { name, email, role: rawRole, gradeLevel, subject, gender, class: className, parentEmail } = req.body;
     
-    if (!name || !email || !role) {
+    if (!name || !email || !rawRole) {
       return res.status(400).json({ 
         success: false, 
         error: 'Name, email, and role are required' 
+      });
+    }
+    
+    // Normalize role to match User model enum (capitalize first letter)
+    const roleMap = {
+      'student': 'Student',
+      'teacher': 'Teacher',
+      'parent': 'Parent',
+      'Student': 'Student',
+      'Teacher': 'Teacher',
+      'Parent': 'Parent'
+    };
+    const role = roleMap[rawRole] || rawRole;
+    
+    // Validate that role is valid
+    const validRoles = ['Student', 'Teacher', 'Parent'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role: ${rawRole}. Valid roles are: student, teacher, parent`
       });
     }
     
@@ -1363,10 +1383,29 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Class name is required' });
     }
     
+    // Validate that school admin has a school ID
+    if (!schoolAdmin.schoolId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School admin must be associated with a school' 
+      });
+    }
+    
+    // Convert schoolId to ObjectId if it's a string
+    let schoolObjectId;
+    try {
+      schoolObjectId = new mongoose.Types.ObjectId(schoolAdmin.schoolId);
+    } catch (err) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid school ID format' 
+      });
+    }
+    
     // Check if class name already exists for this school
     const existingClass = await Class.findOne({
       class_name: name,
-      school_id: schoolAdmin.schoolId
+      school_id: schoolObjectId
     });
     
     if (existingClass) {
@@ -1380,7 +1419,7 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
       subjects: subjects || ['Mathematics'],
       teachers: teachers || [],
       students: students || [],
-      school_id: schoolAdmin.schoolId
+      school_id: schoolObjectId
     });
     
     await newClass.save();
