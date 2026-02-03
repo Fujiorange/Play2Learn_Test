@@ -8,6 +8,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
+const StudentQuiz = require('../models/StudentQuiz');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const Testimonial = require('../models/Testimonial');
@@ -784,18 +785,14 @@ router.get('/child/:studentId/performance', authenticateParent, async (req, res)
     console.log('📊 MathProfile data:', { currentProfile, streak, totalPoints });
 
     // 2. Get Quiz Results (for totalQuizzes, highestScore, recentQuizzes)
-    const allQuizzes = await Quiz.find({ 
+    // ✅ FIX: Query StudentQuiz collection (quiz attempts), not Quiz collection
+    const allQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
       quiz_type: 'regular'
     }).sort({ completed_at: -1 });
 
-    // ✅ FIX: Filter out unsubmitted quizzes (0/15 entries)
-    const quizzes = allQuizzes.filter(quiz => {
-      // A quiz is submitted if it has questions with student answers
-      return quiz.questions && quiz.questions.some(q => 
-        q.student_answer !== null && q.student_answer !== undefined
-      );
-    });
+    // ✅ FIX: Filter out unsubmitted quizzes (only count completed ones with scores > 0)
+    const quizzes = allQuizzes.filter(quiz => quiz.score > 0 && quiz.percentage > 0);
 
     const totalQuizzes = quizzes.length;
 

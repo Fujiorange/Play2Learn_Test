@@ -1,6 +1,6 @@
 // frontend/src/components/Parents/ViewChildPerformance.js
-// ✅ MINIMAL PARENT VIEW - Only 4 stat cards
-// ✅ Removed: Current Profile, Profile Progress, Quiz List
+// ✅ PARENT VIEW - Displays 5 stats matching student view
+// ✅ Stats: Current Profile, Quizzes Taken, Highest Score, Current Streak, Total Points
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -200,7 +200,8 @@ export default function ViewChildPerformance() {
     );
   }
 
-  // Extract only the 4 essential stats
+  // Extract the 5 essential stats (matching student view)
+  const currentProfile = performanceData?.currentProfile || 1;
   const totalQuizzes = performanceData?.totalQuizzes || 0;
   const highestScore = performanceData?.highestScore || 0;
   const streak = performanceData?.streak || 0;
@@ -233,7 +234,7 @@ export default function ViewChildPerformance() {
           )}
         </div>
 
-        {/* Only 4 Stat Cards - Nothing else */}
+        {/* Only 4 Stat Cards - Matching TrackProgress.js */}
         {hasData ? (
           <div style={styles.statsGrid}>
             <div 
