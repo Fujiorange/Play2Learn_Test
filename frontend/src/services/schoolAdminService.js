@@ -508,6 +508,109 @@ const schoolAdminService = {
       console.error('sendUserCredentials error:', error);
       return { success: false, error: error.message || 'Failed to send credentials' };
     }
+  },
+
+  // ==================== PARENT-STUDENT LINK MANAGEMENT ====================
+  async getParentStudents(parentId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/parents/${parentId}/students`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch parent students');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getParentStudents error:', error);
+      return { success: false, error: error.message || 'Failed to load parent students' };
+    }
+  },
+
+  async updateParentStudents(parentId, studentIds) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/parents/${parentId}/students`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ studentIds })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update parent students');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('updateParentStudents error:', error);
+      return { success: false, error: error.message || 'Failed to update parent-student links' };
+    }
+  },
+
+  async getStudentParent(studentId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/students/${studentId}/parent`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch student parent');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getStudentParent error:', error);
+      return { success: false, error: error.message || 'Failed to load student parent' };
+    }
+  },
+
+  async updateStudentParent(studentId, parentId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/students/${studentId}/parent`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ parentId })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update student parent');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('updateStudentParent error:', error);
+      return { success: false, error: error.message || 'Failed to update student-parent link' };
+    }
   }
 };
 

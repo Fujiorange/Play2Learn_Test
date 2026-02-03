@@ -660,6 +660,8 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           emailVerified: true,
           accountActive: true,
           requirePasswordChange: true, // User must change password on first login
+          tempPassword: tempPassword, // Store temp password for pending credentials page
+          credentialsSent: false, // Mark as not sent yet
           createdBy: 'school-admin',
           createdAt: new Date()
         });
@@ -668,26 +670,10 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         results.created++;
         studentsCreatedCount++; // Track for batch update
 
-        // ✅ FIXED: Send credentials email with correct parameter order
-        if (studentData.parentEmail) {
-          try {
-            const schoolName = schoolData.organization_name || 'Your School';
-            
-            await sendStudentCredentialsToParent(
-              newUser,                    // 1. student object (has .name, .email, .class)
-              tempPassword,               // 2. tempPassword string
-              studentData.parentEmail,    // 3. parentEmail string
-              schoolName                  // 4. schoolName string
-            );
-            console.log(`📧 Sent credentials to parent: ${studentData.parentEmail}`);
-            results.emailsSent++;
-          } catch (emailError) {
-            console.error(`❌ Failed to send email to parent:`, emailError.message);
-            results.emailsFailed++;
-          }
-        } else {
-          results.emailsFailed++;
-        }
+        // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
+        // The school admin can manually decide when to send credentials via that page
+        console.log(`📋 Credentials saved to pending page for: ${newUser.email}`);
+        results.emailsFailed++; // Count as not sent (available on pending page)
 
       } catch (error) {
         console.error(`❌ Error creating student:`, error);
@@ -844,6 +830,8 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           emailVerified: true,
           accountActive: true,
           requirePasswordChange: true, // User must change password on first login
+          tempPassword: tempPassword, // Store temp password for pending credentials page
+          credentialsSent: false, // Mark as not sent yet
           createdBy: 'school-admin'
         });
 
@@ -851,19 +839,10 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
         results.created++;
         teachersCreatedCount++; // Track for batch update
 
-        try {
-          const schoolName = schoolData.organization_name || 'Your School';
-          
-          await sendTeacherWelcomeEmail(
-            newTeacher,
-            tempPassword,
-            schoolName
-          );
-          results.emailsSent++;
-        } catch (emailError) {
-          console.error(`❌ Failed to send email:`, emailError.message);
-          results.emailsFailed++;
-        }
+        // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
+        // The school admin can manually decide when to send credentials via that page
+        console.log(`📋 Credentials saved to pending page for: ${newTeacher.email}`);
+        results.emailsFailed++; // Count as not sent (available on pending page)
 
       } catch (error) {
         console.error(`❌ Error creating teacher:`, error);
@@ -1119,6 +1098,8 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           emailVerified: true,
           accountActive: true,
           requirePasswordChange: true, // User must change password on first login
+          tempPassword: tempPassword, // Store temp password for pending credentials page
+          credentialsSent: false, // Mark as not sent yet
           createdBy: 'school-admin',
           createdAt: new Date()
         });
@@ -1133,20 +1114,10 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           console.log(`✅ Updated student's parentEmail field`);
         }
 
-        // Send welcome email to parent
-        try {
-          await sendParentWelcomeEmail(
-            newParent,
-            tempPassword,
-            student.name,
-            schoolName
-          );
-          console.log(`📧 Sent welcome email to: ${newParent.email}`);
-          results.emailsSent++;
-        } catch (emailError) {
-          console.error(`❌ Failed to send email to parent:`, emailError.message);
-          results.emailsFailed++;
-        }
+        // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
+        // The school admin can manually decide when to send credentials via that page
+        console.log(`📋 Credentials saved to pending page for: ${newParent.email}`);
+        results.emailsFailed++; // Count as not sent (available on pending page)
 
         results.details.push({
           row: rowNum,
@@ -1157,7 +1128,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           relationship: parentData.relationship,
           password: tempPassword,
           status: 'created',
-          message: 'New parent account created and linked to student'
+          message: 'New parent account created and linked to student. Credentials available on Pending Credentials page.'
         });
 
       } catch (error) {
@@ -1510,67 +1481,23 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       );
     }
     
-    // Send credentials via email
-    let emailSent = false;
-    try {
-      const schoolData = await School.findById(schoolAdmin.schoolId);
-      const schoolName = schoolData ? schoolData.organization_name : 'Your School';
-      
-      if (role === 'Teacher') {
-        await sendTeacherWelcomeEmail(newUser, tempPassword, schoolName);
-        emailSent = true;
-      } else if (role === 'Student') {
-        if (parentEmail) {
-          await sendStudentCredentialsToParent(newUser, tempPassword, parentEmail, schoolName);
-          emailSent = true;
-        }
-      } else if (role === 'Parent') {
-        // Get the first linked student's name for the email
-        let studentName = 'your child';
-        if (linkedStudents && linkedStudents.length > 0) {
-          try {
-            const firstStudent = await User.findById(linkedStudents[0]);
-            if (firstStudent && firstStudent.name) {
-              studentName = firstStudent.name;
-            }
-            // If student exists but has no name, keep default 'your child'
-          } catch (err) {
-            console.error('Error fetching student name:', err);
-            // On lookup error, keep default fallback
-          }
-        }
-        await sendParentWelcomeEmail(newUser, tempPassword, studentName, schoolName);
-        emailSent = true;
-      }
-      
-      // Mark credentials as sent and clear temp password if email was successful
-      if (emailSent) {
-        await User.findByIdAndUpdate(newUser._id, {
-          credentialsSent: true,
-          credentialsSentAt: new Date(),
-          tempPassword: null // Clear temp password after sending
-        });
-      }
-    } catch (emailError) {
-      console.error('Email sending error:', emailError);
-      emailSent = false;
-      // Continue even if email fails - user is still created
-    }
+    // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
+    // The school admin can manually decide when to send credentials via that page
+    // tempPassword is stored in the user record and displayed on the pending credentials page
     
     res.status(201).json({
       success: true,
-      message: 'User created successfully',
+      message: 'User created successfully. Credentials are available on the Pending Credentials page.',
       user: {
         id: newUser._id,
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
-        tempPassword: tempPassword // Return temp password so admin can share it if email fails
+        tempPassword: tempPassword // Return temp password so admin can view/share it
       },
-      emailSent: emailSent,
-      warning: !emailSent && role === 'Student' && !parentEmail 
-        ? 'No parent email provided. Please share the credentials manually with the student.' 
-        : (!emailSent ? 'Email sending failed. Please share the credentials manually.' : null)
+      emailSent: false,
+      credentialsPending: true,
+      info: 'Login credentials have been saved and are available on the Pending Credentials page. You can send the email from there when ready.'
     });
   } catch (error) {
     console.error('Create user error:', error);
@@ -1687,31 +1614,26 @@ router.post('/users/create-or-link-parent', authenticateSchoolAdmin, async (req,
       emailVerified: true,
       accountActive: true,
       requirePasswordChange: true,
+      tempPassword: tempPassword, // Store temp password for pending credentials page
+      credentialsSent: false, // Mark as not sent yet
       createdBy: 'school-admin'
     });
     
-    // Try to send welcome email
-    let emailSent = false;
-    try {
-      const schoolData = await School.findById(schoolAdmin.schoolId);
-      const schoolName = schoolData ? schoolData.organization_name : 'Your School';
-      await sendParentWelcomeEmail(newParent, tempPassword, student.name, schoolName);
-      emailSent = true;
-    } catch (emailError) {
-      console.error('Email sending error:', emailError);
-    }
+    // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
+    // The school admin can manually decide when to send credentials via that page
     
     res.status(201).json({
       success: true,
       isExisting: false,
-      message: 'Parent account created and linked to student',
+      message: 'Parent account created and linked to student. Credentials available on Pending Credentials page.',
       parent: {
         id: newParent._id,
         name: newParent.name,
         email: newParent.email,
         tempPassword: tempPassword
       },
-      emailSent
+      emailSent: false,
+      credentialsPending: true
     });
     
   } catch (error) {
@@ -2750,6 +2672,228 @@ router.post('/placement-quizzes/:quizId/revoke', authenticateSchoolAdmin, async 
   } catch (error) {
     console.error('❌ Revoke placement quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to revoke placement quiz' });
+  }
+});
+
+// ==================== PARENT-STUDENT LINK MANAGEMENT ====================
+
+// GET all students for a parent (for managing children)
+router.get('/parents/:parentId/students', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { parentId } = req.params;
+    
+    const parent = await User.findById(parentId);
+    if (!parent) {
+      return res.status(404).json({ success: false, error: 'Parent not found' });
+    }
+    
+    if (String(parent.schoolId) !== String(schoolAdmin.schoolId)) {
+      return res.status(403).json({ success: false, error: 'You can only manage users from your school' });
+    }
+    
+    // Get linked students with details
+    const linkedStudentIds = parent.linkedStudents?.map(ls => ls.studentId) || [];
+    const linkedStudents = await User.find({
+      _id: { $in: linkedStudentIds },
+      role: 'Student'
+    }).select('_id name email class gradeLevel');
+    
+    // Get all students in the school that are NOT linked to this parent
+    const availableStudents = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      role: 'Student',
+      _id: { $nin: linkedStudentIds }
+    }).select('_id name email class gradeLevel');
+    
+    res.json({
+      success: true,
+      linkedStudents: linkedStudents.map(s => ({
+        id: s._id,
+        name: s.name,
+        email: s.email,
+        className: s.class || 'Not assigned',
+        gradeLevel: s.gradeLevel || 'N/A'
+      })),
+      availableStudents: availableStudents.map(s => ({
+        id: s._id,
+        name: s.name,
+        email: s.email,
+        className: s.class || 'Not assigned',
+        gradeLevel: s.gradeLevel || 'N/A'
+      }))
+    });
+  } catch (error) {
+    console.error('Get parent students error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load students' });
+  }
+});
+
+// PUT update parent's linked students (add/remove children)
+router.put('/parents/:parentId/students', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { parentId } = req.params;
+    const { studentIds } = req.body; // Array of student IDs to link
+    
+    if (!Array.isArray(studentIds)) {
+      return res.status(400).json({ success: false, error: 'studentIds must be an array' });
+    }
+    
+    const parent = await User.findById(parentId);
+    if (!parent) {
+      return res.status(404).json({ success: false, error: 'Parent not found' });
+    }
+    
+    if (String(parent.schoolId) !== String(schoolAdmin.schoolId)) {
+      return res.status(403).json({ success: false, error: 'You can only manage users from your school' });
+    }
+    
+    // Verify all students exist and belong to this school
+    const students = await User.find({
+      _id: { $in: studentIds },
+      schoolId: schoolAdmin.schoolId,
+      role: 'Student'
+    });
+    
+    if (students.length !== studentIds.length) {
+      return res.status(400).json({ success: false, error: 'Some students were not found or do not belong to your school' });
+    }
+    
+    // Update parent's linkedStudents
+    parent.linkedStudents = studentIds.map(studentId => ({
+      studentId: studentId,
+      relationship: 'Parent'
+    }));
+    
+    await parent.save();
+    
+    res.json({
+      success: true,
+      message: 'Parent-student links updated successfully',
+      linkedCount: studentIds.length
+    });
+  } catch (error) {
+    console.error('Update parent students error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update parent-student links' });
+  }
+});
+
+// GET parent linked to a student
+router.get('/students/:studentId/parent', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { studentId } = req.params;
+    
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+    
+    if (String(student.schoolId) !== String(schoolAdmin.schoolId)) {
+      return res.status(403).json({ success: false, error: 'You can only manage users from your school' });
+    }
+    
+    // Find parent linked to this student
+    const linkedParent = await User.findOne({
+      'linkedStudents.studentId': studentId,
+      role: 'Parent'
+    }).select('_id name email contact');
+    
+    // Get all parents in the school
+    const availableParents = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      role: 'Parent'
+    }).select('_id name email contact');
+    
+    res.json({
+      success: true,
+      linkedParent: linkedParent ? {
+        id: linkedParent._id,
+        name: linkedParent.name,
+        email: linkedParent.email,
+        contact: linkedParent.contact || 'N/A'
+      } : null,
+      availableParents: availableParents.map(p => ({
+        id: p._id,
+        name: p.name,
+        email: p.email,
+        contact: p.contact || 'N/A'
+      }))
+    });
+  } catch (error) {
+    console.error('Get student parent error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load parent information' });
+  }
+});
+
+// PUT update student's linked parent (student can only have 1 parent)
+router.put('/students/:studentId/parent', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { studentId } = req.params;
+    const { parentId } = req.body; // Can be null to unlink, or a parent ID to link
+    
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+    
+    if (String(student.schoolId) !== String(schoolAdmin.schoolId)) {
+      return res.status(403).json({ success: false, error: 'You can only manage users from your school' });
+    }
+    
+    // Remove student from any existing parent
+    await User.updateMany(
+      { 
+        role: 'Parent',
+        'linkedStudents.studentId': studentId
+      },
+      { 
+        $pull: { linkedStudents: { studentId: studentId } }
+      }
+    );
+    
+    // If a new parent is specified, link to them
+    if (parentId) {
+      const newParent = await User.findById(parentId);
+      if (!newParent) {
+        return res.status(404).json({ success: false, error: 'Parent not found' });
+      }
+      
+      if (newParent.role !== 'Parent') {
+        return res.status(400).json({ success: false, error: 'Selected user is not a parent' });
+      }
+      
+      // Add student to new parent's linkedStudents
+      await User.findByIdAndUpdate(parentId, {
+        $addToSet: {
+          linkedStudents: {
+            studentId: studentId,
+            relationship: 'Parent'
+          }
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Student linked to parent successfully',
+        parent: {
+          id: newParent._id,
+          name: newParent.name,
+          email: newParent.email
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        message: 'Student unlinked from parent successfully',
+        parent: null
+      });
+    }
+  } catch (error) {
+    console.error('Update student parent error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update student-parent link' });
   }
 });
 

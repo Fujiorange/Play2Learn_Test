@@ -18,6 +18,14 @@ export default function ParentManagement() {
   const [resetting, setResetting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  
+  // Manage Children Modal State
+  const [manageChildrenParent, setManageChildrenParent] = useState(null);
+  const [linkedStudents, setLinkedStudents] = useState([]);
+  const [availableStudents, setAvailableStudents] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [savingChildren, setSavingChildren] = useState(false);
+  const [loadingChildren, setLoadingChildren] = useState(false);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -138,6 +146,58 @@ export default function ParentManagement() {
     return parent.linkedStudents ? parent.linkedStudents.length : 0;
   };
 
+  // Manage Children Modal Functions
+  const handleOpenManageChildren = async (parent) => {
+    setManageChildrenParent(parent);
+    setLoadingChildren(true);
+    try {
+      const result = await schoolAdminService.getParentStudents(parent.id);
+      if (result.success) {
+        setLinkedStudents(result.linkedStudents || []);
+        setAvailableStudents(result.availableStudents || []);
+        // Initialize selected students with currently linked ones
+        setSelectedStudentIds((result.linkedStudents || []).map(s => s.id));
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load children data' });
+        setManageChildrenParent(null);
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to load children data' });
+      setManageChildrenParent(null);
+    } finally {
+      setLoadingChildren(false);
+    }
+  };
+
+  const handleToggleStudent = (studentId) => {
+    setSelectedStudentIds(prev => 
+      prev.includes(studentId) 
+        ? prev.filter(id => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const handleSaveChildren = async () => {
+    if (!manageChildrenParent) return;
+    setSavingChildren(true);
+    try {
+      const result = await schoolAdminService.updateParentStudents(manageChildrenParent.id, selectedStudentIds);
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Children updated successfully' });
+        setManageChildrenParent(null);
+        // Reload parents to reflect changes
+        loadParents();
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to update children' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update children' });
+    } finally {
+      setSavingChildren(false);
+    }
+  };
+
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     header: { background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 0' },
@@ -155,9 +215,11 @@ export default function ParentManagement() {
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
     viewButton: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
+    manageChildrenButton: { padding: '6px 12px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
     resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '500px', width: '90%', maxHeight: '90vh', overflow: 'auto' },
+    modalContentWide: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '700px', width: '90%', maxHeight: '90vh', overflow: 'auto' },
     modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '24px' },
     detailRow: { display: 'flex', marginBottom: '16px', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' },
     detailLabel: { width: '140px', fontSize: '14px', fontWeight: '600', color: '#6b7280' },
@@ -171,6 +233,7 @@ export default function ParentManagement() {
     modalButtons: { display: 'flex', gap: '12px', marginTop: '16px' },
     cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    saveButtonGreen: { flex: 1, padding: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     deleteButton: { padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginLeft: '8px' },
     deleteConfirmButton: { flex: 1, padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     successCard: { background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '12px', padding: '24px', marginBottom: '16px' },
@@ -184,6 +247,16 @@ export default function ParentManagement() {
     warningText: { fontSize: '13px', color: '#dc2626', marginBottom: '16px', fontWeight: '500' },
     infoText: { fontSize: '13px', color: '#6b7280', marginBottom: '16px' },
     childItem: { display: 'block', marginBottom: '8px' },
+    // Manage Children Modal Styles
+    sectionTitle: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px', marginTop: '16px' },
+    studentList: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' },
+    studentItem: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '6px', cursor: 'pointer' },
+    studentItemSelected: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', cursor: 'pointer', border: '2px solid #3b82f6' },
+    checkbox: { width: '18px', height: '18px', cursor: 'pointer' },
+    studentInfo: { flex: 1 },
+    studentName: { fontWeight: '600', fontSize: '14px', color: '#1f2937' },
+    studentDetails: { fontSize: '12px', color: '#6b7280' },
+    emptyList: { textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '14px' },
   };
 
   return (
@@ -241,6 +314,9 @@ export default function ParentManagement() {
                       <td style={styles.td}>
                         <button style={styles.viewButton} onClick={() => setSelectedParent(parent)}>
                           View
+                        </button>
+                        <button style={styles.manageChildrenButton} onClick={() => handleOpenManageChildren(parent)}>
+                          👨‍👧 Manage Children
                         </button>
                         <button style={styles.resetButton} onClick={() => setResetPasswordUser(parent)}>
                           Reset Password
@@ -445,6 +521,66 @@ export default function ParentManagement() {
                 {deleting ? 'Deleting...' : 'Delete Parent'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Children Modal */}
+      {manageChildrenParent && (
+        <div style={styles.modal} onClick={() => setManageChildrenParent(null)}>
+          <div style={styles.modalContentWide} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>👨‍👧 Manage Children for {manageChildrenParent.name}</h2>
+            
+            {loadingChildren ? (
+              <div style={styles.loadingText}>Loading children data...</div>
+            ) : (
+              <>
+                <p style={styles.infoText}>
+                  Select the students to link to this parent. A parent can have multiple children linked.
+                </p>
+
+                <div style={styles.sectionTitle}>📋 Currently Linked Children ({selectedStudentIds.length})</div>
+                <div style={styles.studentList}>
+                  {linkedStudents.length === 0 && availableStudents.length === 0 ? (
+                    <div style={styles.emptyList}>No students available in the school</div>
+                  ) : (
+                    [...linkedStudents, ...availableStudents].map(student => (
+                      <div 
+                        key={student.id}
+                        style={selectedStudentIds.includes(student.id) ? styles.studentItemSelected : styles.studentItem}
+                        onClick={() => handleToggleStudent(student.id)}
+                      >
+                        <input 
+                          type="checkbox"
+                          checked={selectedStudentIds.includes(student.id)}
+                          onChange={() => {}}
+                          style={styles.checkbox}
+                        />
+                        <div style={styles.studentInfo}>
+                          <div style={styles.studentName}>{student.name}</div>
+                          <div style={styles.studentDetails}>
+                            {student.email} • {student.className} • {student.gradeLevel}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div style={styles.modalButtons}>
+                  <button style={styles.cancelButton} onClick={() => setManageChildrenParent(null)}>
+                    Cancel
+                  </button>
+                  <button 
+                    style={{ ...styles.saveButtonGreen, opacity: savingChildren ? 0.7 : 1 }}
+                    onClick={handleSaveChildren}
+                    disabled={savingChildren}
+                  >
+                    {savingChildren ? 'Saving...' : '✓ Save Changes'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

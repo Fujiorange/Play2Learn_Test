@@ -18,6 +18,14 @@ export default function StudentManagement() {
   const [resetting, setResetting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  
+  // Link Parent Modal State
+  const [linkParentStudent, setLinkParentStudent] = useState(null);
+  const [linkedParent, setLinkedParent] = useState(null);
+  const [availableParents, setAvailableParents] = useState([]);
+  const [selectedParentId, setSelectedParentId] = useState(null);
+  const [savingParent, setSavingParent] = useState(false);
+  const [loadingParentData, setLoadingParentData] = useState(false);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -134,6 +142,54 @@ export default function StudentManagement() {
     }
   };
 
+  // Link Parent Modal Functions
+  const handleOpenLinkParent = async (student) => {
+    setLinkParentStudent(student);
+    setLoadingParentData(true);
+    try {
+      const result = await schoolAdminService.getStudentParent(student.id);
+      if (result.success) {
+        setLinkedParent(result.linkedParent);
+        setAvailableParents(result.availableParents || []);
+        // Initialize selected parent with currently linked one
+        setSelectedParentId(result.linkedParent ? result.linkedParent.id : null);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load parent data' });
+        setLinkParentStudent(null);
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to load parent data' });
+      setLinkParentStudent(null);
+    } finally {
+      setLoadingParentData(false);
+    }
+  };
+
+  const handleSelectParent = (parentId) => {
+    setSelectedParentId(parentId === selectedParentId ? null : parentId);
+  };
+
+  const handleSaveParent = async () => {
+    if (!linkParentStudent) return;
+    setSavingParent(true);
+    try {
+      const result = await schoolAdminService.updateStudentParent(linkParentStudent.id, selectedParentId);
+      if (result.success) {
+        setMessage({ type: 'success', text: selectedParentId ? 'Parent linked successfully' : 'Parent unlinked successfully' });
+        setLinkParentStudent(null);
+        // Reload students to reflect changes
+        loadStudents();
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to update parent link' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update parent link' });
+    } finally {
+      setSavingParent(false);
+    }
+  };
+
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     header: { background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 0' },
@@ -151,9 +207,11 @@ export default function StudentManagement() {
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
     viewButton: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
+    linkParentButton: { padding: '6px 12px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
     resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '500px', width: '90%', maxHeight: '90vh', overflow: 'auto' },
+    modalContentWide: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '600px', width: '90%', maxHeight: '90vh', overflow: 'auto' },
     modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '24px' },
     detailRow: { display: 'flex', marginBottom: '16px', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' },
     detailLabel: { width: '140px', fontSize: '14px', fontWeight: '600', color: '#6b7280' },
@@ -167,6 +225,7 @@ export default function StudentManagement() {
     modalButtons: { display: 'flex', gap: '12px', marginTop: '16px' },
     cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    saveButtonGreen: { flex: 1, padding: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     deleteButton: { padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginLeft: '8px' },
     deleteConfirmButton: { flex: 1, padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     successCard: { background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '12px', padding: '24px', marginBottom: '16px' },
@@ -179,6 +238,18 @@ export default function StudentManagement() {
     viewPasswordButton: { padding: '8px 16px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     warningText: { fontSize: '13px', color: '#dc2626', marginBottom: '16px', fontWeight: '500' },
     infoText: { fontSize: '13px', color: '#6b7280', marginBottom: '16px' },
+    // Link Parent Modal Styles
+    sectionTitle: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px', marginTop: '16px' },
+    parentList: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' },
+    parentItem: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '6px', cursor: 'pointer' },
+    parentItemSelected: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', cursor: 'pointer', border: '2px solid #3b82f6' },
+    radio: { width: '18px', height: '18px', cursor: 'pointer' },
+    parentInfo: { flex: 1 },
+    parentName: { fontWeight: '600', fontSize: '14px', color: '#1f2937' },
+    parentDetails: { fontSize: '12px', color: '#6b7280' },
+    emptyList: { textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '14px' },
+    currentParentBadge: { marginLeft: '8px', padding: '2px 8px', background: '#d1fae5', color: '#065f46', borderRadius: '4px', fontSize: '11px', fontWeight: '600' },
+    unlinkOption: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#fef2f2', borderRadius: '6px', cursor: 'pointer', marginBottom: '8px', border: selectedParentId === null ? '2px solid #ef4444' : '1px solid #fecaca' },
   };
 
   return (
@@ -238,6 +309,9 @@ export default function StudentManagement() {
                       <td style={styles.td}>
                         <button style={styles.viewButton} onClick={() => setSelectedStudent(student)}>
                           View
+                        </button>
+                        <button style={styles.linkParentButton} onClick={() => handleOpenLinkParent(student)}>
+                          👨‍👩‍👧 Link Parent
                         </button>
                         <button style={styles.resetButton} onClick={() => setResetPasswordUser(student)}>
                           Reset Password
@@ -449,6 +523,101 @@ export default function StudentManagement() {
                 {deleting ? 'Deleting...' : 'Delete Student'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Parent Modal */}
+      {linkParentStudent && (
+        <div style={styles.modal} onClick={() => setLinkParentStudent(null)}>
+          <div style={styles.modalContentWide} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>👨‍👩‍👧 Link Parent to {linkParentStudent.name}</h2>
+            
+            {loadingParentData ? (
+              <div style={styles.loadingText}>Loading parent data...</div>
+            ) : (
+              <>
+                <p style={styles.infoText}>
+                  Select a parent to link to this student. Each student can only be linked to one parent.
+                </p>
+
+                {linkedParent && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={styles.sectionTitle}>📋 Currently Linked Parent</div>
+                    <div style={{ padding: '12px', background: '#d1fae5', borderRadius: '8px', border: '2px solid #10b981' }}>
+                      <div style={styles.parentName}>{linkedParent.name}</div>
+                      <div style={styles.parentDetails}>{linkedParent.email}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.sectionTitle}>👨‍👩‍👧 Available Parents</div>
+                
+                {/* Option to unlink */}
+                {linkedParent && (
+                  <div 
+                    style={styles.unlinkOption}
+                    onClick={() => setSelectedParentId(null)}
+                  >
+                    <input 
+                      type="radio"
+                      checked={selectedParentId === null}
+                      onChange={() => {}}
+                      style={styles.radio}
+                    />
+                    <div style={styles.parentInfo}>
+                      <div style={{ ...styles.parentName, color: '#dc2626' }}>❌ Unlink Parent</div>
+                      <div style={styles.parentDetails}>Remove parent link from this student</div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.parentList}>
+                  {availableParents.length === 0 ? (
+                    <div style={styles.emptyList}>No parents available in the school</div>
+                  ) : (
+                    availableParents.map(parent => (
+                      <div 
+                        key={parent.id}
+                        style={selectedParentId === parent.id ? styles.parentItemSelected : styles.parentItem}
+                        onClick={() => handleSelectParent(parent.id)}
+                      >
+                        <input 
+                          type="radio"
+                          checked={selectedParentId === parent.id}
+                          onChange={() => {}}
+                          style={styles.radio}
+                        />
+                        <div style={styles.parentInfo}>
+                          <div style={styles.parentName}>
+                            {parent.name}
+                            {linkedParent && linkedParent.id === parent.id && (
+                              <span style={styles.currentParentBadge}>Current</span>
+                            )}
+                          </div>
+                          <div style={styles.parentDetails}>
+                            {parent.email} {parent.contact && parent.contact !== 'N/A' ? `• ${parent.contact}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div style={styles.modalButtons}>
+                  <button style={styles.cancelButton} onClick={() => setLinkParentStudent(null)}>
+                    Cancel
+                  </button>
+                  <button 
+                    style={{ ...styles.saveButtonGreen, opacity: savingParent ? 0.7 : 1 }}
+                    onClick={handleSaveParent}
+                    disabled={savingParent}
+                  >
+                    {savingParent ? 'Saving...' : '✓ Save Changes'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
