@@ -7,7 +7,7 @@ export default function BulkUploadCSV() {
   const navigate = useNavigate();
   
   const [file, setFile] = useState(null);
-  const [userType, setUserType] = useState('student');
+  const [userType, setUserType] = useState('all');
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -30,21 +30,10 @@ export default function BulkUploadCSV() {
   };
 
   const downloadTemplate = () => {
-    let csvTemplate = '';
-    
-    if (userType === 'student') {
-      csvTemplate = `Name,Email,Class,GradeLevel,ParentEmail,ContactNumber,Gender,DateOfBirth
-John Tan,john.tan@student.com,1A,Primary 1,parent.tan@email.com,+6591234567,male,15/03/2019
-Mary Lim,mary.lim@student.com,1B,Primary 1,parent.lim@email.com,+6598765432,female,22/07/2019`;
-    } else if (userType === 'teacher') {
-      csvTemplate = `Name,Email,Subject,ContactNumber,Gender,DateOfBirth
-Mr. David Lee,david.lee@teacher.com,Mathematics,+6591234567,male,15/03/1985
-Ms. Sarah Wong,sarah.wong@teacher.com,Mathematics,+6598765432,female,22/07/1990`;
-    } else if (userType === 'parent') {
-      csvTemplate = `ParentName,ParentEmail,StudentEmail,Relationship,ContactNumber,Gender
-Mr. Tan Wei Ming,parent.tan@email.com,john.tan@student.com,Father,+6591234567,male
-Mrs. Lim Mei Ling,parent.lim@email.com,mary.lim@student.com,Mother,+6598765432,female`;
-    }
+    const csvTemplate = `Name,Email,Role,Class,GradeLevel,ParentEmail,StudentEmail,Relationship,Subject,ContactNumber,Gender,DateOfBirth
+John Tan,john.tan@student.com,Student,1A,Primary 1,parent.tan@email.com,,,Mathematics,+6591234567,male,2019-03-15
+Mr. David Lee,david.lee@teacher.com,Teacher,,, , ,Mathematics,+6591234567,male,1985-03-15
+Mrs. Lim Mei Ling,parent.lim@email.com,Parent,, , ,john.tan@student.com,Mother,,+6598765432,female,1980-07-22`;
 
     const blob = new Blob([csvTemplate], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -90,7 +79,7 @@ Mrs. Lim Mei Ling,parent.lim@email.com,mary.lim@student.com,Mother,+6598765432,f
 
     try {
       // REAL API CALL - Uploads to database!
-      const response = await schoolAdminService.bulkUploadUsers(file, userType);
+      const response = await schoolAdminService.bulkUploadUsers(file);
 
       if (response.success) {
         // ✅ FIXED: Handle both response structures
@@ -219,28 +208,26 @@ Mrs. Lim Mei Ling,parent.lim@email.com,mary.lim@student.com,Mother,+6598765432,f
       <main style={styles.main}>
         <h1 style={styles.pageTitle}>Bulk Upload Users (CSV)</h1>
         <p style={styles.pageSubtitle}>
-          Upload multiple Primary 1 Mathematics users at once using a CSV file.
+           Upload multiple users at once using a single CSV file with roles defined per row.
         </p>
 
         <div style={styles.card}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>User Type</label>
-            <select
-              value={userType}
-              onChange={(e) => {
-                setUserType(e.target.value);
-                setFile(null);
-                setResult(null);
-                setError('');
-              }}
-              style={styles.select}
-              disabled={uploading}
-            >
-              <option value="student">Students</option>
-              <option value="teacher">Teachers</option>
-              <option value="parent">Parents</option>
-            </select>
-          </div>
+             <div style={styles.formGroup}>
+               <label style={styles.label}>User Type</label>
+               <select
+                 value={userType}
+                 onChange={(e) => {
+                   setUserType(e.target.value);
+                   setFile(null);
+                   setResult(null);
+                   setError('');
+                 }}
+                 style={styles.select}
+                 disabled={uploading}
+               >
+                 <option value="all">All Roles (mixed CSV)</option>
+               </select>
+             </div>
 
           <div style={styles.infoBox}>
             {getInfoContent()}
@@ -302,9 +289,6 @@ Mrs. Lim Mei Ling,parent.lim@email.com,mary.lim@student.com,Mother,+6598765432,f
               <div style={styles.successBox}>
                 <div style={styles.successTitle}>✅ Upload Complete!</div>
                 <div style={styles.successStats}>📊 Created: {result.created} users</div>
-                {result.updated > 0 && (
-                  <div style={styles.successStats}>🔄 Updated (linked): {result.updated} users</div>
-                )}
                 {result.failed > 0 && (
                   <div style={styles.successStats}>⚠️ Failed: {result.failed} users</div>
                 )}

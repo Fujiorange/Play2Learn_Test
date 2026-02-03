@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import schoolAdminService from '../../services/schoolAdminService';
 
-export default function ResetPassword() {
+export default function ParentManagement() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
+  const [parents, setParents] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedParent, setSelectedParent] = useState(null);
+  const [viewingChild, setViewingChild] = useState(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState(null);
   const [resetResult, setResetResult] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordViewed, setPasswordViewed] = useState(false);
@@ -27,54 +29,66 @@ export default function ResetPassword() {
       return;
     }
 
-    loadUsers();
+    loadParents();
   }, [navigate]);
 
-  const loadUsers = async () => {
+  const loadParents = async () => {
     setLoading(true);
     try {
-      // REAL API CALL - Fetches from database!
-      const result = await schoolAdminService.getUsers({
-        gradeLevel: 'Primary 1',
-        subject: 'Mathematics'
-      });
-
+      const result = await schoolAdminService.getUsers({ role: 'Parent' });
       if (result.success) {
-        // Filter out school-admin users
-        const filteredUsers = (result.users || []).filter(u => u.role !== 'school-admin' && u.role !== 'School Admin');
-        setUsers(filteredUsers);
+        setParents(result.users || []);
       } else {
-        console.error('Failed to load users:', result.error);
-        setMessage({ type: 'error', text: result.error || 'Failed to load users' });
+        setMessage({ type: 'error', text: result.error || 'Failed to load parents' });
       }
     } catch (error) {
-      console.error('Error loading users:', error);
-      setMessage({ type: 'error', text: 'Failed to load users' });
+      console.error('Error loading parents:', error);
+      setMessage({ type: 'error', text: 'Failed to load parents' });
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredParents = parents.filter(p =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleReset = async () => {
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB'); // dd/mm/yyyy format
+  };
+
+  const handleViewChildProfile = async (child) => {
+    if (child && child.studentId) {
+      try {
+        const result = await schoolAdminService.getUserDetails(child.studentId);
+        if (result.success) {
+          setViewingChild(result.user);
+          setSelectedParent(null);
+        } else {
+          setMessage({ type: 'error', text: 'Failed to load child profile' });
+        }
+      } catch (error) {
+        setMessage({ type: 'error', text: 'Failed to load child profile' });
+      }
+    }
+  };
+
+  const handleResetPassword = async () => {
     setResetting(true);
     try {
-      // REAL API CALL - Resets password and generates new temp password!
-      const result = await schoolAdminService.resetUserPassword(selectedUser.id);
-
+      const result = await schoolAdminService.resetUserPassword(resetPasswordUser.id);
       if (result.success) {
         setResetResult({
           tempPassword: result.tempPassword,
-          name: result.name || selectedUser.name,
-          email: result.email || selectedUser.email
+          name: result.name || resetPasswordUser.name,
+          email: result.email || resetPasswordUser.email
         });
         setShowPassword(false);
         setPasswordViewed(false);
-        setMessage({ type: 'success', text: `Password reset successfully for ${selectedUser.name}` });
+        setMessage({ type: 'success', text: `Password reset successfully for ${resetPasswordUser.name}` });
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
       }
@@ -90,13 +104,16 @@ export default function ResetPassword() {
     setPasswordViewed(true);
   };
 
-  const handleCloseModal = () => {
-    setSelectedUser(null);
+  const handleCloseResetModal = () => {
+    setResetPasswordUser(null);
     setResetResult(null);
     setShowPassword(false);
     setPasswordViewed(false);
-    // Clear success message after a delay
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  const getLinkedChildrenCount = (parent) => {
+    return parent.linkedStudents ? parent.linkedStudents.length : 0;
   };
 
   const styles = {
@@ -107,7 +124,7 @@ export default function ResetPassword() {
     logoIcon: { width: '40px', height: '40px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' },
     logoText: { fontSize: '20px', fontWeight: '700', color: '#1f2937' },
     backButton: { padding: '8px 16px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    main: { maxWidth: '1000px', margin: '0 auto', padding: '32px' },
+    main: { maxWidth: '1200px', margin: '0 auto', padding: '32px' },
     pageTitle: { fontSize: '28px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' },
     pageSubtitle: { fontSize: '15px', color: '#6b7280', marginBottom: '32px' },
     card: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
@@ -115,20 +132,23 @@ export default function ResetPassword() {
     table: { width: '100%', borderCollapse: 'collapse' },
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
+    viewButton: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
     resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '500px', width: '90%' },
+    modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '500px', width: '90%', maxHeight: '90vh', overflow: 'auto' },
     modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '24px' },
-    label: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' },
-    input: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '24px' },
-    modalButtons: { display: 'flex', gap: '12px' },
-    cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    detailRow: { display: 'flex', marginBottom: '16px', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' },
+    detailLabel: { width: '140px', fontSize: '14px', fontWeight: '600', color: '#6b7280' },
+    detailValue: { flex: 1, fontSize: '14px', color: '#1f2937' },
+    linkButton: { background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px', padding: 0 },
+    closeButton: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginTop: '16px' },
     message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     loadingText: { textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '16px' },
-    // New styles for password display
+    modalButtons: { display: 'flex', gap: '12px', marginTop: '16px' },
+    cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     successCard: { background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '12px', padding: '24px', marginBottom: '16px' },
     successTitle: { fontSize: '18px', fontWeight: '700', color: '#16a34a', marginBottom: '16px' },
     credentialsBox: { background: 'white', border: '2px solid #d1d5db', borderRadius: '8px', padding: '16px', marginBottom: '16px' },
@@ -136,9 +156,10 @@ export default function ResetPassword() {
     credentialsValue: { fontSize: '16px', fontWeight: '600', color: '#1f2937', fontFamily: 'monospace' },
     passwordSection: { background: '#f3f4f6', borderRadius: '8px', padding: '16px', marginBottom: '16px' },
     passwordDisplay: { background: 'white', border: '2px solid #e5e7eb', borderRadius: '8px', padding: '12px 16px', fontFamily: 'monospace', fontSize: '16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    viewButton: { padding: '8px 16px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    viewPasswordButton: { padding: '8px 16px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     warningText: { fontSize: '13px', color: '#dc2626', marginBottom: '16px', fontWeight: '500' },
     infoText: { fontSize: '13px', color: '#6b7280', marginBottom: '16px' },
+    childItem: { display: 'block', marginBottom: '8px' },
   };
 
   return (
@@ -156,8 +177,8 @@ export default function ResetPassword() {
       </header>
 
       <main style={styles.main}>
-        <h1 style={styles.pageTitle}>Reset User Password</h1>
-        <p style={styles.pageSubtitle}>Search for a user and reset their password. A new temporary password will be generated automatically.</p>
+        <h1 style={styles.pageTitle}>👨‍👩‍👧 Parent Management</h1>
+        <p style={styles.pageSubtitle}>View and manage all parents in your school.</p>
 
         <div style={styles.card}>
           {message.text && (
@@ -175,7 +196,7 @@ export default function ResetPassword() {
           />
 
           {loading ? (
-            <div style={styles.loadingText}>Loading users...</div>
+            <div style={styles.loadingText}>Loading parents...</div>
           ) : (
             <>
               <table style={styles.table}>
@@ -183,18 +204,21 @@ export default function ResetPassword() {
                   <tr>
                     <th style={styles.th}>Name</th>
                     <th style={styles.th}>Email</th>
-                    <th style={styles.th}>Role</th>
-                    <th style={styles.th}>Action</th>
+                    <th style={styles.th}>Linked Children</th>
+                    <th style={styles.th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td style={styles.td}><strong>{user.name}</strong></td>
-                      <td style={styles.td}>{user.email}</td>
-                      <td style={styles.td}>{user.role}</td>
+                  {filteredParents.map((parent) => (
+                    <tr key={parent.id}>
+                      <td style={styles.td}><strong>{parent.name}</strong></td>
+                      <td style={styles.td}>{parent.email}</td>
+                      <td style={styles.td}>{getLinkedChildrenCount(parent)} child(ren)</td>
                       <td style={styles.td}>
-                        <button style={styles.resetButton} onClick={() => setSelectedUser(user)}>
+                        <button style={styles.viewButton} onClick={() => setSelectedParent(parent)}>
+                          View
+                        </button>
+                        <button style={styles.resetButton} onClick={() => setResetPasswordUser(parent)}>
                           Reset Password
                         </button>
                       </td>
@@ -203,9 +227,9 @@ export default function ResetPassword() {
                 </tbody>
               </table>
 
-              {filteredUsers.length === 0 && (
+              {filteredParents.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
-                  No users found
+                  No parents found
                 </div>
               )}
             </>
@@ -213,22 +237,106 @@ export default function ResetPassword() {
         </div>
       </main>
 
-      {/* Confirmation Modal (before reset) */}
-      {selectedUser && !resetResult && (
-        <div style={styles.modal} onClick={() => setSelectedUser(null)}>
+      {/* View Parent Details Modal */}
+      {selectedParent && (
+        <div style={styles.modal} onClick={() => setSelectedParent(null)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>Reset Password for {selectedUser.name}</h2>
+            <h2 style={styles.modalTitle}>👨‍👩‍👧 Parent Details</h2>
+            
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Name:</span>
+              <span style={styles.detailValue}>{selectedParent.name}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Email:</span>
+              <span style={styles.detailValue}>{selectedParent.email}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Linked Children:</span>
+              <span style={styles.detailValue}>
+                {selectedParent.linkedStudents && selectedParent.linkedStudents.length > 0 ? (
+                  selectedParent.linkedStudents.map((child, idx) => (
+                    <button 
+                      key={idx}
+                      style={{...styles.linkButton, ...styles.childItem}}
+                      onClick={() => handleViewChildProfile(child)}
+                    >
+                      {child.name} ({child.email})
+                    </button>
+                  ))
+                ) : 'No children linked'}
+              </span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Contact No.:</span>
+              <span style={styles.detailValue}>{selectedParent.contact || 'N/A'}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Date of Birth:</span>
+              <span style={styles.detailValue}>{formatDate(selectedParent.date_of_birth)}</span>
+            </div>
+            
+            <button style={styles.closeButton} onClick={() => setSelectedParent(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* View Child Profile Modal (from parent details) */}
+      {viewingChild && (
+        <div style={styles.modal} onClick={() => setViewingChild(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>🎓 Student Details</h2>
+            
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Name:</span>
+              <span style={styles.detailValue}>{viewingChild.name}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Email:</span>
+              <span style={styles.detailValue}>{viewingChild.email}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Class:</span>
+              <span style={styles.detailValue}>{viewingChild.className || 'Not assigned'}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Grade Level:</span>
+              <span style={styles.detailValue}>{viewingChild.gradeLevel || 'N/A'}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Contact No.:</span>
+              <span style={styles.detailValue}>{viewingChild.contact || 'N/A'}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Date of Birth:</span>
+              <span style={styles.detailValue}>{formatDate(viewingChild.date_of_birth)}</span>
+            </div>
+            
+            <button style={styles.closeButton} onClick={() => setViewingChild(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Confirmation Modal */}
+      {resetPasswordUser && !resetResult && (
+        <div style={styles.modal} onClick={() => setResetPasswordUser(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Reset Password for {resetPasswordUser.name}</h2>
             <p style={styles.infoText}>
-              This will generate a new temporary password for <strong>{selectedUser.email}</strong>.
+              This will generate a new temporary password for <strong>{resetPasswordUser.email}</strong>.
             </p>
             <p style={styles.warningText}>
               ⚠️ The user will be required to change their password on first login.
             </p>
             <div style={styles.modalButtons}>
-              <button style={styles.cancelButton} onClick={() => setSelectedUser(null)}>Cancel</button>
+              <button style={styles.cancelButton} onClick={() => setResetPasswordUser(null)}>Cancel</button>
               <button 
                 style={{ ...styles.saveButton, opacity: resetting ? 0.7 : 1 }} 
-                onClick={handleReset}
+                onClick={handleResetPassword}
                 disabled={resetting}
               >
                 {resetting ? 'Resetting...' : 'Reset Password'}
@@ -238,8 +346,8 @@ export default function ResetPassword() {
         </div>
       )}
 
-      {/* Result Modal (after reset - showing temp password) */}
-      {selectedUser && resetResult && (
+      {/* Reset Password Result Modal */}
+      {resetPasswordUser && resetResult && (
         <div style={styles.modal}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div style={styles.successCard}>
@@ -265,7 +373,7 @@ export default function ResetPassword() {
                         {showPassword ? resetResult.tempPassword : '••••••••'}
                       </span>
                       {!passwordViewed && (
-                        <button style={styles.viewButton} onClick={handleViewPassword}>
+                        <button style={styles.viewPasswordButton} onClick={handleViewPassword}>
                           👁️ View Once
                         </button>
                       )}
@@ -282,11 +390,9 @@ export default function ResetPassword() {
               </p>
             </div>
             
-            <div style={styles.modalButtons}>
-              <button style={styles.saveButton} onClick={handleCloseModal}>
-                Done
-              </button>
-            </div>
+            <button style={{ ...styles.closeButton, background: '#10b981', color: 'white' }} onClick={handleCloseResetModal}>
+              Done
+            </button>
           </div>
         </div>
       )}

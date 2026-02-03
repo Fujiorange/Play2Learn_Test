@@ -8,6 +8,7 @@ export default function RemoveUser() {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  const [filterClass, setFilterClass] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
@@ -55,8 +56,9 @@ export default function RemoveUser() {
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === 'all' || user.role === filterRole;
-    return matchesSearch && matchesRole;
+    const matchesRole = filterRole === 'all' || (user.role && user.role.toLowerCase() === filterRole.toLowerCase());
+    const matchesClass = !filterClass || (user.class || '').toLowerCase().includes(filterClass.toLowerCase());
+    return matchesSearch && matchesRole && matchesClass;
   });
 
   const handleDelete = async () => {
@@ -128,7 +130,7 @@ export default function RemoveUser() {
 
       <main style={styles.main}>
         <h1 style={styles.pageTitle}>Remove User</h1>
-        <p style={styles.pageSubtitle}>Search and remove Primary 1 Mathematics user accounts.</p>
+         <p style={styles.pageSubtitle}>Search and remove user accounts.</p>
 
         <div style={styles.card}>
           {message.text && (
@@ -148,15 +150,25 @@ export default function RemoveUser() {
                 style={styles.input}
               />
             </div>
-            <div>
-              <label style={styles.label}>Filter by Role</label>
-              <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} style={styles.select}>
-                <option value="all">All Roles</option>
-                <option value="student">Students</option>
-                <option value="teacher">Teachers</option>
-                <option value="parent">Parents</option>
-              </select>
-            </div>
+             <div>
+               <label style={styles.label}>Filter by Role</label>
+               <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} style={styles.select}>
+                 <option value="all">All Roles</option>
+                 <option value="Student">Students</option>
+                 <option value="Teacher">Teachers</option>
+                 <option value="Parent">Parents</option>
+               </select>
+             </div>
+             <div>
+               <label style={styles.label}>Filter by Class</label>
+               <input
+                 type="text"
+                 placeholder="e.g., P1-Math-A"
+                 value={filterClass}
+                 onChange={(e) => setFilterClass(e.target.value)}
+                 style={styles.input}
+               />
+             </div>
           </div>
 
           {loading ? (
@@ -165,19 +177,21 @@ export default function RemoveUser() {
             <>
               <table style={styles.table}>
                 <thead>
-                  <tr>
-                    <th style={styles.th}>Name</th>
-                    <th style={styles.th}>Email</th>
-                    <th style={styles.th}>Role</th>
-                    <th style={styles.th}>Action</th>
-                  </tr>
+                   <tr>
+                     <th style={styles.th}>Name</th>
+                     <th style={styles.th}>Email</th>
+                     <th style={styles.th}>Role</th>
+                     <th style={styles.th}>Class</th>
+                     <th style={styles.th}>Action</th>
+                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((user) => (
                     <tr key={user.id}>
                       <td style={styles.td}>{user.name}</td>
                       <td style={styles.td}>{user.email}</td>
-                      <td style={styles.td}>{user.role}</td>
+                     <td style={styles.td}>{user.role}</td>
+                      <td style={styles.td}>{user.className || user.class || '—'}</td>
                       <td style={styles.td}>
                         <button style={styles.deleteButton} onClick={() => setDeleteConfirm(user)}>
                           Delete

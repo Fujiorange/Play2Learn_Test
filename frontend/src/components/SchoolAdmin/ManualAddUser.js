@@ -22,16 +22,39 @@ const generateRandomPassword = (userType) => {
   return `${prefix}${random}${special}`;
 };
 
+// Convert dd/mm/yyyy to ISO date string with proper validation
+const parseDateDDMMYYYY = (dateStr) => {
+  if (!dateStr) return null;
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const year = parseInt(parts[2], 10);
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) return null;
+  
+  // Validate the date is actually valid (e.g., not Feb 31)
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null; // Invalid date (e.g., Feb 30)
+  }
+  
+  return date.toISOString();
+};
+
 export default function ManualAddUser() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     role: '',
+    salutation: '',
     gender: '',
     gradeLevel: 'Primary 1', 
     subject: 'Mathematics',
     classId: '',
+    contact: '',
+    date_of_birth: '',
     // Parent fields
     parentName: '',
     parentEmail: '',
@@ -181,6 +204,9 @@ export default function ManualAddUser() {
         setGeneratedPassword(password);
       }
 
+      // Parse date from dd/mm/yyyy format
+      const parsedDOB = parseDateDDMMYYYY(formData.date_of_birth);
+
       // Prepare user data
       const userData = {
         name: formData.name,
@@ -188,8 +214,11 @@ export default function ManualAddUser() {
         password: password,
         role: formData.role,
         gender: formData.gender,
-        gradeLevel: 'Primary 1',
-        subject: 'Mathematics'
+        gradeLevel: formData.role === 'student' ? formData.gradeLevel : null,
+        subject: 'Mathematics',
+        salutation: (formData.role === 'teacher' || formData.role === 'parent') ? formData.salutation : undefined,
+        contact: formData.contact || undefined,
+        date_of_birth: parsedDOB || undefined,
       };
 
       // Add class assignment for students and teachers
@@ -277,10 +306,13 @@ export default function ManualAddUser() {
       name: '', 
       email: '', 
       role: '', 
+      salutation: '',
       gender: '', 
       gradeLevel: 'Primary 1', 
       subject: 'Mathematics',
       classId: '',
+      contact: '',
+      date_of_birth: '',
       parentName: '',
       parentEmail: '',
       createParent: false,
@@ -607,6 +639,21 @@ export default function ManualAddUser() {
               })()}
             </div>
 
+            {(formData.role === 'teacher' || formData.role === 'parent') && (
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Salutation</label>
+                <input
+                  type="text"
+                  name="salutation"
+                  value={formData.salutation}
+                  onChange={handleChange}
+                  placeholder="e.g., Mr, Ms, Dr"
+                  disabled={loading}
+                  style={styles.input}
+                />
+              </div>
+            )}
+
             {/* Password Generation Section */}
             <div style={styles.formGroup}>
               <label style={styles.label}>
@@ -666,6 +713,34 @@ export default function ManualAddUser() {
               </select>
             </div>
 
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Date of Birth (dd/mm/yyyy)</label>
+              <input
+                type="text"
+                name="date_of_birth"
+                value={formData.date_of_birth}
+                onChange={handleChange}
+                placeholder="dd/mm/yyyy"
+                disabled={loading}
+                style={styles.input}
+                pattern="\d{2}/\d{2}/\d{4}"
+              />
+              <p style={styles.note}>Format: dd/mm/yyyy (e.g., 15/03/2015)</p>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Contact Number</label>
+              <input
+                type="text"
+                name="contact"
+                value={formData.contact}
+                onChange={handleChange}
+                placeholder="e.g., +65 9123 4567"
+                disabled={loading}
+                style={styles.input}
+              />
+            </div>
+
             {/* Class Assignment for Students and Teachers */}
             {(formData.role === 'student' || formData.role === 'teacher') && (
               <div style={styles.formGroup}>
@@ -695,13 +770,20 @@ export default function ManualAddUser() {
               <>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Grade Level</label>
-                  <input
-                    type="text"
-                    value="Primary 1"
-                    disabled
-                    style={styles.disabledInput}
-                  />
-                  <p style={styles.note}>Platform is currently scoped to Primary 1 only</p>
+                  <select
+                    name="gradeLevel"
+                    value={formData.gradeLevel}
+                    onChange={handleChange}
+                    disabled={loading}
+                    style={styles.select}
+                  >
+                    <option value="Primary 1">Primary 1</option>
+                    <option value="Primary 2" disabled>Primary 2 (coming soon)</option>
+                    <option value="Primary 3" disabled>Primary 3 (coming soon)</option>
+                    <option value="Primary 4" disabled>Primary 4 (coming soon)</option>
+                    <option value="Primary 5" disabled>Primary 5 (coming soon)</option>
+                    <option value="Primary 6">Primary 6</option>
+                  </select>
                 </div>
 
                 <div style={styles.formGroup}>

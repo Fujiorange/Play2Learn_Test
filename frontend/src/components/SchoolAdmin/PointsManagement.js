@@ -27,22 +27,6 @@ const defaultShopItems = [
   { id: 'shop_9', name: 'Sparkle Boost', description: '1.25x points for 5 days', icon: '✨', cost: 100, type: 'booster', duration: '5 days', multiplier: 1.25, stock: 100, purchased: 8 }
 ];
 
-const mockStudents = [
-  { id: 'stu_1', name: 'Alice Tan', email: 'alice@school.com', class: 'P1-A', points: 320, activeBooster: null },
-  { id: 'stu_2', name: 'Bob Lee', email: 'bob@school.com', class: 'P1-A', points: 185, activeBooster: { name: 'Turbo Boost', expiresAt: '2026-01-23' } },
-  { id: 'stu_3', name: 'Carol Wong', email: 'carol@school.com', class: 'P1-B', points: 450, activeBooster: null },
-  { id: 'stu_4', name: 'David Lim', email: 'david@school.com', class: 'P1-B', points: 95, activeBooster: null },
-  { id: 'stu_5', name: 'Emma Chen', email: 'emma@school.com', class: 'P1-A', points: 275, activeBooster: null }
-];
-
-const mockTransactions = [
-  { id: 'tx_1', studentName: 'Alice Tan', type: 'earned', amount: 25, reason: 'Perfect Score', date: '2026-01-22', by: 'System' },
-  { id: 'tx_2', studentName: 'Bob Lee', type: 'spent', amount: -150, reason: 'Purchased Turbo Boost', date: '2026-01-22', by: 'Student' },
-  { id: 'tx_3', studentName: 'Carol Wong', type: 'adjustment', amount: 10, reason: 'Helped classmate', date: '2026-01-21', by: 'Mrs. Tan' },
-  { id: 'tx_4', studentName: 'David Lim', type: 'adjustment', amount: -5, reason: 'Late submission', date: '2026-01-21', by: 'Mr. Lee' },
-  { id: 'tx_5', studentName: 'Emma Chen', type: 'earned', amount: 10, reason: 'Complete Quiz', date: '2026-01-20', by: 'System' }
-];
-
 const shopIcons = ['🎁', '🦄', '🐉', '🌈', '🦁', '🐬', '🦋', '🐱', '🐶', '🦊', '🐼', '🐨', '⚡', '🚀', '✨', '💫', '🌟', '💎'];
 
 export default function PointsManagement() {
@@ -73,18 +57,11 @@ export default function PointsManagement() {
 
   const loadData = async () => {
     try {
-      // TODO: Replace with real API calls when backend is ready
-      // const [rulesRes, shopRes, studentsRes, txRes] = await Promise.all([
-      //   schoolAdminService.getPointRules(),
-      //   schoolAdminService.getShopItems(),
-      //   schoolAdminService.getStudentsWithPoints(),
-      //   schoolAdminService.getPointTransactions()
-      // ]);
       await new Promise(resolve => setTimeout(resolve, 500));
       setPointRules(defaultPointRules);
       setShopItems(defaultShopItems);
-      setStudents(mockStudents);
-      setTransactions(mockTransactions);
+      setStudents([]);
+      setTransactions([]);
     } catch (error) {
       console.error('Error loading data:', error);
       setMessage({ type: 'error', text: 'Failed to load data' });
@@ -202,28 +179,18 @@ export default function PointsManagement() {
             <div className="points-overview-grid">
               <div className="sa-card">
                 <h3 className="points-card-title">🏆 Top Students by Points</h3>
-                <table className="sa-table">
-                  <thead><tr><th>Rank</th><th>Student</th><th>Points</th></tr></thead>
-                  <tbody>
-                    {[...students].sort((a, b) => b.points - a.points).slice(0, 5).map((student, index) => (
-                      <tr key={student.id}><td>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}</td><td>{student.name}</td><td className="points-value">{student.points}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="sa-card">
-                <h3 className="points-card-title">📜 Recent Transactions</h3>
-                <table className="sa-table">
-                  <thead><tr><th>Student</th><th>Amount</th><th>Reason</th></tr></thead>
-                  <tbody>
-                    {transactions.slice(0, 5).map(tx => (
-                      <tr key={tx.id}><td>{tx.studentName}</td><td className={tx.amount > 0 ? 'points-positive' : 'points-negative'}>{tx.amount > 0 ? '+' : ''}{tx.amount}</td><td>{tx.reason}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
+                 <div style={{ color: '#6b7280', fontSize: '14px' }}>
+                   Live data will appear here once available.
+                 </div>
+               </div>
+               <div className="sa-card">
+                 <h3 className="points-card-title">📜 Recent Transactions</h3>
+                 <div style={{ color: '#6b7280', fontSize: '14px' }}>
+                   Live data will appear here once available.
+                 </div>
+               </div>
+             </div>
+           </>
         )}
 
         {activeTab === 'rules' && (

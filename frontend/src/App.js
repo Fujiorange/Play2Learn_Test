@@ -94,11 +94,11 @@ import ManualAddUser from './components/SchoolAdmin/ManualAddUser';
 import RemoveUser from './components/SchoolAdmin/RemoveUser';
 import BulkUploadCSV from './components/SchoolAdmin/BulkUploadCSV';
 import ManageClasses from './components/SchoolAdmin/ManageClasses';
-import ProvidePermission from './components/SchoolAdmin/ProvidePermission';
-import ResetPassword from './components/SchoolAdmin/ResetPassword';
-import DisableUser from './components/SchoolAdmin/DisableUser';
 import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
 import PointsManagement from './components/SchoolAdmin/PointsManagement';
+import TeacherManagement from './components/SchoolAdmin/TeacherManagement';
+import StudentManagement from './components/SchoolAdmin/StudentManagement';
+import ParentManagement from './components/SchoolAdmin/ParentManagement';
 
 // ⭐ NEW IMPORT - School Admin Teacher Assignment
 import TeacherAssignment from './components/SchoolAdmin/TeacherAssignment';
@@ -246,11 +246,11 @@ function App() {
           <Route path="/school-admin/users/remove" element={<RemoveUser />} />
           <Route path="/school-admin/users/bulk-upload" element={<BulkUploadCSV />} />
           <Route path="/school-admin/classes/manage" element={<ManageClasses />} />
-          <Route path="/school-admin/users/permissions" element={<ProvidePermission />} />
-          <Route path="/school-admin/users/reset-password" element={<ResetPassword />} />
-          <Route path="/school-admin/users/disable" element={<DisableUser />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
+          <Route path="/school-admin/teachers" element={<TeacherManagement />} />
+          <Route path="/school-admin/students" element={<StudentManagement />} />
+          <Route path="/school-admin/parents" element={<ParentManagement />} />
           
           {/* ⭐ NEW ROUTE - School Admin Teacher Assignment */}
           <Route path="/school-admin/teachers/assignments" element={<TeacherAssignment />} />

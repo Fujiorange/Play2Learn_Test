@@ -188,38 +188,38 @@ export default function SchoolAdminDashboard() {
             </ul>
           </div>
 
-          {/* User Management */}
+          {/* Role Management */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <span style={styles.sectionIcon}>👥</span>
-              <h2 style={styles.sectionTitle}>User Management</h2>
+              <h2 style={styles.sectionTitle}>Role Management</h2>
             </div>
             <ul style={styles.menuList}>
               <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'permissions' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('permissions')}
+                style={{ ...styles.menuItem, ...(hoveredItem === 'teacher-management' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('teacher-management')}
                 onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/users/permissions')}
+                onClick={() => handleMenuClick('/school-admin/teachers')}
               >
-                <span>Manage Permissions</span>
+                <span>👨‍🏫 Teacher Management</span>
                 <span style={styles.arrow}>→</span>
               </li>
               <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'reset-password' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('reset-password')}
+                style={{ ...styles.menuItem, ...(hoveredItem === 'student-management' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('student-management')}
                 onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/users/reset-password')}
+                onClick={() => handleMenuClick('/school-admin/students')}
               >
-                <span>Reset Password</span>
+                <span>🎓 Student Management</span>
                 <span style={styles.arrow}>→</span>
               </li>
               <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'disable-user' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('disable-user')}
+                style={{ ...styles.menuItem, ...(hoveredItem === 'parent-management' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('parent-management')}
                 onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/users/disable')}
+                onClick={() => handleMenuClick('/school-admin/parents')}
               >
-                <span>Disable User</span>
+                <span>👨‍👩‍👧 Parent Management</span>
                 <span style={styles.arrow}>→</span>
               </li>
             </ul>
