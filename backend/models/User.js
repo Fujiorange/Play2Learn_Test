@@ -44,7 +44,6 @@ const userSchema = new mongoose.Schema({
   ],
 
   emailVerified: { type: Boolean, default: false },
-  accountActive: { type: Boolean, default: true },
   verificationToken: { type: String, default: null },
   
   requirePasswordChange: { type: Boolean, default: false },

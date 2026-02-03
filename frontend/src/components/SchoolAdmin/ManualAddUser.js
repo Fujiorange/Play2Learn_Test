@@ -22,6 +22,20 @@ const generateRandomPassword = (userType) => {
   return `${prefix}${random}${special}`;
 };
 
+// Convert dd/mm/yyyy to ISO date string
+const parseDateDDMMYYYY = (dateStr) => {
+  if (!dateStr) return null;
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const year = parseInt(parts[2], 10);
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) return null;
+  // Create date in UTC to avoid timezone issues
+  return new Date(Date.UTC(year, month - 1, day)).toISOString();
+};
+
 export default function ManualAddUser() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -184,6 +198,9 @@ export default function ManualAddUser() {
         setGeneratedPassword(password);
       }
 
+      // Parse date from dd/mm/yyyy format
+      const parsedDOB = parseDateDDMMYYYY(formData.date_of_birth);
+
       // Prepare user data
       const userData = {
         name: formData.name,
@@ -195,7 +212,7 @@ export default function ManualAddUser() {
         subject: 'Mathematics',
         salutation: (formData.role === 'teacher' || formData.role === 'parent') ? formData.salutation : undefined,
         contact: formData.contact || undefined,
-        date_of_birth: formData.date_of_birth || undefined,
+        date_of_birth: parsedDOB || undefined,
       };
 
       // Add class assignment for students and teachers
@@ -691,15 +708,18 @@ export default function ManualAddUser() {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Date of Birth</label>
+              <label style={styles.label}>Date of Birth (dd/mm/yyyy)</label>
               <input
-                type="date"
+                type="text"
                 name="date_of_birth"
                 value={formData.date_of_birth}
                 onChange={handleChange}
+                placeholder="dd/mm/yyyy"
                 disabled={loading}
                 style={styles.input}
+                pattern="\d{2}/\d{2}/\d{4}"
               />
+              <p style={styles.note}>Format: dd/mm/yyyy (e.g., 15/03/2015)</p>
             </div>
 
             <div style={styles.formGroup}>

@@ -68,12 +68,12 @@ const schoolAdminService = {
       }
 
       let url = `${API_URL}/mongo/school-admin/users`;
-      if (filters.gradeLevel || filters.subject) {
-        const params = new URLSearchParams();
-        if (filters.gradeLevel) params.append('gradeLevel', filters.gradeLevel);
-        if (filters.subject) params.append('subject', filters.subject);
-        url += `?${params.toString()}`;
-      }
+      const params = new URLSearchParams();
+      if (filters.gradeLevel) params.append('gradeLevel', filters.gradeLevel);
+      if (filters.subject) params.append('subject', filters.subject);
+      if (filters.role) params.append('role', filters.role);
+      const query = params.toString();
+      if (query) url += `?${query}`;
 
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -87,6 +87,28 @@ const schoolAdminService = {
     } catch (error) {
       console.error('getUsers error:', error);
       return { success: false, error: 'Failed to load users' };
+    }
+  },
+
+  async getUserDetails(userId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/details`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user details');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getUserDetails error:', error);
+      return { success: false, error: 'Failed to load user details' };
     }
   },
 
@@ -139,67 +161,6 @@ const schoolAdminService = {
     } catch (error) {
       console.error('deleteUser error:', error);
       return { success: false, error: error.message || 'Failed to delete user' };
-    }
-  },
-
-  async updateUserStatus(userId, isActive) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ isActive })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update user status');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('updateUserStatus error:', error);
-      return { success: false, error: error.message || 'Failed to update user status' };
-    }
-  },
-
-  async updateUserRole(userId, role) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      // Security check
-      if (role === 'school-admin') {
-        return { success: false, error: 'Cannot assign school-admin role' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/role`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ role })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update user role');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('updateUserRole error:', error);
-      return { success: false, error: error.message || 'Failed to update user role' };
     }
   },
 

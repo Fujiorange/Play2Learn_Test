@@ -135,52 +135,34 @@ async function checkStudentLinkedToParent(studentId) {
 const getDb = () => mongoose.connection.db;
 
 // ==================== DASHBOARD STATS (FIXED!) ====================
-router.get('/dashboard-stats', authenticateToken, async (req, res) => {
+router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
   try {
     console.log('📊 Fetching dashboard stats...');
     
-    // ✅ FIX: Query the 'users' collection with role field, not separate collections!
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    // ✅ FIX: Query the 'users' collection with role field, scoped to school
     const [
       totalStudents,
       totalTeachers,
       totalParents,
-      totalUsers
+      totalClasses
     ] = await Promise.all([
-      User.countDocuments({ role: 'Student' }),
-      User.countDocuments({ role: 'Teacher' }),
-      User.countDocuments({ role: 'Parent' }),
-      User.countDocuments()
+      User.countDocuments({ role: 'Student', schoolId: schoolId }),
+      User.countDocuments({ role: 'Teacher', schoolId: schoolId }),
+      User.countDocuments({ role: 'Parent', schoolId: schoolId }),
+      Class.countDocuments({ school_id: schoolId })
     ]);
 
-    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents`);
-
-    // Get recent registrations (last 7 days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    const recentRegistrations = await User.countDocuments({
-      createdAt: { $gte: sevenDaysAgo }
-    });
-
-    // Get active users (last 30 days login)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const activeUsers = await User.countDocuments({
-      accountActive: true
-    });
+    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents, ${totalClasses} classes`);
 
     res.json({
       success: true,
-      stats: {
-        students: totalStudents,
-        teachers: totalTeachers,
-        parents: totalParents,
-        totalUsers: totalUsers,
-        activeUsers: activeUsers,
-        recentRegistrations: recentRegistrations,
-        classes: 0, // Will implement when class management is ready
-      }
+      total_students: totalStudents,
+      total_teachers: totalTeachers,
+      total_parents: totalParents,
+      total_classes: totalClasses
     });
   } catch (error) {
     console.error('❌ Dashboard stats error:', error);
@@ -310,11 +292,54 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
       });
     }
 
+    // For students, find their linked parent
+    const studentIds = users.filter(u => u.role === 'Student').map(u => u._id);
+    const parentsWithStudents = await User.find({
+      role: 'Parent',
+      'linkedStudents.studentId': { $in: studentIds }
+    }).select('_id name email linkedStudents');
+    
+    // Create a lookup for student -> parent
+    const studentParentLookup = {};
+    parentsWithStudents.forEach(parent => {
+      parent.linkedStudents.forEach(link => {
+        const studentIdStr = link.studentId.toString();
+        if (!studentParentLookup[studentIdStr]) {
+          studentParentLookup[studentIdStr] = {
+            parentId: parent._id,
+            parentName: parent.name,
+            parentEmail: parent.email
+          };
+        }
+      });
+    });
+
+    // For parents, resolve linked student names
+    const allLinkedStudentIds = users
+      .filter(u => u.role === 'Parent' && u.linkedStudents && u.linkedStudents.length > 0)
+      .flatMap(u => u.linkedStudents.map(ls => ls.studentId));
+    
+    const linkedStudentsData = await User.find({
+      _id: { $in: allLinkedStudentIds }
+    }).select('_id name email');
+    
+    const studentLookup = {};
+    linkedStudentsData.forEach(student => {
+      studentLookup[student._id.toString()] = {
+        id: student._id,
+        name: student.name,
+        email: student.email
+      };
+    });
+
     res.json({
       success: true,
       users: users.map(user => {
         const classKey = user.class ? user.class.toString() : null;
-        return {
+        const userIdStr = user._id.toString();
+        
+        // Build response object
+        const result = {
           id: user._id,
           name: user.name,
           email: user.email,
@@ -324,15 +349,119 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
           gradeLevel: user.gradeLevel,
           subject: user.subject,
           contact: user.contact,
-          accountActive: user.accountActive,
+          date_of_birth: user.date_of_birth,
           emailVerified: user.emailVerified,
           createdAt: user.createdAt,
         };
+        
+        // Add linked parent for students
+        if (user.role === 'Student' && studentParentLookup[userIdStr]) {
+          result.linkedParent = studentParentLookup[userIdStr];
+        }
+        
+        // Add linked students for parents
+        if (user.role === 'Parent' && user.linkedStudents && user.linkedStudents.length > 0) {
+          result.linkedStudents = user.linkedStudents.map(ls => {
+            const studentIdStr = ls.studentId.toString();
+            const studentData = studentLookup[studentIdStr];
+            return {
+              studentId: ls.studentId,
+              relationship: ls.relationship,
+              name: studentData ? studentData.name : null,
+              email: studentData ? studentData.email : null
+            };
+          });
+        }
+        
+        return result;
       })
     });
   } catch (error) {
     console.error('❌ Get users error:', error);
     res.status(500).json({ success: false, error: 'Failed to load users' });
+  }
+});
+
+// ==================== GET USER DETAILS ====================
+router.get('/users/:id/details', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const userId = req.params.id;
+    
+    const user = await User.findOne({
+      _id: userId,
+      schoolId: schoolAdmin.schoolId
+    }).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Get class name if applicable
+    let className = null;
+    if (user.class) {
+      const classDoc = await Class.findById(user.class).select('class_name');
+      className = classDoc ? classDoc.class_name : null;
+    }
+    
+    const result = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      class: user.class,
+      className: className,
+      gradeLevel: user.gradeLevel,
+      subject: user.subject,
+      contact: user.contact,
+      date_of_birth: user.date_of_birth,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt,
+    };
+    
+    // For students, find their linked parent
+    if (user.role === 'Student') {
+      const parent = await User.findOne({
+        role: 'Parent',
+        'linkedStudents.studentId': user._id
+      }).select('_id name email');
+      
+      if (parent) {
+        result.linkedParent = {
+          parentId: parent._id,
+          parentName: parent.name,
+          parentEmail: parent.email
+        };
+      }
+    }
+    
+    // For parents, resolve linked student details
+    if (user.role === 'Parent' && user.linkedStudents && user.linkedStudents.length > 0) {
+      const studentIds = user.linkedStudents.map(ls => ls.studentId);
+      const students = await User.find({ _id: { $in: studentIds } }).select('_id name email class gradeLevel');
+      
+      const studentLookup = {};
+      students.forEach(s => {
+        studentLookup[s._id.toString()] = s;
+      });
+      
+      result.linkedStudents = user.linkedStudents.map(ls => {
+        const student = studentLookup[ls.studentId.toString()];
+        return {
+          studentId: ls.studentId,
+          relationship: ls.relationship,
+          name: student ? student.name : null,
+          email: student ? student.email : null,
+          class: student ? student.class : null,
+          gradeLevel: student ? student.gradeLevel : null
+        };
+      });
+    }
+    
+    res.json({ success: true, user: result });
+  } catch (error) {
+    console.error('❌ Get user details error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load user details' });
   }
 });
 
@@ -1671,65 +1800,6 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete user' });
-  }
-});
-
-// ==================== UPDATE USER STATUS ====================
-router.put('/users/:id/status', authenticateSchoolAdmin, async (req, res) => {
-  try {
-    const schoolAdmin = req.schoolAdmin;
-    const { isActive } = req.body;
-    
-    // First find the user to verify school ownership
-    const user = await User.findById(req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    
-    // Verify the user belongs to the school admin's school
-    if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
-      return res.status(403).json({ success: false, error: 'You can only update users from your school' });
-    }
-    
-    // Update the user status
-    user.accountActive = isActive;
-    await user.save();
-    
-    res.json({ success: true, message: 'User status updated successfully' });
-  } catch (error) {
-    console.error('Update status error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update user status' });
-  }
-});
-
-// ==================== UPDATE USER ROLE ====================
-router.put('/users/:id/role', authenticateToken, async (req, res) => {
-  try {
-    const { role } = req.body;
-    
-    // Security check
-    if (role === 'School Admin') {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Cannot assign school-admin role' 
-      });
-    }
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { role: role },
-      { new: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    
-    res.json({ success: true, message: 'User role updated successfully' });
-  } catch (error) {
-    console.error('Update role error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update user role' });
   }
 });
 
