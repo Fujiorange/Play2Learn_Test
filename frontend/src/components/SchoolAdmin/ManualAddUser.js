@@ -22,7 +22,7 @@ const generateRandomPassword = (userType) => {
   return `${prefix}${random}${special}`;
 };
 
-// Convert dd/mm/yyyy to ISO date string
+// Convert dd/mm/yyyy to ISO date string with proper validation
 const parseDateDDMMYYYY = (dateStr) => {
   if (!dateStr) return null;
   const parts = dateStr.split('/');
@@ -32,8 +32,14 @@ const parseDateDDMMYYYY = (dateStr) => {
   const year = parseInt(parts[2], 10);
   if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
   if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) return null;
-  // Create date in UTC to avoid timezone issues
-  return new Date(Date.UTC(year, month - 1, day)).toISOString();
+  
+  // Validate the date is actually valid (e.g., not Feb 31)
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null; // Invalid date (e.g., Feb 30)
+  }
+  
+  return date.toISOString();
 };
 
 export default function ManualAddUser() {
