@@ -23,6 +23,8 @@ export default function ViewChildren() {
         if (result.success && result.children) {
           // Map API data to component format
           const formattedChildren = result.children.map(child => ({
+            studentId: child.studentId,
+            studentName: child.name,
             id: child.studentId,
             name: child.name,
             grade: child.gradeLevel || 'Primary 1',
@@ -100,7 +102,6 @@ export default function ViewChildren() {
               <div key={child.id} style={styles.childCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
                 <div style={styles.childHeader}>
                   <h2 style={styles.childName}>{child.name}</h2>
-                  <span style={styles.gradeBadge}>{child.overallGrade}</span>
                 </div>
                 
                 <div style={styles.infoRow}>
