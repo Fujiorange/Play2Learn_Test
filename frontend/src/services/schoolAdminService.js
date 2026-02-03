@@ -387,7 +387,7 @@ const schoolAdminService = {
     }
   },
 
-  async getAvailableStudents(unassignedOnly = false) {
+  async getAvailableStudents(unassignedOnly = false, includeClassId) {
     try {
       const token = this.getToken();
       if (!token) {
@@ -395,9 +395,11 @@ const schoolAdminService = {
       }
 
       let url = `${API_URL}/mongo/school-admin/classes/available/students`;
-      if (unassignedOnly) {
-        url += '?unassigned=true';
-      }
+      const params = new URLSearchParams();
+      if (unassignedOnly) params.append('unassigned', 'true');
+      if (includeClassId) params.append('includeClassId', includeClassId);
+      const query = params.toString();
+      if (query) url += `?${query}`;
 
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -415,7 +417,7 @@ const schoolAdminService = {
   },
 
   // ==================== BULK UPLOAD ====================
-  async bulkUploadUsers(file, userType) {
+  async bulkUploadUsers(file) {
     try {
       const token = this.getToken();
       if (!token) {
@@ -425,22 +427,7 @@ const schoolAdminService = {
       const formData = new FormData();
       formData.append('file', file);
 
-      let endpoint = '';
-      switch(userType) {
-        case 'teacher':
-          endpoint = 'bulk-import-teachers';
-          break;
-        case 'student':
-          endpoint = 'bulk-import-students';
-          break;
-        case 'parent':
-          endpoint = 'bulk-import-parents';
-          break;
-        default:
-          endpoint = 'bulk-import-students';
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/${endpoint}`, {
+      const response = await fetch(`${API_URL}/mongo/school-admin/bulk-import-users`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

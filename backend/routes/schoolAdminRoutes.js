@@ -1068,6 +1068,130 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
   }
 });
 
+// ==================== BULK IMPORT ALL USERS (roles defined per row) ====================
+router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
+  console.log('\n📤 Bulk import mixed users request received');
+  
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const schoolAdmin = req.schoolAdmin;
+  if (!schoolAdmin.schoolId) {
+    return res.status(400).json({
+      success: false,
+      error: 'School admin must be associated with a school'
+    });
+  }
+
+  const rows = [];
+  const summary = { created: 0, failed: 0, errors: [] };
+
+  try {
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (row) => rows.push(row))
+        .on('end', () => resolve())
+        .on('error', (error) => reject(error));
+    });
+
+    for (const [index, row] of rows.entries()) {
+      const rowNumber = index + 2; // header is row 1
+      const rawRole = (row.Role || row.role || '').trim();
+      const roleMap = { student: 'Student', teacher: 'Teacher', parent: 'Parent', Student: 'Student', Teacher: 'Teacher', Parent: 'Parent' };
+      const role = roleMap[rawRole] || rawRole;
+
+      if (!row.Name || !row.Email || !role) {
+        summary.failed++;
+        summary.errors.push({ row: rowNumber, email: row.Email || 'unknown', error: 'Missing required fields (Name, Email, Role)' });
+        continue;
+      }
+
+      if (!['Student', 'Teacher', 'Parent'].includes(role)) {
+        summary.failed++;
+        summary.errors.push({ row: rowNumber, email: row.Email || 'unknown', error: `Invalid role: ${rawRole}` });
+        continue;
+      }
+
+      try {
+        const existingUser = await User.findOne({ email: row.Email });
+        if (existingUser) {
+          summary.failed++;
+          summary.errors.push({ row: rowNumber, email: row.Email, error: 'Email already exists' });
+          continue;
+        }
+
+        if ((role === 'Teacher' || role === 'Student')) {
+          const licenseCheck = await checkLicenseAvailability(schoolAdmin.schoolId, role);
+          if (!licenseCheck.available) {
+            summary.failed++;
+            summary.errors.push({ row: rowNumber, email: row.Email, error: licenseCheck.error });
+            continue;
+          }
+        }
+
+        const tempPassword = generateTempPassword(role);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+        const linkedStudents = [];
+        if (role === 'Parent' && row.StudentEmail) {
+          const student = await User.findOne({ email: row.StudentEmail, role: 'Student', schoolId: schoolAdmin.schoolId });
+          if (student) {
+            linkedStudents.push({ studentId: student._id, relationship: row.Relationship || row.relationship || 'Parent' });
+          } else {
+            summary.failed++;
+            summary.errors.push({ row: rowNumber, email: row.Email, error: `Student not found for email ${row.StudentEmail}` });
+            continue;
+          }
+        }
+
+        await User.create({
+          name: row.Name,
+          email: row.Email,
+          password: hashedPassword,
+          role,
+          schoolId: schoolAdmin.schoolId,
+          contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || null,
+          gender: row.Gender || row.gender || null,
+          date_of_birth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || null,
+          class: role === 'Student' ? (row.Class || row.class || null) : null,
+          gradeLevel: role === 'Student' ? (row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || 'Primary 1') : null,
+          subject: role === 'Teacher' ? (row.Subject || row.subject || 'Mathematics') : null,
+          linkedStudents: role === 'Parent' ? linkedStudents : undefined,
+          emailVerified: true,
+          accountActive: true,
+          requirePasswordChange: true,
+          createdBy: 'school-admin'
+        });
+
+        if (role === 'Teacher' || role === 'Student') {
+          const incrementField = role === 'Teacher' ? 'current_teachers' : 'current_students';
+          await School.findByIdAndUpdate(
+            schoolAdmin.schoolId,
+            { $inc: { [incrementField]: 1 } }
+          );
+        }
+
+        summary.created++;
+      } catch (err) {
+        console.error('Bulk import row error:', err);
+        summary.failed++;
+        summary.errors.push({ row: rowNumber, email: row.Email || 'unknown', error: err.message || 'Unknown error' });
+      }
+    }
+
+    res.json({ success: true, message: 'Bulk import completed', summary });
+  } catch (error) {
+    console.error('Bulk import users error:', error);
+    res.status(500).json({ success: false, error: 'Failed to import users: ' + error.message });
+  } finally {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+  }
+});
+
 // ==================== MANUAL CREATE USER ====================
 router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
   try {
@@ -1687,7 +1811,7 @@ router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, r
 router.get('/classes/available/students', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = req.schoolAdmin;
-    const { unassigned } = req.query;
+    const { unassigned, includeClassId } = req.query;
     
     const filter = {
       schoolId: schoolAdmin.schoolId,
@@ -1695,9 +1819,23 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
       accountActive: true
     };
     
-    // Optionally filter to only unassigned students
-    if (unassigned === 'true') {
-      filter.class = { $in: [null, ''] };
+    const orConditions = [{ class: { $in: [null, ''] } }];
+    
+    if (includeClassId) {
+      try {
+        const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
+        if (cls && cls.students && cls.students.length > 0) {
+          orConditions.push({ _id: { $in: cls.students } });
+        }
+      } catch (err) {
+        console.warn('Include class lookup failed:', err.message);
+      }
+    }
+    
+    // Default to unassigned students unless explicitly disabled
+    const limitToUnassigned = unassigned !== 'false';
+    if (limitToUnassigned) {
+      filter.$or = orConditions;
     }
     
     const students = await User.find(filter).select('name email class');

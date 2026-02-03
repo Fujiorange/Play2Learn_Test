@@ -73,16 +73,17 @@ export default function ManageClasses() {
 
   const loadTeachersAndStudents = async () => {
     try {
-      const [teachersResult, studentsResult] = await Promise.all([
-        schoolAdminService.getAvailableTeachers(),
-        schoolAdminService.getAvailableStudents()
-      ]);
+       const [teachersResult, studentsResult] = await Promise.all([
+         schoolAdminService.getAvailableTeachers(),
+         schoolAdminService.getAvailableStudents(true)
+       ]);
       
       if (teachersResult.success) {
         setTeachers(teachersResult.teachers || []);
       }
       if (studentsResult.success) {
-        setStudents(studentsResult.students || []);
+       // include only unassigned or currently assigned students
+       setStudents(studentsResult.students || []);
       }
     } catch (error) {
       console.error('Error loading teachers/students:', error);
@@ -170,17 +171,26 @@ export default function ManageClasses() {
     }
   };
 
-  const openEditModal = (cls) => {
-    setSelectedClass(cls);
-    setFormData({
-      name: cls.name,
-      grade: cls.grade,
-      subjects: cls.subjects || ['Mathematics'],
-      teachers: cls.teacherList ? cls.teacherList.map(t => t._id) : [],
-      students: cls.studentList ? cls.studentList.map(s => s._id) : []
-    });
-    setShowEditModal(true);
-  };
+   const openEditModal = async (cls) => {
+     setSelectedClass(cls);
+     setFormData({
+       name: cls.name,
+       grade: cls.grade,
+       subjects: cls.subjects || ['Mathematics'],
+       teachers: cls.teacherList ? cls.teacherList.map(t => t._id) : [],
+       students: cls.studentList ? cls.studentList.map(s => s._id) : []
+     });
+     // include currently assigned students in selection list
+     try {
+       const studentsResult = await schoolAdminService.getAvailableStudents(true, cls.id);
+       if (studentsResult.success) {
+         setStudents(studentsResult.students || []);
+       }
+     } catch (err) {
+       console.error('Error refreshing students for edit:', err);
+     }
+     setShowEditModal(true);
+   };
 
   const openDeleteModal = (cls) => {
     setSelectedClass(cls);
