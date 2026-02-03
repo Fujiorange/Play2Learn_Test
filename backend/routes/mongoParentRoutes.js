@@ -897,18 +897,15 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     const streak = mathProfile?.streak || 0;
 
     // Get recent quiz attempts (last 10 for activities)
-    const allRecentQuizzes = await Quiz.find({ 
+    // ✅ FIX: Query StudentQuiz collection (quiz attempts), not Quiz collection
+    const allRecentQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
       quiz_type: 'regular'
     })
     .sort({ completed_at: -1 });
 
-    // ✅ FIX: Filter out unsubmitted quizzes (0/15 entries)
-    const recentQuizzes = allRecentQuizzes.filter(quiz => {
-      return quiz.questions && quiz.questions.some(q => 
-        q.student_answer !== null && q.student_answer !== undefined
-      );
-    }).slice(0, 10);
+    // ✅ FIX: Filter out unsubmitted quizzes (only count completed ones with scores > 0)
+    const recentQuizzes = allRecentQuizzes.filter(quiz => quiz.score > 0 && quiz.percentage > 0).slice(0, 10);
 
     console.log('📈 Found', recentQuizzes.length, 'recent quizzes (filtered from', allRecentQuizzes.length, 'total)');
 

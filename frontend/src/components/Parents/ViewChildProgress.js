@@ -191,6 +191,20 @@ export default function ViewChildProgress() {
       fontSize: '12px', 
       color: '#6b7280' 
     },
+    quizItem: { 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      padding: '16px', 
+      background: '#f9fafb', 
+      borderRadius: '8px', 
+      marginBottom: '12px', 
+      borderBottom: '1px solid #e5e7eb'
+    },
+    quizInfo: { flex: 1 },
+    quizDate: { fontSize: '13px', color: '#6b7280', marginBottom: '4px' },
+    quizProfile: { fontSize: '15px', fontWeight: '600', color: '#1f2937' },
+    quizScore: { fontSize: '20px', fontWeight: '700', textAlign: 'right' },
     
     emptyState: { 
       textAlign: 'center', 
@@ -271,17 +285,8 @@ export default function ViewChildProgress() {
           )}
         </div>
 
-        {/* Main Stats - 4 cards */}
+        {/* Main Stats - 3 cards */}
         <div style={styles.statsGrid}>
-          <div 
-            style={styles.statCard}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-          >
-            <div style={styles.statValue}>{progressData?.overallProgress || 0}%</div>
-            <div style={styles.statLabel}>Overall Progress</div>
-          </div>
-
           <div 
             style={styles.statCard}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
@@ -346,21 +351,21 @@ export default function ViewChildProgress() {
 
         {/* Recent Activities */}
         <div style={styles.activitiesCard}>
-          <h2 style={styles.sectionTitle}>📅 Recent Activities</h2>
+          <h2 style={styles.sectionTitle}>📝 Recent Activities</h2>
           {progressData?.recentActivities && progressData.recentActivities.length > 0 ? (
             <>
               {progressData.recentActivities.map((activity, index) => (
                 <div key={index} style={styles.activityItem}>
                   <span style={styles.activityText}>{activity.description}</span>
                   <span style={styles.activityTime}>
-                    {activity.timestamp ? new Date(activity.timestamp).toLocaleDateString('en-SG') : 'Recent'}
+                    {activity.timestamp ? new Date(activity.timestamp).toLocaleDateString('en-SG') : activity.date || 'Recent'}
                   </span>
                 </div>
               ))}
             </>
           ) : (
             <div style={styles.emptyState}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📅</div>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
               <p style={{ fontSize: '18px', fontWeight: '600' }}>No recent activities</p>
               <p>Activities will appear here as {childInfo?.studentName || 'your child'} uses the platform</p>
             </div>
