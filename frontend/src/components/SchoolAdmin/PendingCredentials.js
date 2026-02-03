@@ -11,6 +11,8 @@ export default function PendingCredentials() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState(null);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [bulkSending, setBulkSending] = useState(false);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -51,6 +53,38 @@ export default function PendingCredentials() {
     return matchesSearch && matchesRole;
   });
 
+  // Get IDs of filtered users for selection logic
+  const filteredUserIds = filteredUsers.map(u => u.id);
+
+  const handleSelectUser = (userId) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    // Get IDs of currently filtered users that are selected
+    const selectedFilteredIds = selectedUsers.filter(id => filteredUserIds.includes(id));
+    
+    if (selectedFilteredIds.length === filteredUserIds.length) {
+      // All filtered users are selected, deselect them
+      setSelectedUsers(prev => prev.filter(id => !filteredUserIds.includes(id)));
+    } else {
+      // Select all filtered users (keep existing selections from other filters)
+      setSelectedUsers(prev => {
+        const otherSelections = prev.filter(id => !filteredUserIds.includes(id));
+        return [...otherSelections, ...filteredUserIds];
+      });
+    }
+  };
+
+  const isAllFilteredSelected = filteredUserIds.length > 0 && 
+    filteredUserIds.every(id => selectedUsers.includes(id));
+
+  const selectedFilteredCount = selectedUsers.filter(id => filteredUserIds.includes(id)).length;
+
   const handleSendCredentials = async (user) => {
     setSendingId(user.id);
     setMessage({ type: '', text: '' });
@@ -61,6 +95,7 @@ export default function PendingCredentials() {
         setMessage({ type: 'success', text: `Credentials sent successfully to ${user.email}` });
         // Remove the user from the list since credentials are now sent
         setUsers(users.filter(u => u.id !== user.id));
+        setSelectedUsers(prev => prev.filter(id => id !== user.id));
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to send credentials' });
       }
@@ -68,6 +103,46 @@ export default function PendingCredentials() {
       setMessage({ type: 'error', text: 'Failed to send credentials' });
     } finally {
       setSendingId(null);
+      setTimeout(() => setMessage({ type: '', text: '' }), 5000);
+    }
+  };
+
+  const handleBulkSend = async () => {
+    // Only send to selected users that are in the current filtered view
+    const userIdsToSend = selectedUsers.filter(id => filteredUserIds.includes(id));
+    
+    if (userIdsToSend.length === 0) {
+      setMessage({ type: 'error', text: 'No users selected' });
+      return;
+    }
+
+    setBulkSending(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const result = await schoolAdminService.bulkSendCredentials(userIdsToSend);
+      if (result.success) {
+        const successCount = result.results?.success?.length || 0;
+        const failedCount = result.results?.failed?.length || 0;
+        
+        let messageText = `Successfully sent credentials to ${successCount} user(s).`;
+        if (failedCount > 0) {
+          messageText += ` ${failedCount} failed.`;
+        }
+        
+        setMessage({ type: successCount > 0 ? 'success' : 'error', text: messageText });
+        
+        // Remove successful users from the list
+        const successIds = (result.results?.success || []).map(u => u.userId);
+        setUsers(prev => prev.filter(u => !successIds.includes(u.id)));
+        setSelectedUsers(prev => prev.filter(id => !successIds.includes(id)));
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to send credentials' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to send credentials' });
+    } finally {
+      setBulkSending(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
     }
   };
@@ -115,6 +190,11 @@ export default function PendingCredentials() {
     teacherBadge: { background: '#dbeafe', color: '#1e40af' },
     studentBadge: { background: '#fef3c7', color: '#92400e' },
     parentBadge: { background: '#d1fae5', color: '#065f46' },
+    checkbox: { width: '18px', height: '18px', cursor: 'pointer' },
+    bulkActionsBar: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', padding: '12px 16px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' },
+    selectAllButton: { padding: '8px 16px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' },
+    bulkSendButton: { padding: '8px 16px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' },
+    selectionInfo: { fontSize: '14px', color: '#6b7280', marginLeft: 'auto' },
   };
 
   const getRoleBadgeStyle = (role) => {
@@ -152,6 +232,7 @@ export default function PendingCredentials() {
             <strong>How it works:</strong> When you create a user account, a temporary password is generated and stored. 
             Use this page to send the login credentials via email to users. Once sent, the temporary password is cleared 
             for security, and users will be prompted to change their password on first login.
+            If you reset a user's password, they will reappear here.
           </div>
         </div>
 
@@ -198,9 +279,43 @@ export default function PendingCredentials() {
             </div>
           ) : (
             <>
+              <div style={styles.bulkActionsBar}>
+                <button 
+                  style={styles.selectAllButton}
+                  onClick={handleSelectAll}
+                >
+                  {isAllFilteredSelected ? '☑️ Deselect All' : '☐ Select All'}
+                </button>
+                <button 
+                  style={{
+                    ...styles.bulkSendButton,
+                    ...(selectedFilteredCount === 0 || bulkSending ? styles.sendButtonDisabled : {})
+                  }}
+                  onClick={handleBulkSend}
+                  disabled={selectedFilteredCount === 0 || bulkSending}
+                >
+                  {bulkSending ? (
+                    <>⏳ Sending...</>
+                  ) : (
+                    <>📤 Send to Selected ({selectedFilteredCount})</>
+                  )}
+                </button>
+                <span style={styles.selectionInfo}>
+                  {selectedFilteredCount} of {filteredUsers.length} selected
+                </span>
+              </div>
+
               <table style={styles.table}>
                 <thead>
                   <tr>
+                    <th style={{ ...styles.th, width: '40px' }}>
+                      <input
+                        type="checkbox"
+                        style={styles.checkbox}
+                        checked={isAllFilteredSelected}
+                        onChange={handleSelectAll}
+                      />
+                    </th>
                     <th style={styles.th}>Name</th>
                     <th style={styles.th}>Email</th>
                     <th style={styles.th}>Role</th>
@@ -211,7 +326,15 @@ export default function PendingCredentials() {
                 </thead>
                 <tbody>
                   {filteredUsers.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user.id} style={selectedUsers.includes(user.id) ? { background: '#f0f9ff' } : {}}>
+                      <td style={styles.td}>
+                        <input
+                          type="checkbox"
+                          style={styles.checkbox}
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={() => handleSelectUser(user.id)}
+                        />
+                      </td>
                       <td style={styles.td}><strong>{user.name}</strong></td>
                       <td style={styles.td}>{user.email}</td>
                       <td style={styles.td}>
@@ -225,10 +348,10 @@ export default function PendingCredentials() {
                         <button 
                           style={{ 
                             ...styles.sendButton, 
-                            ...(sendingId === user.id ? styles.sendButtonDisabled : {}) 
+                            ...(sendingId === user.id || bulkSending ? styles.sendButtonDisabled : {}) 
                           }}
                           onClick={() => handleSendCredentials(user)}
-                          disabled={sendingId === user.id}
+                          disabled={sendingId === user.id || bulkSending}
                         >
                           {sendingId === user.id ? (
                             <>⏳ Sending...</>

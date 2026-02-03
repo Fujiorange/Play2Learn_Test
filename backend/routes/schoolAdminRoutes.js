@@ -2046,6 +2046,115 @@ router.post('/users/:id/send-credentials', authenticateSchoolAdmin, async (req, 
   }
 });
 
+// POST bulk send credentials to multiple users
+router.post('/users/bulk-send-credentials', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { userIds } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No users selected' });
+    }
+    
+    // Get school name
+    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolName = schoolData ? schoolData.organization_name : 'Your School';
+    
+    const results = {
+      success: [],
+      failed: []
+    };
+    
+    // Process each user
+    for (const userId of userIds) {
+      try {
+        const user = await User.findById(userId);
+        
+        if (!user) {
+          results.failed.push({ userId, error: 'User not found' });
+          continue;
+        }
+        
+        // Verify the user belongs to the school admin's school
+        if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
+          results.failed.push({ userId, email: user.email, error: 'User not from your school' });
+          continue;
+        }
+        
+        // Check if tempPassword exists
+        if (!user.tempPassword) {
+          results.failed.push({ userId, email: user.email, error: 'No temporary password found' });
+          continue;
+        }
+        
+        // Send email based on role
+        let emailSent = false;
+        try {
+          if (user.role === 'Teacher') {
+            await sendTeacherWelcomeEmail(user, user.tempPassword, schoolName);
+            emailSent = true;
+          } else if (user.role === 'Student') {
+            const linkedParent = await User.findOne({
+              role: 'Parent',
+              'linkedStudents.studentId': user._id
+            });
+            
+            if (linkedParent) {
+              await sendStudentCredentialsToParent(user, user.tempPassword, linkedParent.email, schoolName);
+            } else {
+              await sendStudentCredentialsToParent(user, user.tempPassword, user.email, schoolName);
+            }
+            emailSent = true;
+          } else if (user.role === 'Parent') {
+            let studentName = 'your child';
+            if (user.linkedStudents && user.linkedStudents.length > 0) {
+              const firstStudent = await User.findById(user.linkedStudents[0].studentId);
+              if (firstStudent && firstStudent.name) {
+                studentName = firstStudent.name;
+              }
+            }
+            await sendParentWelcomeEmail(user, user.tempPassword, studentName, schoolName);
+            emailSent = true;
+          }
+        } catch (emailError) {
+          console.error(`Email sending error for ${user.email}:`, emailError);
+          results.failed.push({ userId, email: user.email, error: 'Failed to send email' });
+          continue;
+        }
+        
+        if (emailSent) {
+          // Update user to mark credentials as sent
+          await User.findByIdAndUpdate(userId, {
+            credentialsSent: true,
+            credentialsSentAt: new Date(),
+            tempPassword: null
+          });
+          
+          results.success.push({
+            userId,
+            email: user.email,
+            name: user.name
+          });
+        } else {
+          results.failed.push({ userId, email: user.email, error: 'Unable to send email for this user role' });
+        }
+      } catch (error) {
+        console.error(`Error processing user ${userId}:`, error);
+        results.failed.push({ userId, error: error.message });
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Sent credentials to ${results.success.length} users. ${results.failed.length} failed.`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk send credentials error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send credentials' });
+  }
+});
+
 // ==================== GET CLASSES ====================
 // ==================== CLASS MANAGEMENT ROUTES ====================
 
@@ -2094,12 +2203,26 @@ router.get('/classes', authenticateSchoolAdmin, async (req, res) => {
 router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = req.schoolAdmin;
+    const { includeClassId } = req.query;
     
+    // Get all active teachers in the school
     const teachers = await User.find({
       schoolId: schoolAdmin.schoolId,
-      role: 'Teacher',
-      accountActive: true
-    }).select('name email assignedClasses');
+      role: 'Teacher'
+    }).select('name email assignedClasses accountActive');
+    
+    // If includeClassId is provided, get the class to see who's currently assigned
+    let currentClassTeachers = [];
+    if (includeClassId) {
+      try {
+        const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
+        if (cls && cls.teachers && cls.teachers.length > 0) {
+          currentClassTeachers = cls.teachers.map(t => t.toString());
+        }
+      } catch (err) {
+        console.warn('Include class lookup for teachers failed:', err.message);
+      }
+    }
     
     res.json({
       success: true,
@@ -2107,7 +2230,8 @@ router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, r
         id: t._id,
         name: t.name,
         email: t.email,
-        assignedClasses: t.assignedClasses || []
+        assignedClasses: t.assignedClasses || [],
+        isCurrentlyAssigned: currentClassTeachers.includes(t._id.toString())
       }))
     });
   } catch (error) {
@@ -2123,26 +2247,34 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
     const schoolAdmin = req.schoolAdmin;
     const { unassigned, includeClassId } = req.query;
     
+    // Base filter - only students in this school (removed accountActive filter)
     const filter = {
       schoolId: schoolAdmin.schoolId,
-      role: 'Student',
-      accountActive: true
+      role: 'Student'
     };
     
-    const orConditions = [{ class: { $in: [null, ''] } }];
+    // Build conditions for students without classes assigned
+    const orConditions = [
+      { class: { $in: [null, ''] } },
+      { class: { $exists: false } }
+    ];
     
+    // If editing a class, include students currently in that class
     if (includeClassId) {
       try {
         const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
         if (cls && cls.students && cls.students.length > 0) {
           orConditions.push({ _id: { $in: cls.students } });
         }
+        // Also include students whose class field matches this class ID
+        orConditions.push({ class: includeClassId });
+        orConditions.push({ class: includeClassId.toString() });
       } catch (err) {
         console.warn('Include class lookup failed:', err.message);
       }
     }
     
-    // Default to unassigned students unless explicitly disabled
+    // Apply OR conditions unless explicitly showing all students
     const limitToUnassigned = unassigned !== 'false';
     if (limitToUnassigned) {
       filter.$or = orConditions;
