@@ -557,6 +557,18 @@ export default function TeacherDashboard() {
                 <span>Write Review/Testimonial</span>
                 <span style={styles.arrow}>→</span>
               </li>
+              <li
+                style={{
+                  ...styles.menuItem,
+                  ...(hoveredItem === 'announcements' ? styles.menuItemHover : {}),
+                }}
+                onMouseEnter={() => setHoveredItem('announcements')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => navigate('/teacher/announcements')}
+              >
+                <span>📢 School Announcements</span>
+                <span style={styles.arrow}>→</span>
+              </li>
             </ul>
           </div>
 
