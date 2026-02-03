@@ -458,6 +458,56 @@ const schoolAdminService = {
       console.error('getStudentsWithoutParent error:', error);
       return { success: false, error: 'Failed to load students' };
     }
+  },
+
+  // ==================== PENDING CREDENTIALS ====================
+  async getUsersWithPendingCredentials() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/users/pending-credentials`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users with pending credentials');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getUsersWithPendingCredentials error:', error);
+      return { success: false, error: 'Failed to load users with pending credentials' };
+    }
+  },
+
+  async sendUserCredentials(userId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/users/${userId}/send-credentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send credentials');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('sendUserCredentials error:', error);
+      return { success: false, error: error.message || 'Failed to send credentials' };
+    }
   }
 };
 

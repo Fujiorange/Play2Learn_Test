@@ -48,6 +48,12 @@ const userSchema = new mongoose.Schema({
   
   requirePasswordChange: { type: Boolean, default: false },
 
+  // ✅ Temp password storage for credential sending
+  // Stores the temporary password until credentials are sent to user
+  tempPassword: { type: String, default: null },
+  credentialsSent: { type: Boolean, default: false },
+  credentialsSentAt: { type: Date, default: null },
+
   createdBy: { type: String, default: null },
   isTrialUser: { type: Boolean, default: false },
 

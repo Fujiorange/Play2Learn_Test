@@ -1484,6 +1484,8 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       accountActive: true,
       requirePasswordChange: true, // User must change password on first login
       createdBy: 'school-admin',
+      tempPassword: tempPassword, // Store temp password for credential sending
+      credentialsSent: false, // Mark as not sent yet
       ...(linkedStudentsData && { linkedStudents: linkedStudentsData })
     });
 
@@ -1540,6 +1542,15 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
         await sendParentWelcomeEmail(newUser, tempPassword, studentName, schoolName);
         emailSent = true;
       }
+      
+      // Mark credentials as sent and clear temp password if email was successful
+      if (emailSent) {
+        await User.findByIdAndUpdate(newUser._id, {
+          credentialsSent: true,
+          credentialsSentAt: new Date(),
+          tempPassword: null // Clear temp password after sending
+        });
+      }
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       emailSent = false;
@@ -1556,6 +1567,7 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
         role: newUser.role,
         tempPassword: tempPassword // Return temp password so admin can share it if email fails
       },
+      emailSent: emailSent,
       warning: !emailSent && role === 'Student' && !parentEmail 
         ? 'No parent email provided. Please share the credentials manually with the student.' 
         : (!emailSent ? 'Email sending failed. Please share the credentials manually.' : null)
@@ -1832,6 +1844,9 @@ router.put('/users/:id/password', authenticateSchoolAdmin, async (req, res) => {
     // Update user with new password and set requirePasswordChange flag
     user.password = hashedPassword;
     user.requirePasswordChange = true;
+    user.tempPassword = tempPassword; // Store temp password for credential sending
+    user.credentialsSent = false; // Mark as not sent yet
+    user.credentialsSentAt = null;
     await user.save();
     
     // Return temp password for one-time viewing by school admin
@@ -1846,6 +1861,142 @@ router.put('/users/:id/password', authenticateSchoolAdmin, async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ success: false, error: 'Failed to reset password' });
+  }
+});
+
+// ==================== PENDING CREDENTIALS MANAGEMENT ====================
+
+// GET users with pending credentials (tempPassword not null and credentialsSent = false)
+router.get('/users/pending-credentials', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    
+    const users = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      tempPassword: { $ne: null },
+      credentialsSent: { $ne: true },
+      role: { $in: ['Teacher', 'Student', 'Parent'] }
+    }).select('name email role tempPassword class gradeLevel createdAt');
+    
+    // Format response
+    const formattedUsers = users.map(user => ({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      tempPassword: user.tempPassword,
+      className: user.class || null,
+      gradeLevel: user.gradeLevel || null,
+      createdAt: user.createdAt
+    }));
+    
+    res.json({
+      success: true,
+      users: formattedUsers,
+      count: formattedUsers.length
+    });
+  } catch (error) {
+    console.error('Get pending credentials error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get users with pending credentials' });
+  }
+});
+
+// POST send credentials email to a specific user
+router.post('/users/:id/send-credentials', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const userId = req.params.id;
+    
+    // Find the user
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Verify the user belongs to the school admin's school
+    if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
+      return res.status(403).json({ success: false, error: 'You can only send credentials for users from your school' });
+    }
+    
+    // Check if tempPassword exists
+    if (!user.tempPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No temporary password found. The credentials may have already been sent or the user has changed their password.' 
+      });
+    }
+    
+    // Get school name
+    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolName = schoolData ? schoolData.organization_name : 'Your School';
+    
+    // Send email based on role
+    let emailSent = false;
+    try {
+      if (user.role === 'Teacher') {
+        await sendTeacherWelcomeEmail(user, user.tempPassword, schoolName);
+        emailSent = true;
+      } else if (user.role === 'Student') {
+        // For students, we need to send to parent email if available
+        // First check if parent is linked
+        const linkedParent = await User.findOne({
+          role: 'Parent',
+          'linkedStudents.studentId': user._id
+        });
+        
+        if (linkedParent) {
+          await sendStudentCredentialsToParent(user, user.tempPassword, linkedParent.email, schoolName);
+          emailSent = true;
+        } else {
+          // Send directly to student email
+          await sendStudentCredentialsToParent(user, user.tempPassword, user.email, schoolName);
+          emailSent = true;
+        }
+      } else if (user.role === 'Parent') {
+        // Get linked student names
+        let studentName = 'your child';
+        if (user.linkedStudents && user.linkedStudents.length > 0) {
+          const firstStudent = await User.findById(user.linkedStudents[0].studentId);
+          if (firstStudent && firstStudent.name) {
+            studentName = firstStudent.name;
+          }
+        }
+        await sendParentWelcomeEmail(user, user.tempPassword, studentName, schoolName);
+        emailSent = true;
+      }
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to send email. Please check email configuration.' 
+      });
+    }
+    
+    if (emailSent) {
+      // Update user to mark credentials as sent
+      await User.findByIdAndUpdate(userId, {
+        credentialsSent: true,
+        credentialsSentAt: new Date(),
+        tempPassword: null // Clear temp password after sending
+      });
+      
+      res.json({
+        success: true,
+        message: `Credentials sent successfully to ${user.email}`,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role
+        }
+      });
+    } else {
+      res.status(400).json({ success: false, error: 'Unable to send email for this user role' });
+    }
+  } catch (error) {
+    console.error('Send credentials error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send credentials' });
   }
 });
 

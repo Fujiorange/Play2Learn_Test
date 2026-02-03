@@ -176,7 +176,15 @@ export default function SchoolAdminDashboard() {
                 <span>Upload CSV (Bulk)</span>
                 <span style={styles.arrow}>→</span>
               </li>
-              {/* Remove User menu item removed - delete functionality moved to role management pages */}
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'pending-credentials' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('pending-credentials')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/users/pending-credentials')}
+              >
+                <span>📧 Send Credentials</span>
+                <span style={styles.arrow}>→</span>
+              </li>
             </ul>
           </div>
 

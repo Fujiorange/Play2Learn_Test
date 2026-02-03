@@ -99,6 +99,7 @@ import PointsManagement from './components/SchoolAdmin/PointsManagement';
 import TeacherManagement from './components/SchoolAdmin/TeacherManagement';
 import StudentManagement from './components/SchoolAdmin/StudentManagement';
 import ParentManagement from './components/SchoolAdmin/ParentManagement';
+import PendingCredentials from './components/SchoolAdmin/PendingCredentials';
 
 // ⭐ NEW IMPORT - School Admin Teacher Assignment
 import TeacherAssignment from './components/SchoolAdmin/TeacherAssignment';
@@ -245,6 +246,7 @@ function App() {
           <Route path="/school-admin/users/manual-add" element={<ManualAddUser />} />
           {/* RemoveUser route removed - delete functionality moved to role management pages */}
           <Route path="/school-admin/users/bulk-upload" element={<BulkUploadCSV />} />
+          <Route path="/school-admin/users/pending-credentials" element={<PendingCredentials />} />
           <Route path="/school-admin/classes/manage" element={<ManageClasses />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
