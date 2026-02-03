@@ -16,6 +16,8 @@ export default function ParentManagement() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -112,6 +114,26 @@ export default function ParentManagement() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
+  const handleDeleteUser = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    try {
+      const result = await schoolAdminService.deleteUser(deleteConfirm.id);
+      if (result.success) {
+        setParents(parents.filter(p => p.id !== deleteConfirm.id));
+        setMessage({ type: 'success', text: `Parent "${deleteConfirm.name}" deleted successfully` });
+        setDeleteConfirm(null);
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to delete parent' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to delete parent' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getLinkedChildrenCount = (parent) => {
     return parent.linkedStudents ? parent.linkedStudents.length : 0;
   };
@@ -149,6 +171,8 @@ export default function ParentManagement() {
     modalButtons: { display: 'flex', gap: '12px', marginTop: '16px' },
     cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     saveButton: { flex: 1, padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    deleteButton: { padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginLeft: '8px' },
+    deleteConfirmButton: { flex: 1, padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     successCard: { background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '12px', padding: '24px', marginBottom: '16px' },
     successTitle: { fontSize: '18px', fontWeight: '700', color: '#16a34a', marginBottom: '16px' },
     credentialsBox: { background: 'white', border: '2px solid #d1d5db', borderRadius: '8px', padding: '16px', marginBottom: '16px' },
@@ -220,6 +244,9 @@ export default function ParentManagement() {
                         </button>
                         <button style={styles.resetButton} onClick={() => setResetPasswordUser(parent)}>
                           Reset Password
+                        </button>
+                        <button style={styles.deleteButton} onClick={() => setDeleteConfirm(parent)}>
+                          Delete
                         </button>
                       </td>
                     </tr>
@@ -393,6 +420,31 @@ export default function ParentManagement() {
             <button style={{ ...styles.closeButton, background: '#10b981', color: 'white' }} onClick={handleCloseResetModal}>
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div style={styles.modal} onClick={() => setDeleteConfirm(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>⚠️ Confirm Deletion</h2>
+            <p style={styles.infoText}>
+              Are you sure you want to delete <strong>{deleteConfirm.name}</strong>?
+            </p>
+            <p style={styles.warningText}>
+              ⚠️ This action cannot be undone. The parent will be unlinked from their children.
+            </p>
+            <div style={styles.modalButtons}>
+              <button style={styles.cancelButton} onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button 
+                style={{ ...styles.deleteConfirmButton, opacity: deleting ? 0.7 : 1 }} 
+                onClick={handleDeleteUser}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete Parent'}
+              </button>
+            </div>
           </div>
         </div>
       )}

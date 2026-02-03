@@ -176,15 +176,7 @@ export default function SchoolAdminDashboard() {
                 <span>Upload CSV (Bulk)</span>
                 <span style={styles.arrow}>→</span>
               </li>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'remove-user' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('remove-user')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/users/remove')}
-              >
-                <span>Remove User</span>
-                <span style={styles.arrow}>→</span>
-              </li>
+              {/* Remove User menu item removed - delete functionality moved to role management pages */}
             </ul>
           </div>
 
