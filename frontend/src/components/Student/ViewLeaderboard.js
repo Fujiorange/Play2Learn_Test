@@ -8,7 +8,6 @@ export default function ViewLeaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -17,9 +16,6 @@ export default function ViewLeaderboard() {
         navigate('/login');
         return;
       }
-
-      const user = authService.getCurrentUser();
-      setCurrentUser(user);
 
       try {
         // REAL API CALL - Get leaderboard from database

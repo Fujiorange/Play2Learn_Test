@@ -107,7 +107,8 @@ export default function StudentDashboard() {
   useEffect(() => {
     // Load dashboard data on mount
     loadDashboardData();
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // 🔄 FIXED: Refresh dashboard when window regains focus
@@ -120,7 +121,8 @@ export default function StudentDashboard() {
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading) {
     return (

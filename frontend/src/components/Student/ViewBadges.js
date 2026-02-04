@@ -6,7 +6,6 @@ import studentService from '../../services/studentService';
 
 export default function ViewBadges() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
   const [badges, setBadges] = useState([]);
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [progress, setProgress] = useState({});
@@ -53,9 +52,6 @@ export default function ViewBadges() {
 
   const loadData = async () => {
     try {
-      const currentUser = authService.getCurrentUser();
-      setUser(currentUser);
-
       const [badgesResult, progressResult] = await Promise.all([
         studentService.getBadges(),
         studentService.getBadgeProgress()

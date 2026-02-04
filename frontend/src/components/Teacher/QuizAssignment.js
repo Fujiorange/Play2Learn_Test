@@ -20,14 +20,6 @@ export default function QuizAssignment() {
 
   const getToken = () => localStorage.getItem('token');
 
-  useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
-    fetchData();
-  }, [navigate]);
-
   const fetchData = async () => {
     try {
       const [quizzesRes, launchedRes, classesRes] = await Promise.all([
@@ -58,12 +50,21 @@ export default function QuizAssignment() {
         setMyClasses(classesData.classes || []);
       }
     } catch (error) {
-      console.error('Failed to fetch data:', error);
+      console.error('Error fetching data:', error);
       setError('Failed to load quiz data');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLaunchQuiz = async () => {
     if (!launchModal || selectedClasses.length === 0) {

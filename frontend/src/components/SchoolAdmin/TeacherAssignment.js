@@ -21,10 +21,6 @@ export default function TeacherAssignment() {
 
   const getToken = () => localStorage.getItem('token');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     try {
       const [teachersRes, classesRes] = await Promise.all([
@@ -55,6 +51,10 @@ export default function TeacherAssignment() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const openAssignmentModal = (teacher) => {
     setSelectedTeacher(teacher);

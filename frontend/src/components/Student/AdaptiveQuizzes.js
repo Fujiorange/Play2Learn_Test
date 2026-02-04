@@ -14,10 +14,6 @@ function AdaptiveQuizzes() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('available');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const getToken = () => localStorage.getItem('token');
 
   const fetchData = async () => {
@@ -49,6 +45,10 @@ function AdaptiveQuizzes() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const startQuiz = (quizId) => {
     navigate(`/student/adaptive-quiz/${quizId}`);

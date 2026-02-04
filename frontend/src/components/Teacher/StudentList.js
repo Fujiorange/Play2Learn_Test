@@ -17,14 +17,6 @@ export default function StudentList() {
 
   const getToken = () => localStorage.getItem('token');
 
-  useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
-    loadData();
-  }, [navigate]);
-
   const loadData = async () => {
     try {
       const [studentsRes, classesRes] = await Promise.all([
@@ -43,20 +35,26 @@ export default function StudentList() {
 
       if (studentsData.success) {
         setStudents(studentsData.students || []);
-      } else {
-        setError(studentsData.error || 'Failed to load students');
       }
-
       if (classesData.success) {
         setMyClasses(classesData.classes || []);
       }
     } catch (error) {
-      console.error('Error loading students:', error);
-      setError('Failed to load students');
+      console.error('Error loading data:', error);
+      setError('Failed to load student data');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredStudents = useMemo(() => students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase());

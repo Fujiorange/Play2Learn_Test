@@ -6,7 +6,6 @@ import studentService from '../../services/studentService';
 
 export default function ViewRewardShop() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
   const [shopItems, setShopItems] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [currentPoints, setCurrentPoints] = useState(0);
@@ -27,9 +26,6 @@ export default function ViewRewardShop() {
 
   const loadData = async () => {
     try {
-      const currentUser = authService.getCurrentUser();
-      setUser(currentUser);
-
       const [shopResult, purchasesResult, dashboardResult] = await Promise.all([
         studentService.getShopItems(),
         studentService.getPurchases(),

@@ -12,14 +12,10 @@ export default function WriteTestimonial() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
   const [title, setTitle] = useState('');
   const [testimonialText, setTestimonialText] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
     rating: 5,
@@ -39,11 +35,6 @@ export default function WriteTestimonial() {
     };
     loadData();
   }, [navigate]);
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setMessage({ type: '', text: '' });
-  };
 
   const handleRatingClick = (rating) => {
     setFormData({ ...formData, rating });
@@ -99,9 +90,6 @@ export default function WriteTestimonial() {
     formGroup: { marginBottom: '24px' },
     label: { display: 'block', fontSize: '15px', fontWeight: '600', color: '#374151', marginBottom: '8px' },
     input: { width: '100%', padding: '12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', fontFamily: 'inherit' },
-    ratingContainer: { display: 'flex', gap: '8px', marginBottom: '8px' },
-    star: { fontSize: '36px', cursor: 'pointer', transition: 'transform 0.2s' },
-    textarea: { width: '100%', padding: '12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', fontFamily: 'inherit', minHeight: '150px', resize: 'vertical' },
     checkboxContainer: { display: 'flex', alignItems: 'center', gap: '8px' },
     checkbox: { width: '20px', height: '20px', cursor: 'pointer' },
     checkboxLabel: { fontSize: '14px', color: '#374151' },

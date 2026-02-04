@@ -42,7 +42,7 @@ const Testimonials = () => {
         <div className="testimonials-grid">
           {testimonials.map((testimonial) => (
             <div key={testimonial.id} className="testimonial-card">
-              <img src={testimonial.image} alt={`${testimonial.name}'s photo`} className="testimonial-image" />
+              <img src={testimonial.image} alt={testimonial.name} className="testimonial-image" />
               <blockquote className="testimonial-quote">"{testimonial.quote}"</blockquote>
               <cite className="testimonial-cite">
                 <strong>{testimonial.name}</strong>, {testimonial.role}

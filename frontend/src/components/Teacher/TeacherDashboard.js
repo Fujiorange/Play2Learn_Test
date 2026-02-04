@@ -9,7 +9,6 @@ export default function TeacherDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [expandedSection, setExpandedSection] = useState(null);
-  const [buttonHovered, setButtonHovered] = useState(false);
 
   useEffect(() => {
     // Check authentication and load user data
