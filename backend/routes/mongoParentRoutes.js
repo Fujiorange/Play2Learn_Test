@@ -1318,11 +1318,21 @@ router.get('/announcements', authMiddleware, async (req, res) => {
     }
     
     const schoolIdArray = Array.from(schoolIds);
+    
+    // Convert schoolIds to ObjectIds for querying announcements
+    let schoolObjectIds;
+    try {
+      schoolObjectIds = schoolIdArray.map(id => new mongoose.Types.ObjectId(id));
+    } catch (err) {
+      console.error("❌ Invalid schoolId format in array:", schoolIdArray);
+      return res.status(400).json({ success: false, error: "Invalid school ID format" });
+    }
+    
     const now = new Date();
     
     // Build filter: announcements from all linked schools, not expired, and audience includes parents or all
     const filter = {
-      schoolId: { $in: schoolIdArray },
+      schoolId: { $in: schoolObjectIds },
       $or: [
         { expiresAt: { $gt: now } },
         { expiresAt: null }

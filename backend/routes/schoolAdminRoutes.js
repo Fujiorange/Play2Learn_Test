@@ -2630,8 +2630,17 @@ router.get('/announcements', authenticateSchoolAdmin, async (req, res) => {
     const schoolAdmin = req.schoolAdmin;
     const schoolId = schoolAdmin.schoolId;
     
-    // Filter announcements by schoolId to only show school admin's own announcements
-    const filter = schoolId ? { schoolId: schoolId } : {};
+    // Convert schoolId to ObjectId for querying announcements
+    let filter = {};
+    if (schoolId) {
+      try {
+        const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+        filter = { schoolId: schoolObjectId };
+      } catch (err) {
+        console.error("❌ Invalid schoolId format:", schoolId);
+        return res.status(400).json({ success: false, error: "Invalid school ID format" });
+      }
+    }
     
     const announcements = await Announcement.find(filter)
       .sort({ pinned: -1, createdAt: -1 });
@@ -2667,6 +2676,15 @@ router.post('/announcements', authenticateSchoolAdmin, async (req, res) => {
       });
     }
     
+    // Convert schoolId to ObjectId
+    let schoolObjectId;
+    try {
+      schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+    } catch (err) {
+      console.error("❌ Invalid schoolId format:", schoolId);
+      return res.status(400).json({ success: false, error: "Invalid school ID format" });
+    }
+    
     const announcement = new Announcement({
       title,
       content,
@@ -2674,7 +2692,7 @@ router.post('/announcements', authenticateSchoolAdmin, async (req, res) => {
       audience: audience || 'all',
       pinned: pinned || false,
       author: req.user.name || req.user.email,
-      schoolId: schoolId,  // ✅ Store schoolId with announcement for school-scoped filtering
+      schoolId: schoolObjectId,  // ✅ Store schoolId as ObjectId
       expiresAt: expiresAt ? new Date(expiresAt) : null
     });
     
@@ -2697,6 +2715,15 @@ router.put('/announcements/:id', authenticateSchoolAdmin, async (req, res) => {
     const schoolAdmin = req.schoolAdmin;
     const schoolId = schoolAdmin.schoolId;
     
+    // Convert schoolId to ObjectId
+    let schoolObjectId;
+    try {
+      schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+    } catch (err) {
+      console.error("❌ Invalid schoolId format:", schoolId);
+      return res.status(400).json({ success: false, error: "Invalid school ID format" });
+    }
+    
     const updates = { ...req.body };
     delete updates._id;
     delete updates.schoolId; // Prevent changing schoolId
@@ -2708,7 +2735,7 @@ router.put('/announcements/:id', authenticateSchoolAdmin, async (req, res) => {
     
     // Only update announcements belonging to this school
     const announcement = await Announcement.findOneAndUpdate(
-      { _id: req.params.id, schoolId: schoolId },
+      { _id: req.params.id, schoolId: schoolObjectId },
       { $set: updates },
       { new: true, runValidators: true }
     );
@@ -2731,9 +2758,18 @@ router.delete('/announcements/:id', authenticateSchoolAdmin, async (req, res) =>
     const schoolAdmin = req.schoolAdmin;
     const schoolId = schoolAdmin.schoolId;
     
+    // Convert schoolId to ObjectId
+    let schoolObjectId;
+    try {
+      schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+    } catch (err) {
+      console.error("❌ Invalid schoolId format:", schoolId);
+      return res.status(400).json({ success: false, error: "Invalid school ID format" });
+    }
+    
     // Only delete announcements belonging to this school
     const result = await Announcement.findOneAndDelete(
-      { _id: req.params.id, schoolId: schoolId }
+      { _id: req.params.id, schoolId: schoolObjectId }
     );
     
     if (!result) {

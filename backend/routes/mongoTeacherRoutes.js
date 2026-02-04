@@ -781,11 +781,20 @@ router.get('/announcements', async (req, res) => {
       return res.json({ success: true, announcements: [], message: 'No school assigned' });
     }
     
+    // Convert schoolId to ObjectId for querying announcements
+    let schoolObjectId;
+    try {
+      schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+    } catch (err) {
+      console.error("❌ Invalid schoolId format:", schoolId);
+      return res.status(400).json({ success: false, error: "Invalid school ID format" });
+    }
+    
     const now = new Date();
     
     // Build filter: school-specific, not expired, and audience includes teachers or all
     const filter = {
-      schoolId: schoolId,
+      schoolId: schoolObjectId,
       $or: [
         { expiresAt: { $gt: now } },
         { expiresAt: null }
