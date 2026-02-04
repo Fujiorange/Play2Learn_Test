@@ -131,27 +131,48 @@ async function verifySetup() {
     } else {
       console.log(`✅ Found ${parentsWithStudents.length} parents with linked students`);
       
-      // Show details
+      // Collect all student IDs first to minimize database queries
+      const allStudentIds = new Set();
+      const parentStudentMap = new Map();
+      
       for (const parent of parentsWithStudents) {
         const validStudentIds = getValidStudentIds(parent.linkedStudents);
         
         if (validStudentIds.length === 0) {
           console.log(`   ⚠️  ${parent.name} (${parent.email}): Has linkedStudents array but all studentIds are null!`);
-          continue;
-        }
-        
-        const linkedStudents = await User.find({
-          _id: { $in: validStudentIds },
-          role: 'Student'
-        }).select('name email');
-        
-        if (linkedStudents.length === 0) {
-          console.log(`   ⚠️  ${parent.name} (${parent.email}): Linked students not found in database!`);
         } else {
-          console.log(`   - ${parent.name} (${parent.email}): ${linkedStudents.length} linked student(s)`);
-          linkedStudents.forEach(s => {
-            console.log(`     → ${s.name} (${s.email})`);
+          parentStudentMap.set(parent._id.toString(), {
+            parent,
+            studentIds: validStudentIds
           });
+          validStudentIds.forEach(id => allStudentIds.add(id.toString()));
+        }
+      }
+      
+      // Fetch all students at once
+      if (allStudentIds.size > 0) {
+        const allStudents = await User.find({
+          _id: { $in: Array.from(allStudentIds) },
+          role: 'Student'
+        }).select('_id name email');
+        
+        const studentMap = new Map();
+        allStudents.forEach(s => studentMap.set(s._id.toString(), s));
+        
+        // Show details for each parent
+        for (const [parentId, { parent, studentIds }] of parentStudentMap) {
+          const linkedStudents = studentIds
+            .map(id => studentMap.get(id.toString()))
+            .filter(s => s); // Remove undefined (students not found)
+          
+          if (linkedStudents.length === 0) {
+            console.log(`   ⚠️  ${parent.name} (${parent.email}): Linked students not found in database!`);
+          } else {
+            console.log(`   - ${parent.name} (${parent.email}): ${linkedStudents.length} linked student(s)`);
+            linkedStudents.forEach(s => {
+              console.log(`     → ${s.name} (${s.email})`);
+            });
+          }
         }
       }
     }

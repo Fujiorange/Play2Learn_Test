@@ -234,8 +234,12 @@ router.get('/dashboard', authenticateParent, async (req, res) => {
       });
     }
 
-    const enrichedLinkedStudents = parent.linkedStudents
-      .map(linkedStudent => {
+    // Filter to only valid linked students with non-null studentIds
+    const validLinkedStudents = parent.linkedStudents.filter(ls => 
+      ls && typeof ls === 'object' && ls.studentId
+    );
+    
+    const enrichedLinkedStudents = validLinkedStudents.map(linkedStudent => {
         const fullStudent = students.find(s => s._id.toString() === linkedStudent.studentId.toString());
         
         if (fullStudent) {
@@ -252,7 +256,7 @@ router.get('/dashboard', authenticateParent, async (req, res) => {
           };
         }
         
-        // If student not found in database, return minimal info
+        // If student not found in database, return minimal info with the studentId we have
         return {
           studentId: linkedStudent.studentId,
           studentName: 'Student Not Found',

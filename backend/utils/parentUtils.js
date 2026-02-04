@@ -15,6 +15,7 @@ function getValidStudentIds(linkedStudents) {
   }
   
   return linkedStudents
+    .filter(ls => ls && typeof ls === 'object') // Filter out non-objects first
     .map(ls => ls.studentId)
     .filter(id => id !== null && id !== undefined); // Filter out null/undefined values specifically
 }
