@@ -80,7 +80,7 @@ export default function ParentManagement() {
         aValue = a.email?.toLowerCase() || '';
         bValue = b.email?.toLowerCase() || '';
         break;
-      case 'linkedChildren':
+      case 'linkedStudents':
         aValue = a.linkedStudents ? a.linkedStudents.length : 0;
         bValue = b.linkedStudents ? b.linkedStudents.length : 0;
         break;
@@ -344,7 +344,7 @@ export default function ParentManagement() {
                   <tr>
                     <th style={styles.thSortable} onClick={() => handleSort('name')}>Name{getSortIndicator('name')}</th>
                     <th style={styles.thSortable} onClick={() => handleSort('email')}>Email{getSortIndicator('email')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('linkedChildren')}>Linked Children{getSortIndicator('linkedChildren')}</th>
+                    <th style={styles.thSortable} onClick={() => handleSort('linkedStudents')}>Linked Children{getSortIndicator('linkedStudents')}</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
                 </thead>

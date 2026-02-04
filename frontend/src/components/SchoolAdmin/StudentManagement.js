@@ -90,8 +90,20 @@ export default function StudentManagement() {
         bValue = b.className?.toLowerCase() || '';
         break;
       case 'gradeLevel':
-        aValue = a.gradeLevel?.toLowerCase() || '';
-        bValue = b.gradeLevel?.toLowerCase() || '';
+        // Parse grade levels numerically if possible, otherwise compare as strings
+        const aGrade = a.gradeLevel || '';
+        const bGrade = b.gradeLevel || '';
+        const aNum = parseInt(aGrade, 10);
+        const bNum = parseInt(bGrade, 10);
+        // If both are valid numbers, sort numerically
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          aValue = aNum;
+          bValue = bNum;
+        } else {
+          // Otherwise sort alphabetically
+          aValue = aGrade.toLowerCase();
+          bValue = bGrade.toLowerCase();
+        }
         break;
       default:
         return 0;
