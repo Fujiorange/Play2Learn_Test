@@ -13,6 +13,7 @@ const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const Testimonial = require('../models/Testimonial');
 const { authMiddleware } = require('../middleware/auth');
+const { getValidStudentIds } = require('../utils/parentUtils');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
@@ -209,9 +210,7 @@ router.get('/dashboard', authenticateParent, async (req, res) => {
       });
     }
 
-    const studentIds = parent.linkedStudents
-      .map(ls => ls.studentId)
-      .filter(id => id); // Filter out null/undefined student IDs
+    const studentIds = getValidStudentIds(parent.linkedStudents);
     
     const students = await User.find({
       _id: { $in: studentIds },
@@ -418,9 +417,7 @@ router.get('/children/summary', authenticateParent, async (req, res) => {
       });
     }
 
-    const studentIds = parent.linkedStudents
-      .map(ls => ls.studentId)
-      .filter(id => id); // Filter out null/undefined student IDs
+    const studentIds = getValidStudentIds(parent.linkedStudents);
     
     // ✅ Get students with schoolId (string field)
     const students = await User.find({
@@ -722,9 +719,7 @@ router.get('/feedback', authenticateParent, async (req, res) => {
       });
     }
 
-    const studentIds = parent.linkedStudents
-      .map(ls => ls.studentId)
-      .filter(id => id); // Filter out null/undefined student IDs
+    const studentIds = getValidStudentIds(parent.linkedStudents);
 
     const feedback = await Feedback.find({
       studentId: { $in: studentIds }
@@ -1301,9 +1296,7 @@ router.get('/announcements', authMiddleware, async (req, res) => {
     
     // Get schoolIds from all linked students
     if (parent.linkedStudents && parent.linkedStudents.length > 0) {
-      const studentIds = parent.linkedStudents
-        .map(ls => ls.studentId)
-        .filter(id => id); // Filter out null/undefined student IDs
+      const studentIds = getValidStudentIds(parent.linkedStudents);
       
       if (studentIds.length > 0) {
         const students = await User.find({ _id: { $in: studentIds } }).select('schoolId');

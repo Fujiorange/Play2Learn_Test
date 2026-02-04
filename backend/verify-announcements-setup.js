@@ -4,8 +4,15 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('./models/User');
+const { getValidStudentIds } = require('./utils/parentUtils');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/play2learn';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is not set!');
+  console.error('   Please set MONGODB_URI in your .env file');
+  process.exit(1);
+}
 
 async function verifySetup() {
   try {
@@ -122,9 +129,7 @@ async function verifySetup() {
       
       // Show details
       for (const parent of parentsWithStudents) {
-        const validStudentIds = parent.linkedStudents
-          .map(ls => ls.studentId)
-          .filter(id => id);
+        const validStudentIds = getValidStudentIds(parent.linkedStudents);
         
         if (validStudentIds.length === 0) {
           console.log(`   ⚠️  ${parent.name} (${parent.email}): Has linkedStudents array but all studentIds are null!`);
