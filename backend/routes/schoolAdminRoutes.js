@@ -2644,69 +2644,6 @@ router.get('/announcements', authenticateSchoolAdmin, async (req, res) => {
   }
 });
 
-// ==================== GET PUBLIC ANNOUNCEMENTS (For Students/Parents) ====================
-router.get('/announcements/public', async (req, res) => {
-  try {
-    const db = getDb();
-    const { audience } = req.query;
-    
-    console.log('📢 Fetching public announcements for:', audience);
-    
-    const now = new Date();
-    
-    // Base filter: not expired
-    let filter = {
-      $or: [
-        { expiresAt: { $gt: now } },
-        { expiresAt: null },
-        { expiresAt: { $exists: false } }
-      ]
-    };
-    
-    // Add audience filter if specified
-    if (audience && audience !== 'all') {
-      const audienceNormalized = audience.toLowerCase();
-      const audienceMatches = ['all']; // Always include 'all' audience
-      
-      if (audienceNormalized.includes('student')) {
-        audienceMatches.push('student', 'students');
-      } else if (audienceNormalized.includes('teacher')) {
-        audienceMatches.push('teacher', 'teachers');
-      } else if (audienceNormalized.includes('parent')) {
-        audienceMatches.push('parent', 'parents');
-      } else {
-        audienceMatches.push(audienceNormalized);
-      }
-      
-      filter = {
-        $and: [
-          { $or: [
-            { expiresAt: { $gt: now } },
-            { expiresAt: null },
-            { expiresAt: { $exists: false } }
-          ]},
-          { $or: [
-            { audience: { $in: audienceMatches } },
-            { audience: { $exists: false } }
-          ]}
-        ]
-      };
-    }
-    
-    const announcements = await db.collection('announcements')
-      .find(filter)
-      .sort({ pinned: -1, createdAt: -1 })
-      .limit(50)
-      .toArray();
-    
-    console.log(`✅ Found ${announcements.length} announcements for ${audience}`);
-    res.json({ success: true, announcements });
-  } catch (error) {
-    console.error('❌ Get public announcements error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load announcements' });
-  }
-});
-
 // ==================== CREATE ANNOUNCEMENT ====================
 router.post('/announcements', authenticateSchoolAdmin, async (req, res) => {
   try {

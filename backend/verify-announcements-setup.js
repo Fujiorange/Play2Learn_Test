@@ -4,6 +4,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('./models/User');
+const Announcement = require('./models/Announcement');
 const { getValidStudentIds } = require('./utils/parentUtils');
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -79,41 +80,33 @@ async function verifySetup() {
 
     // Check 4: Verify announcement collection exists and has data
     console.log('📊 Check 4: Checking announcements collection...');
-    const db = mongoose.connection.db;
-    const collections = await db.listCollections().toArray();
-    const hasAnnouncementCollection = collections.some(c => c.name === 'announcements');
     
-    let announcementsCount = 0;
-    if (hasAnnouncementCollection) {
-      announcementsCount = await db.collection('announcements').countDocuments();
-    }
+    const announcementsCount = await Announcement.countDocuments();
     
-    if (!hasAnnouncementCollection) {
-      console.log('⚠️  Announcements collection does not exist!');
+    if (announcementsCount === 0) {
+      console.log('⚠️  No announcements found!');
       console.log('   ℹ️  Create announcements via School Admin dashboard');
     } else {
       console.log(`✅ Announcements collection exists with ${announcementsCount} announcements`);
       
-      if (announcementsCount > 0) {
-        // Show sample announcements
-        const sampleAnnouncements = await db.collection('announcements')
-          .find({})
-          .limit(3)
-          .project({ title: 1, schoolId: 1, audience: 1, createdAt: 1 })
-          .toArray();
-        
-        console.log('   📢 Sample announcements:');
-        sampleAnnouncements.forEach(a => {
-          console.log(`   - "${a.title}" (School: ${a.schoolId || 'N/A'}, Audience: ${a.audience || 'all'})`);
-        });
-        
-        // Check for announcements without schoolId
-        const announcementsWithoutSchool = await db.collection('announcements')
-          .countDocuments({ $or: [{ schoolId: null }, { schoolId: { $exists: false } }] });
-        
-        if (announcementsWithoutSchool > 0) {
-          console.log(`   ⚠️  ${announcementsWithoutSchool} announcements have no schoolId (global announcements)`);
-        }
+      // Show sample announcements
+      const sampleAnnouncements = await Announcement.find({})
+        .limit(3)
+        .select('title schoolId audience createdAt')
+        .lean();
+      
+      console.log('   📢 Sample announcements:');
+      sampleAnnouncements.forEach(a => {
+        console.log(`   - "${a.title}" (School: ${a.schoolId || 'N/A'}, Audience: ${a.audience || 'all'})`);
+      });
+      
+      // Check for announcements without schoolId
+      const announcementsWithoutSchool = await Announcement.countDocuments({ 
+        $or: [{ schoolId: null }, { schoolId: { $exists: false } }] 
+      });
+      
+      if (announcementsWithoutSchool > 0) {
+        console.log(`   ⚠️  ${announcementsWithoutSchool} announcements have no schoolId (will cause errors)`);
       }
     }
     console.log('');
