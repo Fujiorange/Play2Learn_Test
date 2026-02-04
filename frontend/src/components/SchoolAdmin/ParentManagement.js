@@ -311,13 +311,22 @@ export default function ParentManagement() {
                       <td style={styles.td}>
                         <strong>{parent.name}</strong>
                         {getLinkedChildrenCount(parent) === 0 && (
-                          <span style={{ marginLeft: '8px', color: '#ef4444', fontWeight: 'bold' }} title="No linked students">⚠️</span>
+                          <span 
+                            style={{ marginLeft: '8px', color: '#ef4444', fontWeight: 'bold' }} 
+                            title="No linked students"
+                            aria-label="Warning: No linked students"
+                            role="img"
+                          >⚠️</span>
                         )}
                       </td>
                       <td style={styles.td}>{parent.email}</td>
                       <td style={styles.td}>
                         {getLinkedChildrenCount(parent) === 0 ? (
-                          <span style={{ color: '#ef4444', fontWeight: '600' }}>
+                          <span 
+                            style={{ color: '#ef4444', fontWeight: '600' }}
+                            role="alert"
+                            aria-live="polite"
+                          >
                             ⚠️ No children linked
                           </span>
                         ) : (

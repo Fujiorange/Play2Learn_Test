@@ -1842,15 +1842,16 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
         });
       }
       
-      // If deleteParents query param is provided, delete those parents
+      // If deleteParents query param is provided, delete those parents concurrently
       if (deleteParents) {
         const parentIdsToDelete = deleteParents.split(',');
-        for (const parentId of parentIdsToDelete) {
-          const parentToDelete = parentsWithStudent.find(p => String(p._id) === parentId);
-          if (parentToDelete && parentToDelete.linkedStudents.length === 1) {
-            await User.findByIdAndDelete(parentId);
-          }
-        }
+        const deletePromises = parentIdsToDelete
+          .filter(parentId => {
+            const parentToDelete = parentsWithStudent.find(p => String(p._id) === parentId);
+            return parentToDelete && parentToDelete.linkedStudents.length === 1;
+          })
+          .map(parentId => User.findByIdAndDelete(parentId));
+        await Promise.all(deletePromises);
       }
       
       // Remove student from all remaining parents' linkedStudents array

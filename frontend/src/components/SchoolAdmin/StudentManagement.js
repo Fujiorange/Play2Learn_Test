@@ -172,12 +172,12 @@ export default function StudentManagement() {
   // Handle parent deletion after student deletion
   const handleConfirmParentDeletion = async (deleteSelected) => {
     if (deleteSelected && selectedParentsToDelete.length > 0) {
-      // Delete selected parents
+      // Delete selected parents concurrently for better performance
       setDeleting(true);
       try {
-        for (const parentId of selectedParentsToDelete) {
-          await schoolAdminService.deleteUser(parentId);
-        }
+        await Promise.all(
+          selectedParentsToDelete.map(parentId => schoolAdminService.deleteUser(parentId))
+        );
         setMessage({ type: 'success', text: `Student deleted and ${selectedParentsToDelete.length} parent(s) removed successfully` });
       } catch (err) {
         setMessage({ type: 'error', text: 'Student deleted but failed to remove some parents' });
