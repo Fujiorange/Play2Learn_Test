@@ -236,11 +236,6 @@ router.get('/dashboard', authenticateParent, async (req, res) => {
 
     const enrichedLinkedStudents = parent.linkedStudents
       .map(linkedStudent => {
-        // Skip if studentId is null/undefined (shouldn't happen since getValidStudentIds already filtered)
-        if (!linkedStudent.studentId) {
-          return null;
-        }
-        
         const fullStudent = students.find(s => s._id.toString() === linkedStudent.studentId.toString());
         
         if (fullStudent) {
@@ -266,8 +261,7 @@ router.get('/dashboard', authenticateParent, async (req, res) => {
           gradeLevel: 'N/A',
           class: 'N/A'
         };
-      })
-      .filter(item => item !== null); // Remove any null entries
+      });
 
     res.json({
       success: true,
