@@ -83,11 +83,15 @@ async function verifySetup() {
     const collections = await db.listCollections().toArray();
     const hasAnnouncementCollection = collections.some(c => c.name === 'announcements');
     
+    let announcementsCount = 0;
+    if (hasAnnouncementCollection) {
+      announcementsCount = await db.collection('announcements').countDocuments();
+    }
+    
     if (!hasAnnouncementCollection) {
       console.log('⚠️  Announcements collection does not exist!');
       console.log('   ℹ️  Create announcements via School Admin dashboard');
     } else {
-      const announcementsCount = await db.collection('announcements').countDocuments();
       console.log(`✅ Announcements collection exists with ${announcementsCount} announcements`);
       
       if (announcementsCount > 0) {
@@ -168,7 +172,6 @@ async function verifySetup() {
     console.log(`  - Parents: ${totalParents} (${parentsWithStudents.length} with linked students)`);
     
     if (hasAnnouncementCollection) {
-      const announcementsCount = await db.collection('announcements').countDocuments();
       console.log(`  - Announcements: ${announcementsCount}`);
     }
     
@@ -179,7 +182,7 @@ async function verifySetup() {
       console.log('   Run update scripts or manually assign schoolId to these users');
     }
     
-    if (!hasAnnouncementCollection || (await db.collection('announcements').countDocuments()) === 0) {
+    if (!hasAnnouncementCollection || announcementsCount === 0) {
       console.log('⚠️  ACTION REQUIRED: Create test announcements via School Admin dashboard');
     }
     
