@@ -30,10 +30,10 @@ export default function BulkUploadCSV() {
   };
 
   const downloadTemplate = () => {
-    const csvTemplate = `Name,Email,Role,Class,GradeLevel,ParentEmail,StudentEmail,Relationship,Subject,ContactNumber,Gender,DateOfBirth
-John Tan,john.tan@student.com,Student,1A,Primary 1,parent.tan@email.com,,,Mathematics,+6591234567,male,2019-03-15
-Mr. David Lee,david.lee@teacher.com,Teacher,,, , ,Mathematics,+6591234567,male,1985-03-15
-Mrs. Lim Mei Ling,parent.lim@email.com,Parent,, , ,john.tan@student.com,Mother,,+6598765432,female,1980-07-22`;
+    const csvTemplate = `Name,Email,Role,Salutation,Class,GradeLevel,ParentEmail,StudentEmail,Relationship,Subject,ContactNumber,Gender,DateOfBirth
+John Tan,john.tan@student.com,Student,,1A,Primary 1,parent.tan@email.com,,,Mathematics,+6591234567,male,15/03/2019
+David Lee,david.lee@teacher.com,Teacher,Mr,,,,,,,+6591234567,male,15/03/1985
+Lim Mei Ling,parent.lim@email.com,Parent,Mrs,,,,john.tan@student.com,Mother,,+6598765432,female,22/07/1980`;
 
     const blob = new Blob([csvTemplate], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -151,11 +151,12 @@ Mrs. Lim Mei Ling,parent.lim@email.com,Parent,, , ,john.tan@student.com,Mother,,
         <>
           <div style={styles.infoTitle}>📋 Student CSV Format Requirements:</div>
           <ul style={styles.infoList}>
-            <li><strong>Required:</strong> Name, Email</li>
+            <li><strong>Required:</strong> Name, Email, Role (Student)</li>
             <li><strong>Optional:</strong> Class, GradeLevel, ParentEmail, ContactNumber, Gender, DateOfBirth</li>
-            <li>GradeLevel defaults to "Primary 1"</li>
+            <li>GradeLevel: Only "Primary 1" is currently available (Primary 2-6 coming soon)</li>
             <li>If ParentEmail provided, credentials will be sent to parent</li>
             <li>Date format: DD/MM/YYYY or YYYY-MM-DD</li>
+            <li>Gender: male or female</li>
           </ul>
         </>
       );
@@ -164,22 +165,25 @@ Mrs. Lim Mei Ling,parent.lim@email.com,Parent,, , ,john.tan@student.com,Mother,,
         <>
           <div style={styles.infoTitle}>📋 Teacher CSV Format Requirements:</div>
           <ul style={styles.infoList}>
-            <li><strong>Required:</strong> Name, Email</li>
-            <li><strong>Optional:</strong> Subject, ContactNumber, Gender, DateOfBirth</li>
+            <li><strong>Required:</strong> Name, Email, Role (Teacher)</li>
+            <li><strong>Optional:</strong> Salutation, Subject, ContactNumber, Gender, DateOfBirth</li>
+            <li>Salutation: Mr, Mrs, Ms, Miss, Dr, Prof, Mdm</li>
             <li>Subject defaults to "Mathematics"</li>
-            <li>Welcome email will be sent to teacher</li>
+            <li>Date format: DD/MM/YYYY or YYYY-MM-DD</li>
+            <li>Gender: male or female</li>
           </ul>
         </>
       );
     } else {
       return (
         <>
-          <div style={styles.infoTitle}>📋 Parent CSV Format Requirements:</div>
+          <div style={styles.infoTitle}>📋 Mixed CSV Format Requirements:</div>
           <ul style={styles.infoList}>
-            <li><strong>Required:</strong> ParentName, ParentEmail, StudentEmail</li>
-            <li><strong>Optional:</strong> Relationship, ContactNumber, Gender</li>
-            <li>Student must exist in database first</li>
-            <li>Relationship: Father, Mother, Guardian, etc.</li>
+            <li><strong>Required for all:</strong> Name, Email, Role (Student/Teacher/Parent)</li>
+            <li><strong>For Students:</strong> GradeLevel (only Primary 1 available), Class (optional), ParentEmail (optional)</li>
+            <li><strong>For Teachers:</strong> Salutation (Mr, Mrs, Ms, Miss, Dr, Prof, Mdm), Subject (optional)</li>
+            <li><strong>For Parents:</strong> Salutation, StudentEmail (required - student must exist), Relationship (e.g., Father, Mother, Guardian)</li>
+            <li><strong>Common optional:</strong> ContactNumber, Gender (male/female), DateOfBirth (DD/MM/YYYY or YYYY-MM-DD)</li>
           </ul>
         </>
       );

@@ -168,6 +168,14 @@ export const resetSchoolAdminPassword = async (id) => {
   });
 };
 
+// Create a single school admin (for manual add page)
+export const createSingleSchoolAdmin = async (schoolId, adminData) => {
+  return apiCall('/api/p2ladmin/school-admins', {
+    method: 'POST',
+    body: JSON.stringify({ schoolId, admins: [adminData] }),
+  });
+};
+
 // ==================== QUESTIONS ====================
 export const getQuestions = async (filters = {}) => {
   const queryString = new URLSearchParams(filters).toString();
@@ -364,6 +372,7 @@ export default {
   deleteSchool,
   getSchoolAdmins,
   createSchoolAdmins,
+  createSingleSchoolAdmin,
   updateSchoolAdmin,
   deleteSchoolAdmin,
   resetSchoolAdminPassword,

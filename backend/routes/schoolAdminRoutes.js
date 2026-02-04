@@ -285,11 +285,22 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
     const classIds = [...new Set(users.map(u => u.class).filter(Boolean))];
     const classLookup = {};
     if (classIds.length > 0) {
-      const classDocs = await Class.find({ _id: { $in: classIds }, school_id: schoolAdmin.schoolId })
-        .select('class_name');
-      classDocs.forEach(cls => {
-        classLookup[cls._id.toString()] = cls.class_name;
+      // Filter to only valid ObjectIds to avoid query errors
+      const validClassIds = classIds.filter(id => {
+        try {
+          return mongoose.Types.ObjectId.isValid(id);
+        } catch (e) {
+          return false;
+        }
       });
+      
+      if (validClassIds.length > 0) {
+        const classDocs = await Class.find({ _id: { $in: validClassIds }, school_id: schoolAdmin.schoolId })
+          .select('class_name');
+        classDocs.forEach(cls => {
+          classLookup[cls._id.toString()] = cls.class_name;
+        });
+      }
     }
 
     // For students, find their linked parent
@@ -400,8 +411,14 @@ router.get('/users/:id/details', authenticateSchoolAdmin, async (req, res) => {
     // Get class name if applicable
     let className = null;
     if (user.class) {
-      const classDoc = await Class.findById(user.class).select('class_name');
-      className = classDoc ? classDoc.class_name : null;
+      // Only lookup if it's a valid ObjectId
+      if (mongoose.Types.ObjectId.isValid(user.class)) {
+        const classDoc = await Class.findById(user.class).select('class_name');
+        className = classDoc ? classDoc.class_name : user.class;
+      } else {
+        // If it's not a valid ObjectId, it might be a plain class name string
+        className = user.class;
+      }
     }
     
     const result = {
@@ -560,6 +577,12 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
       throw new Error('School not found');
     }
 
+    // Build a class name to ID lookup for the school
+    const allClasses = await Class.find({ school_id: schoolAdmin.schoolId }).select('_id class_name');
+    const classNameToId = {};
+    allClasses.forEach(cls => {
+      classNameToId[cls.class_name.toLowerCase()] = cls._id.toString();
+    });
     
     // Track students created in this batch for atomic update at the end
     let studentsCreatedCount = 0;
@@ -643,6 +666,18 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           }
         }
 
+        // Resolve class name to class ID
+        let classId = null;
+        const className = studentData.class?.trim() || null;
+        if (className) {
+          const classKey = className.toLowerCase();
+          if (classNameToId[classKey]) {
+            classId = classNameToId[classKey];
+          } else {
+            console.log(`⚠️ Class "${className}" not found for student ${studentData.email}. User will be created without class assignment.`);
+          }
+        }
+
         // ✅ Create ONLY user document in 'users' collection
         const newUser = await User.create({
           name: studentData.name.trim(),
@@ -651,7 +686,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           password: hashedPassword,
           role: 'Student',
           schoolId: schoolAdmin.schoolId,
-          class: studentData.class?.trim() || null,
+          class: classId,
           gradeLevel: studentData.gradeLevel?.trim() || 'Primary 1',
           parentEmail: studentData.parentEmail?.toLowerCase().trim() || null,
           contact: studentData.contact?.trim() || null,
@@ -665,6 +700,11 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           createdBy: 'school-admin',
           createdAt: new Date()
         });
+
+        // If student has a class, add them to the Class.students array
+        if (classId) {
+          await Class.findByIdAndUpdate(classId, { $addToSet: { students: newUser._id } });
+        }
 
         console.log(`✅ Student created in users collection: ${newUser.email}`);
         results.created++;
@@ -1211,6 +1251,13 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
         .on('error', (error) => reject(error));
     });
 
+    // Build a class name to ID lookup for the school
+    const allClasses = await Class.find({ school_id: schoolAdmin.schoolId }).select('_id class_name');
+    const classNameToId = {};
+    allClasses.forEach(cls => {
+      classNameToId[cls.class_name.toLowerCase()] = cls._id.toString();
+    });
+
     for (const [index, row] of rows.entries()) {
       const rowNumber = index + 2; // header is row 1
       const rawRole = (row.Role || row.role || '').trim();
@@ -1261,24 +1308,71 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
           }
         }
 
-        await User.create({
+        // Resolve class name to class ID for students
+        let classId = null;
+        const className = row.Class || row.class || null;
+        if (role === 'Student' && className) {
+          const classKey = className.toLowerCase().trim();
+          if (classNameToId[classKey]) {
+            classId = classNameToId[classKey];
+          } else {
+            // Class not found - still create user but without class assignment
+            console.log(`⚠️ Class "${className}" not found for student ${row.Email}. User will be created without class assignment.`);
+          }
+        }
+
+        // Parse date of birth
+        let parsedDateOfBirth = null;
+        const dateStr = row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || null;
+        if (dateStr) {
+          try {
+            const trimmedDate = dateStr.trim();
+            if (trimmedDate.includes('-')) {
+              parsedDateOfBirth = new Date(trimmedDate);
+            } else if (trimmedDate.includes('/')) {
+              const parts = trimmedDate.split('/');
+              if (parts.length === 3) {
+                const day = parseInt(parts[0]);
+                const month = parseInt(parts[1]) - 1;
+                const year = parseInt(parts[2]);
+                parsedDateOfBirth = new Date(year, month, day);
+              }
+            }
+            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
+              parsedDateOfBirth = null;
+            }
+          } catch (dateErr) {
+            console.log(`⚠️ Invalid date format: ${dateStr}`);
+            parsedDateOfBirth = null;
+          }
+        }
+
+        const newUser = await User.create({
           name: row.Name,
           email: row.Email,
           password: hashedPassword,
           role,
           schoolId: schoolAdmin.schoolId,
+          salutation: (role === 'Teacher' || role === 'Parent') ? (row.Salutation || row.salutation || null) : null,
           contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || null,
           gender: row.Gender || row.gender || null,
-          date_of_birth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || null,
-          class: role === 'Student' ? (row.Class || row.class || null) : null,
+          date_of_birth: parsedDateOfBirth,
+          class: role === 'Student' ? classId : null,
           gradeLevel: role === 'Student' ? (row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || 'Primary 1') : null,
           subject: role === 'Teacher' ? (row.Subject || row.subject || 'Mathematics') : null,
           linkedStudents: role === 'Parent' ? linkedStudents : undefined,
           emailVerified: true,
           accountActive: true,
           requirePasswordChange: true,
+          tempPassword: tempPassword,
+          credentialsSent: false,
           createdBy: 'school-admin'
         });
+
+        // If student has a class, add them to the Class.students array
+        if (role === 'Student' && classId) {
+          await Class.findByIdAndUpdate(classId, { $addToSet: { students: newUser._id } });
+        }
 
         if (role === 'Teacher' || role === 'Student') {
           const incrementField = role === 'Teacher' ? 'current_teachers' : 'current_students';
@@ -1296,7 +1390,8 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
       }
     }
 
-    res.json({ success: true, message: 'Bulk import completed', summary });
+    // Return both 'results' and 'summary' for backward compatibility
+    res.json({ success: true, message: 'Bulk import completed', results: summary, summary });
   } catch (error) {
     console.error('Bulk import users error:', error);
     res.status(500).json({ success: false, error: 'Failed to import users: ' + error.message });
@@ -1800,6 +1895,35 @@ router.get('/users/pending-credentials', authenticateSchoolAdmin, async (req, re
       role: { $in: ['Teacher', 'Student', 'Parent'] }
     }).select('name email role tempPassword class gradeLevel createdAt');
     
+    // Build class lookup map to resolve class IDs to class names
+    const classIds = [...new Set(users.map(u => u.class).filter(Boolean))];
+    const classLookup = {};
+    if (classIds.length > 0) {
+      // Filter to only valid ObjectIds
+      const validClassIds = classIds.filter(id => {
+        try {
+          return mongoose.Types.ObjectId.isValid(id);
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      if (validClassIds.length > 0) {
+        const classDocs = await Class.find({ _id: { $in: validClassIds }, school_id: schoolAdmin.schoolId })
+          .select('class_name');
+        classDocs.forEach(cls => {
+          classLookup[cls._id.toString()] = cls.class_name;
+        });
+      }
+    }
+    
+    // Helper function to resolve class name
+    const resolveClassName = (classId) => {
+      if (!classId) return null;
+      const classKey = classId.toString();
+      return classLookup[classKey] || classKey;
+    };
+    
     // Format response
     const formattedUsers = users.map(user => ({
       id: user._id,
@@ -1807,7 +1931,7 @@ router.get('/users/pending-credentials', authenticateSchoolAdmin, async (req, re
       email: user.email,
       role: user.role,
       tempPassword: user.tempPassword,
-      className: user.class || null,
+      className: resolveClassName(user.class),
       gradeLevel: user.gradeLevel || null,
       createdAt: user.createdAt
     }));
@@ -1922,6 +2046,115 @@ router.post('/users/:id/send-credentials', authenticateSchoolAdmin, async (req, 
   }
 });
 
+// POST bulk send credentials to multiple users
+router.post('/users/bulk-send-credentials', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { userIds } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No users selected' });
+    }
+    
+    // Get school name
+    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolName = schoolData ? schoolData.organization_name : 'Your School';
+    
+    const results = {
+      success: [],
+      failed: []
+    };
+    
+    // Process each user
+    for (const userId of userIds) {
+      try {
+        const user = await User.findById(userId);
+        
+        if (!user) {
+          results.failed.push({ userId, error: 'User not found' });
+          continue;
+        }
+        
+        // Verify the user belongs to the school admin's school
+        if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
+          results.failed.push({ userId, email: user.email, error: 'User not from your school' });
+          continue;
+        }
+        
+        // Check if tempPassword exists
+        if (!user.tempPassword) {
+          results.failed.push({ userId, email: user.email, error: 'No temporary password found' });
+          continue;
+        }
+        
+        // Send email based on role
+        let emailSent = false;
+        try {
+          if (user.role === 'Teacher') {
+            await sendTeacherWelcomeEmail(user, user.tempPassword, schoolName);
+            emailSent = true;
+          } else if (user.role === 'Student') {
+            const linkedParent = await User.findOne({
+              role: 'Parent',
+              'linkedStudents.studentId': user._id
+            });
+            
+            if (linkedParent) {
+              await sendStudentCredentialsToParent(user, user.tempPassword, linkedParent.email, schoolName);
+            } else {
+              await sendStudentCredentialsToParent(user, user.tempPassword, user.email, schoolName);
+            }
+            emailSent = true;
+          } else if (user.role === 'Parent') {
+            let studentName = 'your child';
+            if (user.linkedStudents && user.linkedStudents.length > 0) {
+              const firstStudent = await User.findById(user.linkedStudents[0].studentId);
+              if (firstStudent && firstStudent.name) {
+                studentName = firstStudent.name;
+              }
+            }
+            await sendParentWelcomeEmail(user, user.tempPassword, studentName, schoolName);
+            emailSent = true;
+          }
+        } catch (emailError) {
+          console.error(`Email sending error for ${user.email}:`, emailError);
+          results.failed.push({ userId, email: user.email, error: 'Failed to send email' });
+          continue;
+        }
+        
+        if (emailSent) {
+          // Update user to mark credentials as sent
+          await User.findByIdAndUpdate(userId, {
+            credentialsSent: true,
+            credentialsSentAt: new Date(),
+            tempPassword: null
+          });
+          
+          results.success.push({
+            userId,
+            email: user.email,
+            name: user.name
+          });
+        } else {
+          results.failed.push({ userId, email: user.email, error: 'Unable to send email for this user role' });
+        }
+      } catch (error) {
+        console.error(`Error processing user ${userId}:`, error);
+        results.failed.push({ userId, error: error.message });
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Sent credentials to ${results.success.length} users. ${results.failed.length} failed.`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk send credentials error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send credentials' });
+  }
+});
+
 // ==================== GET CLASSES ====================
 // ==================== CLASS MANAGEMENT ROUTES ====================
 
@@ -1970,12 +2203,27 @@ router.get('/classes', authenticateSchoolAdmin, async (req, res) => {
 router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = req.schoolAdmin;
+    const { includeClassId } = req.query;
     
+    // Get all teachers in the school - accountActive filter removed to ensure
+    // all teachers show up when creating/editing classes, regardless of active status
     const teachers = await User.find({
       schoolId: schoolAdmin.schoolId,
-      role: 'Teacher',
-      accountActive: true
-    }).select('name email assignedClasses');
+      role: 'Teacher'
+    }).select('name email assignedClasses accountActive');
+    
+    // If includeClassId is provided, get the class to see who's currently assigned
+    let currentClassTeachers = [];
+    if (includeClassId) {
+      try {
+        const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
+        if (cls && cls.teachers && cls.teachers.length > 0) {
+          currentClassTeachers = cls.teachers.map(t => t.toString());
+        }
+      } catch (err) {
+        console.warn('Include class lookup for teachers failed:', err.message);
+      }
+    }
     
     res.json({
       success: true,
@@ -1983,7 +2231,8 @@ router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, r
         id: t._id,
         name: t.name,
         email: t.email,
-        assignedClasses: t.assignedClasses || []
+        assignedClasses: t.assignedClasses || [],
+        isCurrentlyAssigned: currentClassTeachers.includes(t._id.toString())
       }))
     });
   } catch (error) {
@@ -1999,26 +2248,36 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
     const schoolAdmin = req.schoolAdmin;
     const { unassigned, includeClassId } = req.query;
     
+    // Base filter - only students in this school
+    // Note: accountActive filter removed to ensure all students show up when
+    // creating/editing classes, regardless of account active status
     const filter = {
       schoolId: schoolAdmin.schoolId,
-      role: 'Student',
-      accountActive: true
+      role: 'Student'
     };
     
-    const orConditions = [{ class: { $in: [null, ''] } }];
+    // Build conditions for students without classes assigned
+    const orConditions = [
+      { class: { $in: [null, ''] } },
+      { class: { $exists: false } }
+    ];
     
+    // If editing a class, include students currently in that class
     if (includeClassId) {
       try {
         const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
         if (cls && cls.students && cls.students.length > 0) {
           orConditions.push({ _id: { $in: cls.students } });
         }
+        // Also include students whose class field matches this class ID
+        orConditions.push({ class: includeClassId });
+        orConditions.push({ class: includeClassId.toString() });
       } catch (err) {
         console.warn('Include class lookup failed:', err.message);
       }
     }
     
-    // Default to unassigned students unless explicitly disabled
+    // Apply OR conditions unless explicitly showing all students
     const limitToUnassigned = unassigned !== 'false';
     if (limitToUnassigned) {
       filter.$or = orConditions;
@@ -2706,20 +2965,39 @@ router.get('/parents/:parentId/students', authenticateSchoolAdmin, async (req, r
       _id: { $nin: linkedStudentIds }
     }).select('_id name email class gradeLevel');
     
+    // Build class lookup map to resolve class IDs to class names
+    const allStudents = [...linkedStudents, ...availableStudents];
+    const classIds = [...new Set(allStudents.map(s => s.class).filter(Boolean))];
+    const classLookup = {};
+    if (classIds.length > 0) {
+      const classDocs = await Class.find({ _id: { $in: classIds }, school_id: schoolAdmin.schoolId })
+        .select('class_name');
+      classDocs.forEach(cls => {
+        classLookup[cls._id.toString()] = cls.class_name;
+      });
+    }
+    
+    // Helper function to resolve class name
+    const resolveClassName = (classId) => {
+      if (!classId) return 'Not assigned';
+      const classKey = classId.toString();
+      return classLookup[classKey] || 'Not assigned';
+    };
+    
     res.json({
       success: true,
       linkedStudents: linkedStudents.map(s => ({
         id: s._id,
         name: s.name,
         email: s.email,
-        className: s.class || 'Not assigned',
+        className: resolveClassName(s.class),
         gradeLevel: s.gradeLevel || 'N/A'
       })),
       availableStudents: availableStudents.map(s => ({
         id: s._id,
         name: s.name,
         email: s.email,
-        className: s.class || 'Not assigned',
+        className: resolveClassName(s.class),
         gradeLevel: s.gradeLevel || 'N/A'
       }))
     });

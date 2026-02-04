@@ -1,20 +1,16 @@
 // School Admin Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getSchools, createSchoolAdmins, getSchoolAdmins, updateSchoolAdmin, deleteSchoolAdmin, resetSchoolAdminPassword } from '../../services/p2lAdminService';
+import { getSchools, getSchoolAdmins, updateSchoolAdmin, deleteSchoolAdmin, resetSchoolAdminPassword } from '../../services/p2lAdminService';
 import './SchoolAdminManagement.css';
 
 function SchoolAdminManagement() {
   const [schools, setSchools] = useState([]);
   const [selectedSchool, setSelectedSchool] = useState('');
   const [admins, setAdmins] = useState([]);
-  const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [adminForms, setAdminForms] = useState([{ name: '', email: '', contact: '' }]);
-  const [createdAdmins, setCreatedAdmins] = useState([]);
-  const [viewedPasswords, setViewedPasswords] = useState({});
   const [editingAdmin, setEditingAdmin] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', email: '', contact: '', accountActive: true });
+  const [editForm, setEditForm] = useState({ name: '', email: '', contact: '' });
   // Store temp passwords for recently created admins (persists in session)
   const [tempPasswords, setTempPasswords] = useState({});
 
@@ -58,80 +54,6 @@ function SchoolAdminManagement() {
     }
   };
 
-  const handleAddAdminForm = () => {
-    setAdminForms([...adminForms, { name: '', email: '', contact: '' }]);
-  };
-
-  const handleRemoveAdminForm = (index) => {
-    const newForms = adminForms.filter((_, i) => i !== index);
-    setAdminForms(newForms);
-  };
-
-  const handleAdminFormChange = (index, field, value) => {
-    const newForms = [...adminForms];
-    newForms[index][field] = value;
-    setAdminForms(newForms);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedSchool) {
-      alert('Please select a school first');
-      return;
-    }
-
-    try {
-      const response = await createSchoolAdmins(selectedSchool, adminForms);
-      
-      // Store created admins with their temp passwords
-      if (response.created && response.created.length > 0) {
-        setCreatedAdmins(response.created);
-        // Initialize viewedPasswords state for each created admin
-        const initialViewed = {};
-        const newTempPasswords = { ...tempPasswords };
-        
-        response.created.forEach(admin => {
-          if (admin.id) {
-            initialViewed[admin.id] = false;
-            // Store temp password for this admin in session
-            if (admin.tempPassword) {
-              newTempPasswords[admin.id] = {
-                password: admin.tempPassword,
-                email: admin.email,
-                name: admin.name,
-                createdAt: new Date().toISOString()
-              };
-            }
-          }
-        });
-        setViewedPasswords(initialViewed);
-        setTempPasswords(newTempPasswords);
-        
-        // Persist to session storage
-        sessionStorage.setItem('schoolAdminTempPasswords', JSON.stringify(newTempPasswords));
-      }
-      
-      setShowForm(false);
-      setAdminForms([{ name: '', email: '', contact: '' }]);
-      fetchSchoolAdmins(selectedSchool);
-    } catch (error) {
-      console.error('Failed to create school admins:', error);
-      alert(error.message || 'Failed to create school admins');
-    }
-  };
-
-  const cancelForm = () => {
-    setShowForm(false);
-    setAdminForms([{ name: '', email: '', contact: '' }]);
-    setCreatedAdmins([]);
-    setViewedPasswords({});
-  };
-  
-  const handleViewPassword = (adminId) => {
-    // Mark this password as viewed (can only be viewed once)
-    setViewedPasswords(prev => ({ ...prev, [adminId]: true }));
-  };
-
   const handleViewTempPasswordFromList = (adminId) => {
     if (!tempPasswords[adminId]) {
       alert('Temporary password is no longer available. It may have been viewed previously or the browser session may have expired.');
@@ -166,8 +88,7 @@ function SchoolAdminManagement() {
     setEditForm({
       name: admin.name || '',
       email: admin.email || '',
-      contact: admin.contact || '',
-      accountActive: admin.accountActive !== undefined ? admin.accountActive : true
+      contact: admin.contact || ''
     });
   };
 
@@ -242,7 +163,7 @@ function SchoolAdminManagement() {
 
   const cancelEdit = () => {
     setEditingAdmin(null);
-    setEditForm({ name: '', email: '', contact: '', accountActive: true });
+    setEditForm({ name: '', email: '', contact: '' });
   };
 
   if (loading) {
@@ -256,13 +177,15 @@ function SchoolAdminManagement() {
           <h1>School Admin Management</h1>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
-        <button 
-          onClick={() => setShowForm(true)} 
-          className="btn-primary"
-          disabled={!selectedSchool}
-        >
-          + Create Admin(s)
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Link 
+            to="/p2ladmin/school-admins/manual-add"
+            className="btn-primary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+          >
+            + Add Admin
+          </Link>
+        </div>
       </header>
 
       <div className="content-container">
@@ -296,7 +219,6 @@ function SchoolAdminManagement() {
                       <h3>{admin.name}</h3>
                       <p><strong>Email:</strong> {admin.email}</p>
                       {admin.contact && <p><strong>Contact:</strong> {admin.contact}</p>}
-                      <p><strong>Status:</strong> {admin.accountActive ? '✅ Active' : '❌ Inactive'}</p>
                       <p className="created-date">
                         Created: {new Date(admin.createdAt).toLocaleDateString()}
                       </p>
@@ -344,114 +266,6 @@ function SchoolAdminManagement() {
         )}
       </div>
 
-      {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2>Create School Admin(s)</h2>
-            <p className="info-text">
-              Temporary passwords will be auto-generated for each admin. 
-              They will be required to change their password on first login.
-            </p>
-
-            <form onSubmit={handleSubmit}>
-              {adminForms.map((form, index) => (
-                <div key={index} className="admin-form-group">
-                  <h3>Admin #{index + 1}</h3>
-                  <div className="form-group">
-                    <label>Name *</label>
-                    <input
-                      type="text"
-                      value={form.name}
-                      onChange={(e) => handleAdminFormChange(index, 'name', e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Email *</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => handleAdminFormChange(index, 'email', e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Contact (Optional)</label>
-                    <input
-                      type="text"
-                      value={form.contact}
-                      onChange={(e) => handleAdminFormChange(index, 'contact', e.target.value)}
-                    />
-                  </div>
-
-                  {adminForms.length > 1 && (
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveAdminForm(index)}
-                      className="btn-remove"
-                    >
-                      Remove This Admin
-                    </button>
-                  )}
-                </div>
-              ))}
-
-              <button 
-                type="button" 
-                onClick={handleAddAdminForm}
-                className="btn-add-more"
-              >
-                + Add Another Admin
-              </button>
-
-              <div className="form-actions">
-                <button type="submit" className="btn-submit">
-                  Create Admin(s)
-                </button>
-                <button type="button" onClick={cancelForm} className="btn-cancel">
-                  Cancel
-                </button>
-              </div>
-            </form>
-
-            {createdAdmins.length > 0 && (
-              <div className="created-admins-section">
-                <h3>✅ Created Administrators</h3>
-                <p className="warning-text">
-                  ⚠️ Important: You can only view each password once! Make sure to save it.
-                </p>
-                {createdAdmins.map((admin, index) => (
-                  <div key={index} className={`created-admin ${admin.success ? 'success' : 'error'}`}>
-                    <p><strong>{admin.name}</strong></p>
-                    <p>Email: {admin.email}</p>
-                    {admin.success && admin.tempPassword && (
-                      <div className="temp-password-section">
-                        {!viewedPasswords[admin.id] ? (
-                          <button 
-                            onClick={() => handleViewPassword(admin.id)} 
-                            className="btn-view-password"
-                          >
-                            👁️ View Temp Password
-                          </button>
-                        ) : (
-                          <p className="temp-password">
-                            Password: <code>{admin.tempPassword}</code>
-                            <span className="password-warning"> (Password revealed - save it now!)</span>
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {!admin.success && <p className="error-msg">{admin.error}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {editingAdmin && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -484,17 +298,6 @@ function SchoolAdminManagement() {
                   value={editForm.contact}
                   onChange={(e) => handleEditFormChange('contact', e.target.value)}
                 />
-              </div>
-
-              <div className="form-group">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={editForm.accountActive}
-                    onChange={(e) => handleEditFormChange('accountActive', e.target.checked)}
-                  />
-                  {' '}Account Active
-                </label>
               </div>
 
               <div className="form-actions">

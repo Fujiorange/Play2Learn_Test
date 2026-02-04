@@ -280,6 +280,25 @@ export default function SchoolAdminDashboard() {
               </li>
             </ul>
           </div>
+
+          {/* Communication */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionIcon}>📢</span>
+              <h2 style={styles.sectionTitle}>Communication</h2>
+            </div>
+            <ul style={styles.menuList}>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'announcements' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('announcements')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/announcements')}
+              >
+                <span>📢 Manage Announcements</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </main>
     </div>

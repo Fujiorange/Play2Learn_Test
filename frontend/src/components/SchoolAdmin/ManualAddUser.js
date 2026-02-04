@@ -235,9 +235,13 @@ export default function ManualAddUser() {
       const result = await schoolAdminService.createUser(userData);
 
       if (result.success) {
+        // Use the tempPassword from backend response (backend generates and stores the password)
+        const backendTempPassword = result.user.tempPassword;
+        setGeneratedPassword(backendTempPassword); // Update displayed password to match backend
+        
         setCreatedUser({
           ...result.user,
-          tempPassword: password
+          tempPassword: backendTempPassword
         });
         
         // If creating a student with parent info, create or link the parent
@@ -253,7 +257,7 @@ export default function ManualAddUser() {
               // Existing parent - student was linked
               setCreatedUser({
                 ...result.user,
-                tempPassword: password,
+                tempPassword: backendTempPassword,
                 parentLinked: true,
                 parentEmail: formData.parentEmail,
                 parentName: parentResult.parent.name
@@ -266,7 +270,7 @@ export default function ManualAddUser() {
               // New parent created - show temp password
               setCreatedUser({
                 ...result.user,
-                tempPassword: password,
+                tempPassword: backendTempPassword,
                 parentCreated: true,
                 parentEmail: formData.parentEmail,
                 parentTempPassword: parentResult.parent.tempPassword
@@ -642,15 +646,22 @@ export default function ManualAddUser() {
             {(formData.role === 'teacher' || formData.role === 'parent') && (
               <div style={styles.formGroup}>
                 <label style={styles.label}>Salutation</label>
-                <input
-                  type="text"
+                <select
                   name="salutation"
                   value={formData.salutation}
                   onChange={handleChange}
-                  placeholder="e.g., Mr, Ms, Dr"
                   disabled={loading}
-                  style={styles.input}
-                />
+                  style={styles.select}
+                >
+                  <option value="">Select salutation</option>
+                  <option value="Mr">Mr</option>
+                  <option value="Mrs">Mrs</option>
+                  <option value="Ms">Ms</option>
+                  <option value="Miss">Miss</option>
+                  <option value="Dr">Dr</option>
+                  <option value="Prof">Prof</option>
+                  <option value="Mdm">Mdm</option>
+                </select>
               </div>
             )}
 
@@ -782,7 +793,7 @@ export default function ManualAddUser() {
                     <option value="Primary 3" disabled>Primary 3 (coming soon)</option>
                     <option value="Primary 4" disabled>Primary 4 (coming soon)</option>
                     <option value="Primary 5" disabled>Primary 5 (coming soon)</option>
-                    <option value="Primary 6">Primary 6</option>
+                    <option value="Primary 6" disabled>Primary 6 (coming soon)</option>
                   </select>
                 </div>
 

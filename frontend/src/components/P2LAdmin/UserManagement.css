@@ -180,6 +180,16 @@
   font-size: 0.9rem;
 }
 
+.users-table th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.users-table th.sortable-header:hover {
+  background: #e9ecef;
+}
+
 .users-table tbody tr:hover {
   background: #f8f9fa;
 }

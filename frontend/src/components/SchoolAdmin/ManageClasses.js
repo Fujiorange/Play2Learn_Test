@@ -180,14 +180,20 @@ export default function ManageClasses() {
        teachers: cls.teacherList ? cls.teacherList.map(t => t._id) : [],
        students: cls.studentList ? cls.studentList.map(s => s._id) : []
      });
-     // include currently assigned students in selection list
+     // Refresh both teachers and students to include currently assigned ones
      try {
-       const studentsResult = await schoolAdminService.getAvailableStudents(true, cls.id);
+       const [teachersResult, studentsResult] = await Promise.all([
+         schoolAdminService.getAvailableTeachers(cls.id),
+         schoolAdminService.getAvailableStudents(true, cls.id)
+       ]);
+       if (teachersResult.success) {
+         setTeachers(teachersResult.teachers || []);
+       }
        if (studentsResult.success) {
          setStudents(studentsResult.students || []);
        }
      } catch (err) {
-       console.error('Error refreshing students for edit:', err);
+       console.error('Error refreshing teachers/students for edit:', err);
      }
      setShowEditModal(true);
    };

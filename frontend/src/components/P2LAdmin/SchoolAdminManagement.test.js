@@ -5,10 +5,10 @@ import SchoolAdminManagement from './SchoolAdminManagement';
 // Mock p2lAdminService
 jest.mock('../../services/p2lAdminService', () => ({
   getSchools: jest.fn(() => Promise.resolve({ data: [] })),
-  createSchoolAdmins: jest.fn(),
   getSchoolAdmins: jest.fn(() => Promise.resolve({ data: [] })),
   updateSchoolAdmin: jest.fn(),
-  deleteSchoolAdmin: jest.fn()
+  deleteSchoolAdmin: jest.fn(),
+  resetSchoolAdminPassword: jest.fn()
 }));
 
 describe('SchoolAdminManagement', () => {
@@ -48,20 +48,7 @@ describe('SchoolAdminManagement', () => {
   });
 
   it('verifies session storage can store and retrieve temp password data', async () => {
-    const { createSchoolAdmins, getSchools, getSchoolAdmins } = require('../../services/p2lAdminService');
-    
-    // Mock successful creation
-    const mockCreatedAdmin = {
-      id: 'newadmin123',
-      email: 'newadmin@example.com',
-      name: 'New Admin',
-      tempPassword: 'NewTempPass123!',
-      success: true
-    };
-    
-    createSchoolAdmins.mockResolvedValue({
-      created: [mockCreatedAdmin]
-    });
+    const { getSchools, getSchoolAdmins } = require('../../services/p2lAdminService');
     
     getSchools.mockResolvedValue({
       data: [{
