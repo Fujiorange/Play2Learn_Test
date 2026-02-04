@@ -18,11 +18,13 @@ const ViewAnnouncements = () => {
     try {
       setLoading(true);
       
-      // ✅ Uses existing school admin endpoint with teachers audience
-      const response = await fetch('http://localhost:5000/school-admin/announcements/public?audience=teachers', {
+      // ✅ Uses authenticated endpoint filtered by teacher's school
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/mongo/teacher/announcements', {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
 

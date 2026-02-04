@@ -2624,15 +2624,21 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
 // These routes use direct MongoDB access (getDb()) for compatibility with Wei Xiang's admin UI
 
 // ==================== GET ANNOUNCEMENTS (Admin View) ====================
-router.get('/announcements', authenticateToken, async (req, res) => {
+router.get('/announcements', authenticateSchoolAdmin, async (req, res) => {
   try {
     const db = getDb();
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    // Filter announcements by schoolId to only show school admin's own announcements
+    const filter = schoolId ? { schoolId: schoolId } : {};
+    
     const announcements = await db.collection('announcements')
-      .find({})
+      .find(filter)
       .sort({ pinned: -1, createdAt: -1 })
       .toArray();
     
-    console.log(`📢 Admin fetched ${announcements.length} announcements`);
+    console.log(`📢 Admin fetched ${announcements.length} announcements for school ${schoolId}`);
     res.json({ success: true, announcements });
   } catch (error) {
     console.error('❌ Get announcements error:', error);
@@ -2704,7 +2710,7 @@ router.get('/announcements/public', async (req, res) => {
 });
 
 // ==================== CREATE ANNOUNCEMENT ====================
-router.post('/announcements', authenticateToken, async (req, res) => {
+router.post('/announcements', authenticateSchoolAdmin, async (req, res) => {
   try {
     const db = getDb();
     const { title, content, priority, audience, pinned, expiresAt } = req.body;
@@ -2716,6 +2722,17 @@ router.post('/announcements', authenticateToken, async (req, res) => {
       });
     }
     
+    // Get the school admin's schoolId to scope announcements to their school
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    if (!schoolId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'School Admin must be associated with a school to create announcements' 
+      });
+    }
+    
     const newAnnouncement = {
       title,
       content,
@@ -2723,6 +2740,7 @@ router.post('/announcements', authenticateToken, async (req, res) => {
       audience: audience || 'all',
       pinned: pinned || false,
       author: req.user.name || req.user.email,
+      schoolId: schoolId,  // ✅ Store schoolId with announcement for school-scoped filtering
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -2730,7 +2748,7 @@ router.post('/announcements', authenticateToken, async (req, res) => {
     
     const result = await db.collection('announcements').insertOne(newAnnouncement);
     
-    console.log(`📢 Announcement created: "${title}" by ${newAnnouncement.author}`);
+    console.log(`📢 Announcement created: "${title}" by ${newAnnouncement.author} for school ${schoolId}`);
     res.json({ 
       success: true, 
       announcement: { ...newAnnouncement, _id: result.insertedId } 
@@ -2742,26 +2760,31 @@ router.post('/announcements', authenticateToken, async (req, res) => {
 });
 
 // ==================== UPDATE ANNOUNCEMENT ====================
-router.put('/announcements/:id', authenticateToken, async (req, res) => {
+router.put('/announcements/:id', authenticateSchoolAdmin, async (req, res) => {
   try {
     const db = getDb();
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
     const updates = { ...req.body, updatedAt: new Date() };
     delete updates._id;
+    delete updates.schoolId; // Prevent changing schoolId
     
     if (updates.expiresAt) {
       updates.expiresAt = new Date(updates.expiresAt);
     }
     
+    // Only update announcements belonging to this school
     const result = await db.collection('announcements').updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { _id: new mongoose.Types.ObjectId(req.params.id), schoolId: schoolId },
       { $set: updates }
     );
     
     if (result.matchedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Announcement not found' });
+      return res.status(404).json({ success: false, error: 'Announcement not found or access denied' });
     }
     
-    console.log(`📢 Announcement updated: ${req.params.id}`);
+    console.log(`📢 Announcement updated: ${req.params.id} for school ${schoolId}`);
     res.json({ success: true, message: 'Announcement updated' });
   } catch (error) {
     console.error('❌ Update announcement error:', error);
@@ -2770,18 +2793,22 @@ router.put('/announcements/:id', authenticateToken, async (req, res) => {
 });
 
 // ==================== DELETE ANNOUNCEMENT ====================
-router.delete('/announcements/:id', authenticateToken, async (req, res) => {
+router.delete('/announcements/:id', authenticateSchoolAdmin, async (req, res) => {
   try {
     const db = getDb();
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    // Only delete announcements belonging to this school
     const result = await db.collection('announcements').deleteOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) }
+      { _id: new mongoose.Types.ObjectId(req.params.id), schoolId: schoolId }
     );
     
     if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Announcement not found' });
+      return res.status(404).json({ success: false, error: 'Announcement not found or access denied' });
     }
     
-    console.log(`📢 Announcement deleted: ${req.params.id}`);
+    console.log(`📢 Announcement deleted: ${req.params.id} from school ${schoolId}`);
     res.json({ success: true, message: 'Announcement deleted' });
   } catch (error) {
     console.error('❌ Delete announcement error:', error);

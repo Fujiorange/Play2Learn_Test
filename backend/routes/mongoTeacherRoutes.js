@@ -768,4 +768,50 @@ router.get('/my-classes', async (req, res) => {
   }
 });
 
+// ==================== ANNOUNCEMENTS ====================
+// Get school announcements for teachers - filtered by their school
+router.get('/announcements', async (req, res) => {
+  try {
+    const teacher = req.teacher;
+    const schoolId = teacher.schoolId;
+    
+    if (!schoolId) {
+      return res.json({ success: true, announcements: [], message: 'No school assigned' });
+    }
+    
+    const db = mongoose.connection.db;
+    const now = new Date();
+    
+    // Build filter: school-specific, not expired, and audience includes teachers or all
+    const filter = {
+      schoolId: schoolId,
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ],
+      $and: [
+        {
+          $or: [
+            { audience: { $in: ['all', 'teacher', 'teachers'] } },
+            { audience: { $exists: false } }
+          ]
+        }
+      ]
+    };
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    console.log(`📢 Teacher ${req.user.userId} fetched ${announcements.length} announcements for school ${schoolId}`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('Get teacher announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
 module.exports = router;

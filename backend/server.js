@@ -187,7 +187,12 @@ app.get('/api/public/maintenance', async (req, res) => {
 });
 
 // ==================== PUBLIC ANNOUNCEMENTS ENDPOINT ====================
-// ✅ NEW: Public endpoint for students to view school announcements (no authentication required)
+// ⚠️ DEPRECATED: This endpoint returns all announcements without school filtering
+// Use the authenticated endpoints instead:
+// - Students: /api/mongo/student/announcements
+// - Teachers: /api/mongo/teacher/announcements
+// - Parents: /api/mongo/parent/announcements
+// These endpoints filter announcements by the user's school
 app.get('/school-admin/announcements/public', async (req, res) => {
   try {
     const { audience } = req.query;

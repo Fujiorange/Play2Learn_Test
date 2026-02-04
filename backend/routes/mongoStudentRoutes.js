@@ -1455,4 +1455,56 @@ router.get("/badges/progress", async (req, res) => {
   }
 });
 
+// ==================== ANNOUNCEMENTS ====================
+// Get school announcements for students - filtered by their school
+router.get("/announcements", async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+    
+    // Get student's schoolId
+    const student = await User.findById(studentId).select('schoolId');
+    if (!student) {
+      return res.status(404).json({ success: false, error: "Student not found" });
+    }
+    
+    const schoolId = student.schoolId;
+    if (!schoolId) {
+      return res.json({ success: true, announcements: [], message: "No school assigned" });
+    }
+    
+    const db = mongoose.connection.db;
+    const now = new Date();
+    
+    // Build filter: school-specific, not expired, and audience includes students or all
+    const filter = {
+      schoolId: schoolId,
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ],
+      $and: [
+        {
+          $or: [
+            { audience: { $in: ['all', 'student', 'students'] } },
+            { audience: { $exists: false } }
+          ]
+        }
+      ]
+    };
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    console.log(`📢 Student ${studentId} fetched ${announcements.length} announcements for school ${schoolId}`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error("❌ Get student announcements error:", error);
+    res.status(500).json({ success: false, error: "Failed to load announcements" });
+  }
+});
+
 module.exports = router;

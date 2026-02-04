@@ -1262,5 +1262,77 @@ router.get('/testimonials', authMiddleware, async (req, res) => {
   }
 });
 
+// ==================== ANNOUNCEMENTS ====================
+// Get school announcements for parents - filtered by their linked students' schools
+router.get('/announcements', authMiddleware, async (req, res) => {
+  try {
+    const parentId = req.user.userId;
+    
+    // Get parent's linked students
+    const parent = await User.findById(parentId).select('linkedStudents schoolId');
+    if (!parent) {
+      return res.status(404).json({ success: false, error: 'Parent not found' });
+    }
+    
+    // Collect all unique schoolIds from linked students
+    const schoolIds = new Set();
+    
+    // Add parent's own schoolId if exists
+    if (parent.schoolId) {
+      schoolIds.add(parent.schoolId);
+    }
+    
+    // Get schoolIds from all linked students
+    if (parent.linkedStudents && parent.linkedStudents.length > 0) {
+      const studentIds = parent.linkedStudents.map(ls => ls.studentId);
+      const students = await User.find({ _id: { $in: studentIds } }).select('schoolId');
+      
+      students.forEach(student => {
+        if (student.schoolId) {
+          schoolIds.add(student.schoolId);
+        }
+      });
+    }
+    
+    if (schoolIds.size === 0) {
+      return res.json({ success: true, announcements: [], message: 'No linked schools found' });
+    }
+    
+    const schoolIdArray = Array.from(schoolIds);
+    const db = mongoose.connection.db;
+    const now = new Date();
+    
+    // Build filter: announcements from all linked schools, not expired, and audience includes parents or all
+    const filter = {
+      schoolId: { $in: schoolIdArray },
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ],
+      $and: [
+        {
+          $or: [
+            { audience: { $in: ['all', 'parent', 'parents'] } },
+            { audience: { $exists: false } }
+          ]
+        }
+      ]
+    };
+    
+    const announcements = await db.collection('announcements')
+      .find(filter)
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    console.log(`📢 Parent ${parentId} fetched ${announcements.length} announcements from schools: ${schoolIdArray.join(', ')}`);
+    res.json({ success: true, announcements });
+  } catch (error) {
+    console.error('Get parent announcements error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load announcements' });
+  }
+});
+
 
 module.exports = router;
