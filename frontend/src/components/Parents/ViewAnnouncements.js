@@ -1,7 +1,9 @@
 // frontend/src/components/Parent/ViewAnnouncements.js
-// ✅ PARENT VIEW - Uses existing school admin backend
+// ✅ PARENT VIEW - Uses authenticated endpoint filtered by parent's linked students' schools
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const ViewAnnouncements = () => {
   const navigate = useNavigate();
@@ -20,7 +22,7 @@ const ViewAnnouncements = () => {
       
       // ✅ Uses authenticated endpoint filtered by parent's linked students' schools
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/mongo/parent/announcements', {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/parent/announcements`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

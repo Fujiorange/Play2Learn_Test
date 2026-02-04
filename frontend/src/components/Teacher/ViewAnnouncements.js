@@ -1,7 +1,9 @@
 // frontend/src/components/Teacher/ViewAnnouncements.js
-// ✅ TEACHER VIEW - Uses existing school admin backend
+// ✅ TEACHER VIEW - Uses authenticated endpoint filtered by teacher's school
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const ViewAnnouncements = () => {
   const navigate = useNavigate();
@@ -20,7 +22,7 @@ const ViewAnnouncements = () => {
       
       // ✅ Uses authenticated endpoint filtered by teacher's school
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/mongo/teacher/announcements', {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/announcements`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
