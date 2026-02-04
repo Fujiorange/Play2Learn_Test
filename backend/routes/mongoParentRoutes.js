@@ -1286,7 +1286,7 @@ router.get('/announcements', authMiddleware, async (req, res) => {
     const parentId = req.user.userId;
     
     // Get parent's linked students
-    const parent = await User.findById(parentId).select('linkedStudents schoolId');
+    const parent = await User.findById(parentId).select('linkedStudents schoolId').lean();
     if (!parent) {
       return res.status(404).json({ success: false, error: 'Parent not found' });
     }
@@ -1304,7 +1304,7 @@ router.get('/announcements', authMiddleware, async (req, res) => {
       const studentIds = getValidStudentIds(parent.linkedStudents);
       
       if (studentIds.length > 0) {
-        const students = await User.find({ _id: { $in: studentIds } }).select('schoolId');
+        const students = await User.find({ _id: { $in: studentIds } }).select('schoolId').lean();
         
         students.forEach(student => {
           if (student.schoolId) {
@@ -1335,8 +1335,8 @@ router.get('/announcements', authMiddleware, async (req, res) => {
     const filter = {
       schoolId: { $in: schoolObjectIds },
       $or: [
-        { expiresAt: { $gt: now } },
-        { expiresAt: null }
+        { expiresAt: null },
+        { expiresAt: { $gte: now } }
       ],
       audience: { $in: ['all', 'parent', 'parents'] }
     };

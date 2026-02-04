@@ -1465,7 +1465,7 @@ router.get("/announcements", async (req, res) => {
     const studentId = req.user.userId;
     
     // Get student's schoolId
-    const student = await User.findById(studentId).select('schoolId');
+    const student = await User.findById(studentId).select('schoolId').lean();
     if (!student) {
       return res.status(404).json({ success: false, error: "Student not found" });
     }
@@ -1490,8 +1490,8 @@ router.get("/announcements", async (req, res) => {
     const filter = {
       schoolId: schoolObjectId,
       $or: [
-        { expiresAt: { $gt: now } },
-        { expiresAt: null }
+        { expiresAt: null },
+        { expiresAt: { $gte: now } }
       ],
       audience: { $in: ['all', 'student', 'students'] }
     };

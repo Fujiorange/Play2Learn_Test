@@ -797,8 +797,8 @@ router.get('/announcements', async (req, res) => {
     const filter = {
       schoolId: schoolObjectId,
       $or: [
-        { expiresAt: { $gt: now } },
-        { expiresAt: null }
+        { expiresAt: null },
+        { expiresAt: { $gte: now } }
       ],
       audience: { $in: ['all', 'teacher', 'teachers'] }
     };
