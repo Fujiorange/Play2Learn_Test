@@ -2,10 +2,17 @@
 // ✅ UPDATED: Added getChildSkills(studentId) method
 // ✅ UPDATED: Added createTestimonial(formData) method for WriteTestimonial.js
 // ✅ Includes everything from Phase 2 + new skills method
+// ✅ FIXED: Dynamic API_BASE_URL based on environment (localhost vs deployed)
 
 import authService from './authService';
 
-const API_BASE_URL = 'http://localhost:5000/api/mongo/parent';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api/mongo/parent'
+    : `${window.location.origin}/api/mongo/parent`);
+
+console.log('🌐 Parent Service API_BASE_URL:', API_BASE_URL);
 
 class ParentService {
   // ==================== DASHBOARD & CHILDREN (PHASE 1) ====================
