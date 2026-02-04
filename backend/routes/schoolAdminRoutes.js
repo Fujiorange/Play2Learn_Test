@@ -1793,6 +1793,7 @@ router.get('/students-without-parent', authenticateSchoolAdmin, async (req, res)
 router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = req.schoolAdmin;
+    const { deleteParents } = req.query; // Optional: comma-separated list of parent IDs to delete
     
     // First find the user to get their role and class assignments
     const user = await User.findById(req.params.id);
@@ -1814,18 +1815,63 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
       );
     }
     
-    // If user is a student, remove them from their assigned class
+    // If user is a student, handle parent relationships
+    let affectedParents = [];
     if (user.role === 'Student') {
+      // Remove student from their assigned class
       await Class.updateMany(
         { students: user._id },
         { $pull: { students: user._id } }
+      );
+      
+      // Find parents who have this student linked
+      const parentsWithStudent = await User.find({
+        role: 'Parent',
+        schoolId: schoolAdmin.schoolId,
+        'linkedStudents.studentId': user._id
+      });
+      
+      // Check each parent and categorize them
+      for (const parent of parentsWithStudent) {
+        const hasOnlyThisStudent = parent.linkedStudents.length === 1;
+        affectedParents.push({
+          id: parent._id,
+          name: parent.name,
+          email: parent.email,
+          hasOnlyThisStudent: hasOnlyThisStudent
+        });
+      }
+      
+      // If deleteParents query param is provided, delete those parents
+      if (deleteParents) {
+        const parentIdsToDelete = deleteParents.split(',');
+        for (const parentId of parentIdsToDelete) {
+          const parentToDelete = parentsWithStudent.find(p => String(p._id) === parentId);
+          if (parentToDelete && parentToDelete.linkedStudents.length === 1) {
+            await User.findByIdAndDelete(parentId);
+          }
+        }
+      }
+      
+      // Remove student from all remaining parents' linkedStudents array
+      await User.updateMany(
+        { 
+          role: 'Parent', 
+          schoolId: schoolAdmin.schoolId,
+          'linkedStudents.studentId': user._id 
+        },
+        { $pull: { linkedStudents: { studentId: user._id } } }
       );
     }
     
     // Now delete the user
     await User.findByIdAndDelete(req.params.id);
     
-    res.json({ success: true, message: 'User deleted successfully' });
+    res.json({ 
+      success: true, 
+      message: 'User deleted successfully',
+      affectedParents: affectedParents
+    });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete user' });

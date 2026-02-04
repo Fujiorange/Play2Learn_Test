@@ -19,6 +19,10 @@ export default function StudentManagement() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
   
+  // Parent deletion confirmation state
+  const [parentDeletePrompt, setParentDeletePrompt] = useState(null);
+  const [selectedParentsToDelete, setSelectedParentsToDelete] = useState([]);
+  
   // Link Parent Modal State
   const [linkParentStudent, setLinkParentStudent] = useState(null);
   const [linkedParent, setLinkedParent] = useState(null);
@@ -122,16 +126,39 @@ export default function StudentManagement() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleDeleteUser = async () => {
+  const handleDeleteUser = async (deleteParentIds = null) => {
     if (!deleteConfirm) return;
     setDeleting(true);
     try {
-      const result = await schoolAdminService.deleteUser(deleteConfirm.id);
+      // Build URL with optional parent deletion
+      let url = deleteConfirm.id;
+      if (deleteParentIds && deleteParentIds.length > 0) {
+        url += `?deleteParents=${deleteParentIds.join(',')}`;
+      }
+      
+      const result = await schoolAdminService.deleteUser(url);
       if (result.success) {
-        setStudents(students.filter(s => s.id !== deleteConfirm.id));
-        setMessage({ type: 'success', text: `Student "${deleteConfirm.name}" deleted successfully` });
-        setDeleteConfirm(null);
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+        // Check if there are parents with only this student linked
+        const parentsWithOnlyThisStudent = (result.affectedParents || []).filter(p => p.hasOnlyThisStudent);
+        
+        if (parentsWithOnlyThisStudent.length > 0 && !deleteParentIds) {
+          // Show prompt to delete parents
+          setParentDeletePrompt({
+            studentName: deleteConfirm.name,
+            parents: parentsWithOnlyThisStudent
+          });
+          // Note: Don't close deleteConfirm yet - user needs to decide about parents
+          // But student is already deleted, so update the list
+          setStudents(students.filter(s => s.id !== deleteConfirm.id));
+          setDeleteConfirm(null);
+        } else {
+          setStudents(students.filter(s => s.id !== deleteConfirm.id));
+          setMessage({ type: 'success', text: `Student "${deleteConfirm.name}" deleted successfully` });
+          setDeleteConfirm(null);
+          setParentDeletePrompt(null);
+          setSelectedParentsToDelete([]);
+          setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+        }
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to delete student' });
       }
@@ -140,6 +167,37 @@ export default function StudentManagement() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  // Handle parent deletion after student deletion
+  const handleConfirmParentDeletion = async (deleteSelected) => {
+    if (deleteSelected && selectedParentsToDelete.length > 0) {
+      // Delete selected parents
+      setDeleting(true);
+      try {
+        for (const parentId of selectedParentsToDelete) {
+          await schoolAdminService.deleteUser(parentId);
+        }
+        setMessage({ type: 'success', text: `Student deleted and ${selectedParentsToDelete.length} parent(s) removed successfully` });
+      } catch (err) {
+        setMessage({ type: 'error', text: 'Student deleted but failed to remove some parents' });
+      } finally {
+        setDeleting(false);
+      }
+    } else {
+      setMessage({ type: 'success', text: `Student deleted successfully` });
+    }
+    setParentDeletePrompt(null);
+    setSelectedParentsToDelete([]);
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  const handleToggleParentForDeletion = (parentId) => {
+    setSelectedParentsToDelete(prev => 
+      prev.includes(parentId)
+        ? prev.filter(id => id !== parentId)
+        : [...prev, parentId]
+    );
   };
 
   // Link Parent Modal Functions
@@ -519,10 +577,75 @@ export default function StudentManagement() {
               <button style={styles.cancelButton} onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button 
                 style={{ ...styles.deleteConfirmButton, opacity: deleting ? 0.7 : 1 }} 
-                onClick={handleDeleteUser}
+                onClick={() => handleDeleteUser()}
                 disabled={deleting}
               >
                 {deleting ? 'Deleting...' : 'Delete Student'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Parent Deletion Prompt Modal */}
+      {parentDeletePrompt && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>👨‍👩‍👧 Parent Account Notice</h2>
+            <p style={styles.infoText}>
+              The student <strong>{parentDeletePrompt.studentName}</strong> has been deleted.
+            </p>
+            <p style={{ ...styles.infoText, marginBottom: '16px' }}>
+              The following parent(s) only had this student linked. Would you like to delete their accounts too?
+            </p>
+            
+            <div style={{ marginBottom: '16px' }}>
+              {parentDeletePrompt.parents.map(parent => (
+                <div 
+                  key={parent.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px',
+                    background: selectedParentsToDelete.includes(parent.id) ? '#fef2f2' : '#f9fafb',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    border: selectedParentsToDelete.includes(parent.id) ? '2px solid #ef4444' : '1px solid #e5e7eb',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => handleToggleParentForDeletion(parent.id)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedParentsToDelete.includes(parent.id)}
+                    onChange={() => {}}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#1f2937' }}>{parent.name}</div>
+                    <div style={{ fontSize: '13px', color: '#6b7280' }}>{parent.email}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={styles.modalButtons}>
+              <button 
+                style={styles.cancelButton} 
+                onClick={() => handleConfirmParentDeletion(false)}
+              >
+                Keep Parent(s)
+              </button>
+              <button 
+                style={{ 
+                  ...styles.deleteConfirmButton, 
+                  opacity: (deleting || selectedParentsToDelete.length === 0) ? 0.7 : 1 
+                }} 
+                onClick={() => handleConfirmParentDeletion(true)}
+                disabled={deleting || selectedParentsToDelete.length === 0}
+              >
+                {deleting ? 'Deleting...' : `Delete Selected (${selectedParentsToDelete.length})`}
               </button>
             </div>
           </div>

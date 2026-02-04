@@ -308,9 +308,22 @@ export default function ParentManagement() {
                 <tbody>
                   {filteredParents.map((parent) => (
                     <tr key={parent.id}>
-                      <td style={styles.td}><strong>{parent.name}</strong></td>
+                      <td style={styles.td}>
+                        <strong>{parent.name}</strong>
+                        {getLinkedChildrenCount(parent) === 0 && (
+                          <span style={{ marginLeft: '8px', color: '#ef4444', fontWeight: 'bold' }} title="No linked students">⚠️</span>
+                        )}
+                      </td>
                       <td style={styles.td}>{parent.email}</td>
-                      <td style={styles.td}>{getLinkedChildrenCount(parent)} child(ren)</td>
+                      <td style={styles.td}>
+                        {getLinkedChildrenCount(parent) === 0 ? (
+                          <span style={{ color: '#ef4444', fontWeight: '600' }}>
+                            ⚠️ No children linked
+                          </span>
+                        ) : (
+                          `${getLinkedChildrenCount(parent)} child(ren)`
+                        )}
+                      </td>
                       <td style={styles.td}>
                         <button style={styles.viewButton} onClick={() => setSelectedParent(parent)}>
                           View

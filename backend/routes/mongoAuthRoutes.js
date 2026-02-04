@@ -287,8 +287,10 @@ router.put('/change-password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
     // Update password and clear requirePasswordChange flag
+    // Also clear tempPassword so user is removed from pending credentials page
     user.password = hashedPassword;
     user.requirePasswordChange = false;
+    user.tempPassword = null;
     user.updatedAt = new Date();
     await user.save();
 
