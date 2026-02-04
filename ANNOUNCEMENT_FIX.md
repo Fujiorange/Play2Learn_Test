@@ -21,16 +21,27 @@ schoolId: {
 When querying announcements with a String schoolId, MongoDB couldn't match it against the ObjectId schoolId in the announcements collection, resulting in no results and query failures.
 
 ## Solution
-Convert the String schoolId to an ObjectId before querying announcements using:
+Created utility functions to convert String schoolIds to ObjectIds before querying:
 ```javascript
-const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+// For single schoolId
+const schoolObjectId = convertSchoolIdToObjectId(schoolId);
+
+// For array of schoolIds (parent routes)
+const schoolObjectIds = convertSchoolIdsToObjectIds(schoolIdArray);
 ```
 
 ## Files Modified
-1. `backend/routes/mongoStudentRoutes.js` - GET /announcements endpoint
-2. `backend/routes/mongoTeacherRoutes.js` - GET /announcements endpoint
-3. `backend/routes/mongoParentRoutes.js` - GET /announcements endpoint
-4. `backend/routes/schoolAdminRoutes.js` - GET, POST, PUT, DELETE /announcements endpoints
+1. `backend/utils/objectIdConverter.js` - **NEW** utility functions for ObjectId conversion
+2. `backend/routes/mongoStudentRoutes.js` - GET /announcements endpoint
+3. `backend/routes/mongoTeacherRoutes.js` - GET /announcements endpoint
+4. `backend/routes/mongoParentRoutes.js` - GET /announcements endpoint
+5. `backend/routes/schoolAdminRoutes.js` - GET, POST, PUT, DELETE /announcements endpoints
+
+## Improvements
+- ✅ Reduced code duplication by extracting conversion logic to utility functions
+- ✅ Improved error messages - now indicates which schoolId is invalid (important for parents with multiple linked schools)
+- ✅ Consistent error handling across all routes
+- ✅ Better maintainability - single source of truth for ObjectId conversion
 
 ## How to Test
 
@@ -113,7 +124,7 @@ const announcements = await Announcement.find(filter);
 
 ### After Fix
 ```javascript
-const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+const schoolObjectId = convertSchoolIdToObjectId(schoolId);
 const filter = {
   schoolId: schoolObjectId,  // ObjectId value
   ...
@@ -122,15 +133,47 @@ const announcements = await Announcement.find(filter);
 // Result: [...] (matches found!)
 ```
 
+## Utility Functions
+
+### convertSchoolIdToObjectId(schoolId)
+Converts a single string schoolId to MongoDB ObjectId.
+
+**Parameters:**
+- `schoolId` (string) - The school ID to convert
+
+**Returns:** 
+- `mongoose.Types.ObjectId` - The converted ObjectId
+
+**Throws:** 
+- Error with message "School ID is required" if schoolId is missing
+- Error with message "Invalid school ID format: {schoolId}" if format is invalid
+
+### convertSchoolIdsToObjectIds(schoolIds)
+Converts an array of string schoolIds to MongoDB ObjectIds.
+
+**Parameters:**
+- `schoolIds` (string[]) - Array of school IDs to convert
+
+**Returns:** 
+- `mongoose.Types.ObjectId[]` - Array of converted ObjectIds
+
+**Throws:** 
+- Error with message "School IDs must be an array" if not an array
+- Error with message "Invalid school ID at index {index}: {id}" if any ID is invalid
+
+This improved error messaging helps debugging when parents have multiple linked schools.
+
 ## Impact
 - ✅ Students can now view school announcements
 - ✅ Teachers can now view school announcements
 - ✅ Parents can now view announcements from their children's schools
 - ✅ School admins can reliably create, view, edit, and delete announcements
 - ✅ Consistent ObjectId handling across all announcement operations
+- ✅ Better error messages for debugging
 
 ## Notes
 - Mongoose automatically converts String to ObjectId when **saving** documents (if schema specifies ObjectId)
 - Mongoose does NOT automatically convert String to ObjectId when **querying** documents
 - This is why announcements could be created but not retrieved
 - The fix adds explicit conversion for all query operations
+- Utility functions ensure consistent conversion logic across the codebase
