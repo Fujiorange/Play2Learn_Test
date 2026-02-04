@@ -58,7 +58,8 @@ const isQuizAvailableForStudent = async (quiz, userId) => {
 router.get('/quizzes', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const user = await User.findById(userId);
+    // Use lean() for read-only query to improve performance
+    const user = await User.findById(userId).lean();
     
     // Build query - show only launched quizzes for the student's class
     const now = new Date();
@@ -92,9 +93,11 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
       });
     }
     
+    // Use lean() for read-only query to improve performance
     const quizzes = await Quiz.find(query)
     .select('title description adaptive_config questions createdAt quiz_type is_launched launched_at launch_start_date launch_end_date launched_for_classes')
-    .sort({ launched_at: -1 });
+    .sort({ launched_at: -1 })
+    .lean();
 
     // Count questions by difficulty for each quiz
     const quizzesWithStats = quizzes.map(quiz => {
@@ -538,12 +541,23 @@ router.get('/my-attempts', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     
+    // Use lean() for read-only query to improve performance
     const attempts = await QuizAttempt.find({ userId })
       .populate('quizId', 'title description adaptive_config')
       .sort({ startedAt: -1 })
-      .limit(20);
+      .limit(20)
+      .lean();
 
-    const attemptsWithStats = attempts.map(attempt => ({
+    // Filter out attempts with missing quiz references and log them for debugging
+    const validAttempts = attempts.filter(attempt => {
+      if (!attempt.quizId) {
+        console.warn(`Orphaned quiz attempt found: attemptId=${attempt._id}, quizId reference is null`);
+        return false;
+      }
+      return true;
+    });
+
+    const attemptsWithStats = validAttempts.map(attempt => ({
       attemptId: attempt._id,
       quizTitle: attempt.quizId.title,
       correct_count: attempt.correct_count,

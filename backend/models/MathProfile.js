@@ -14,4 +14,8 @@ const mathProfileSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Add indexes for performance on frequently queried fields
+mathProfileSchema.index({ student_id: 1 }, { unique: true });
+mathProfileSchema.index({ total_points: -1 }); // For leaderboard sorting
+
 module.exports = mongoose.model('MathProfile', mathProfileSchema);

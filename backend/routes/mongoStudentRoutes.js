@@ -338,28 +338,61 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
       if (q.is_correct) skillUpdates[skill].correct++;
     });
 
+    const skillNames = Object.keys(skillUpdates);
+    
+    // Fetch all existing skills in a single query instead of N queries
+    const existingSkills = await MathSkill.find({ 
+      student_id: studentId, 
+      skill_name: { $in: skillNames } 
+    });
+    
+    const skillMap = new Map(existingSkills.map(s => [s.skill_name, s]));
+    const bulkOps = [];
+
     for (const [skillName, stats] of Object.entries(skillUpdates)) {
       const skillPercentage = (stats.correct / stats.total) * 100;
       const xpGain = Math.floor(skillPercentage / 10);
 
-      let skill = await MathSkill.findOne({ student_id: studentId, skill_name: skillName });
-
-      if (!skill) {
-        skill = new MathSkill({
-          student_id: studentId,
-          skill_name: skillName,
-          current_level: 0,
-          xp: 0,
-          unlocked: true,
+      const existingSkill = skillMap.get(skillName);
+      
+      if (existingSkill) {
+        // Update existing skill using bulk operation
+        const newXp = existingSkill.xp + xpGain;
+        const newLevel = Math.min(5, Math.floor(newXp / 100));
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: existingSkill._id },
+            update: { 
+              $set: { 
+                xp: newXp, 
+                current_level: newLevel, 
+                updatedAt: new Date() 
+              } 
+            }
+          }
+        });
+      } else {
+        // Insert new skill using bulk operation
+        const newXp = xpGain;
+        const newLevel = Math.min(5, Math.floor(newXp / 100));
+        bulkOps.push({
+          insertOne: {
+            document: {
+              student_id: studentId,
+              skill_name: skillName,
+              current_level: newLevel,
+              xp: newXp,
+              unlocked: true,
+              updatedAt: new Date()
+            }
+          }
         });
       }
+    }
 
-      skill.xp += xpGain;
-      const newLevel = Math.min(5, Math.floor(skill.xp / 100));
-      skill.current_level = newLevel;
-      skill.updatedAt = new Date();
-
-      await skill.save();
+    // Execute all updates in a single bulk operation
+    if (bulkOps.length > 0) {
+      await MathSkill.bulkWrite(bulkOps);
     }
   } catch (error) {
     console.error("Error updating skills:", error);
@@ -490,23 +523,26 @@ router.get("/math-skills", async (req, res) => {
   try {
     const studentId = req.user.userId;
 
-    const mathProfile = await MathProfile.findOne({ student_id: studentId });
+    // Use lean() for read-only queries to improve performance
+    const mathProfile = await MathProfile.findOne({ student_id: studentId }).lean();
     const skills = await MathSkill.find({ student_id: studentId });
 
     const requiredSkills = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
     const existingSkillNames = skills.map(s => s.skill_name);
 
-    for (const skillName of requiredSkills) {
-      if (!existingSkillNames.includes(skillName)) {
-        const newSkill = await MathSkill.create({
-          student_id: studentId,
-          skill_name: skillName,
-          current_level: 0,
-          xp: 0,
-          unlocked: true,
-        });
-        skills.push(newSkill);
-      }
+    // Batch create missing skills instead of creating one at a time
+    const missingSkills = requiredSkills.filter(name => !existingSkillNames.includes(name));
+    
+    if (missingSkills.length > 0) {
+      const newSkillDocs = missingSkills.map(skillName => ({
+        student_id: studentId,
+        skill_name: skillName,
+        current_level: 0,
+        xp: 0,
+        unlocked: true,
+      }));
+      const createdSkills = await MathSkill.insertMany(newSkillDocs);
+      skills.push(...createdSkills);
     }
 
     res.json({
@@ -851,21 +887,13 @@ router.get("/math-progress", async (req, res) => {
       await mathProfile.save();
     }
 
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({
-      completed_at: -1,
-    });
+    // Use lean() for read-only query to improve performance
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
+      .sort({ completed_at: -1 })
+      .lean();
 
-    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
-    const quizzes = allQuizzes.filter(q => {
-      // Include quiz if it has student answers in questions
-      if (q.questions && q.questions.length > 0) {
-        return q.questions.some(question => 
-          question.student_answer !== null && question.student_answer !== undefined
-        );
-      }
-      // Also include if score > 0 or percentage > 0 (submitted)
-      return q.score > 0 || q.percentage > 0;
-    });
+    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
+    const quizzes = allQuizzes.filter(isQuizCompleted);
 
     const totalQuizzes = quizzes.length;
     const averageScore =
@@ -873,7 +901,7 @@ router.get("/math-progress", async (req, res) => {
         ? Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes)
         : 0;
 
-    // âœ… FIXED: Use total_points from MathProfile (source of truth) instead of recalculating
+    // Use total_points from MathProfile (source of truth) instead of recalculating
     // This ensures consistency with Dashboard and Shop, accounting for both earned and spent points
     const totalPoints = mathProfile ? (mathProfile.total_points || 0) : 0;
 
@@ -905,19 +933,13 @@ router.get("/math-progress", async (req, res) => {
 router.get("/quiz-results", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
+    // Use lean() for read-only query to improve performance
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
+      .sort({ completed_at: -1 })
+      .lean();
 
-    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
-    const completedQuizzes = allQuizzes.filter(q => {
-      // Include quiz if it has student answers in questions
-      if (q.questions && q.questions.length > 0) {
-        return q.questions.some(question => 
-          question.student_answer !== null && question.student_answer !== undefined
-        );
-      }
-      // Also include if score > 0 or percentage > 0 (submitted)
-      return q.score > 0 || q.percentage > 0;
-    });
+    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
+    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
 
     res.json({
       success: true,
@@ -941,19 +963,13 @@ router.get("/quiz-results", async (req, res) => {
 router.get("/quiz-history", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
+    // Use lean() for read-only query to improve performance
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
+      .sort({ completed_at: -1 })
+      .lean();
 
-    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
-    const completedQuizzes = allQuizzes.filter(q => {
-      // Include quiz if it has student answers in questions
-      if (q.questions && q.questions.length > 0) {
-        return q.questions.some(question => 
-          question.student_answer !== null && question.student_answer !== undefined
-        );
-      }
-      // Also include if score > 0 or percentage > 0 (submitted)
-      return q.score > 0 || q.percentage > 0;
-    });
+    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
+    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
 
     res.json({
       success: true,
@@ -981,10 +997,12 @@ router.get("/leaderboard", async (req, res) => {
   try {
     const currentUserId = req.user.userId;
     
+    // Use lean() for read-only query to improve performance
     const students = await MathProfile.find()
       .populate("student_id", "name email")
       .sort({ total_points: -1 })
-      .limit(20);
+      .limit(20)
+      .lean();
 
     res.json({
       success: true,
@@ -1053,8 +1071,10 @@ router.get("/support-tickets", async (req, res) => {
   try {
     const studentId = req.user.userId;
 
+    // Use lean() for read-only query to improve performance
     const tickets = await SupportTicket.find({ student_id: studentId })
-      .sort({ created_at: -1 });
+      .sort({ created_at: -1 })
+      .lean();
 
     res.json({
       success: true,
@@ -1150,9 +1170,11 @@ router.post("/testimonials", async (req, res) => {
 
 router.get("/testimonials", async (req, res) => {
   try {
+    // Use lean() for read-only query to improve performance
     const testimonials = await Testimonial.find({ approved: true })
       .sort({ created_at: -1 })
-      .limit(20);
+      .limit(20)
+      .lean();
 
     res.json({
       success: true,

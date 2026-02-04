@@ -65,4 +65,9 @@ userSchema.pre('save', function preSave() {
   this.updatedAt = Date.now();
 });
 
+// Add indexes for performance on frequently queried fields
+userSchema.index({ schoolId: 1, role: 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ 'linkedStudents.studentId': 1 });
+
 module.exports = mongoose.model('User', userSchema);

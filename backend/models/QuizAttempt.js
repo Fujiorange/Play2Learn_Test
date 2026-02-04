@@ -22,4 +22,8 @@ const quizAttemptSchema = new mongoose.Schema({
   timeSpent: { type: Number } // in seconds
 });
 
+// Add compound index for efficient querying of user's attempts
+quizAttemptSchema.index({ userId: 1, is_completed: 1 });
+quizAttemptSchema.index({ userId: 1, startedAt: -1 });
+
 module.exports = mongoose.model('QuizAttempt', quizAttemptSchema);

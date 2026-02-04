@@ -22,4 +22,8 @@ questionSchema.pre('save', function() {
   this.updatedAt = Date.now();
 });
 
+// Add indexes for performance on frequently queried fields
+questionSchema.index({ is_active: 1, difficulty: 1 });
+questionSchema.index({ subject: 1, topic: 1 });
+
 module.exports = mongoose.model('Question', questionSchema);

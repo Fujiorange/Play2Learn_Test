@@ -15,4 +15,8 @@ const supportTicketSchema = new mongoose.Schema({
   admin_response: { type: String }
 });
 
+// Add indexes for performance on frequently queried fields
+supportTicketSchema.index({ student_id: 1, created_at: -1 });
+supportTicketSchema.index({ status: 1 });
+
 module.exports = mongoose.model('SupportTicket', supportTicketSchema);

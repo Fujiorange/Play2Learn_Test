@@ -15,4 +15,8 @@ const testimonialSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Add indexes for performance on frequently queried fields
+testimonialSchema.index({ approved: 1, created_at: -1 });
+testimonialSchema.index({ display_on_landing: 1 });
+
 module.exports = mongoose.model('Testimonial', testimonialSchema);

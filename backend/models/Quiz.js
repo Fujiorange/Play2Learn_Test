@@ -36,4 +36,8 @@ quizSchema.pre('save', function() {
   this.updatedAt = Date.now();
 });
 
+// Add indexes for performance on frequently queried fields
+quizSchema.index({ quiz_type: 1, is_active: 1 });
+quizSchema.index({ is_launched: 1, is_active: 1 });
+
 module.exports = mongoose.model('Quiz', quizSchema);
