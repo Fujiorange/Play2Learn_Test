@@ -1,13 +1,3 @@
-// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX
-// ✅ Queries USERS collection correctly for dashboard stats
-// ✅ Parent CSV import with linkedStudents integration
-// ✅ FIXED: Student credentials email now sends correct parameters
-// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX + ANNOUNCEMENTS
-// ✅ Queries USERS collection correctly for dashboard stats
-// ✅ Parent CSV import with linkedStudents integration
-// ✅ FIXED: Student credentials email now sends correct parameters
-// ⭐ NEW: Added announcement routes from Wei Xiang's implementation
-// backend/routes/schoolAdminRoutes.js - COMPREHENSIVE FIX
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
