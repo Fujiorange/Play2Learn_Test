@@ -810,7 +810,7 @@ router.get('/questions-grades', authenticateP2LAdmin, async (req, res) => {
     
     // Custom sort to order by grade level number (Primary 1, Primary 2, etc.)
     const sortedGrades = grades
-      .filter(g => g && g.trim())
+      .filter(g => g && g.trim().length > 0)
       .sort((a, b) => {
         // Extract number from grade string (e.g., "Primary 1" -> 1)
         const matchA = a.match(/\d+/);

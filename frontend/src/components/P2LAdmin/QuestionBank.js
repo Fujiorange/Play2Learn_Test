@@ -266,8 +266,8 @@ function QuestionBank() {
   const downloadTemplate = () => {
     const template = `text,choice1,choice2,choice3,choice4,answer,difficulty,subject,topic,grade
 "What is 2 + 2?","2","3","4","5","4",1,"Math","Addition","Primary 1"
-"What is the capital of France?","London","Berlin","Paris","Rome","Paris",2,"Geography","Capitals","Primary 2"
-"Which planet is closest to the sun?","Venus","Mars","Mercury","Earth","Mercury",3,"Science","Solar System","Primary 3"`;
+"What is the capital of France?","London","Berlin","Paris","Rome","Paris",2,"Geography","Capitals","Primary 1"
+"Which planet is closest to the sun?","Venus","Mars","Mercury","Earth","Mercury",3,"Science","Solar System","Primary 1"`;
     
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
