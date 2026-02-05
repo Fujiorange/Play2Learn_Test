@@ -250,11 +250,11 @@ export default function StudentDashboard() {
       icon: '🛒',
       action: () => navigate('/student/shop'),
     },
-    // 1️⃣3️⃣ Badges & Shop
+    // 1️⃣3️⃣ Badges
     {
       id: 'badges',
-      title: 'Badges & Shop',
-      description: 'View earned badges and spend points',
+      title: 'Badges',
+      description: 'View earned badges',
       icon: '🏆',
       action: () => navigate('/student/badges'),
     },

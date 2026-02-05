@@ -22,8 +22,8 @@ export default function ViewLeaderboard() {
       setCurrentUser(user);
 
       try {
-        // REAL API CALL - Get leaderboard from database
-        const result = await studentService.getLeaderboard();
+        // REAL API CALL - Get leaderboard filtered by current user's school & class
+        const result = await studentService.getLeaderboard(user.schoolId, user.class);
 
         if (result.success) {
           setLeaderboard(result.leaderboard || []);

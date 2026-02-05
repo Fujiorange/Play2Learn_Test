@@ -1,102 +1,358 @@
+// frontend/src/components/Teacher/TrackTicket.js
+// ✅ FIXED VERSION - Uses real API
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function TrackTicket() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState([]);
+  const [filter, setFilter] = useState('all');
   const [error, setError] = useState('');
 
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
-    const loadTickets = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/mongo/teacher/support-tickets', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          setTickets(data.tickets || []);
-        } else {
-          setError(data.error || 'Failed to load tickets');
-        }
-      } catch (error) {
-        console.error('Error loading tickets:', error);
-        setError('Failed to connect to server');
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
     loadTickets();
   }, [navigate]);
 
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'open': return { background: '#dbeafe', color: '#1d4ed8' };
-      case 'in-progress': return { background: '#fef3c7', color: '#d97706' };
-      case 'resolved': return { background: '#dcfce7', color: '#16a34a' };
-      default: return { background: '#f3f4f6', color: '#6b7280' };
+  const loadTickets = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTickets(data.tickets || []);
+      } else {
+        setError(data.error || 'Failed to load tickets');
+      }
+    } catch (err) {
+      console.error('Error loading tickets:', err);
+      setError('Failed to load tickets');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const getStatusColor = (status) => {
+    const colors = {
+      open: { bg: '#fef3c7', text: '#92400e', label: '🟡 Open' },
+      'in-progress': { bg: '#dbeafe', text: '#1e40af', label: '🔵 In Progress' },
+      resolved: { bg: '#d1fae5', text: '#065f46', label: '✅ Resolved' },
+      closed: { bg: '#e5e7eb', text: '#374151', label: '⬜ Closed' }
+    };
+    return colors[status] || colors.open;
+  };
+
+  const getPriorityColor = (priority) => {
+    const colors = {
+      low: '#10b981',
+      medium: '#f59e0b',
+      high: '#ef4444',
+      urgent: '#dc2626'
+    };
+    return colors[priority] || colors.medium;
+  };
+
+  const filteredTickets = filter === 'all' 
+    ? tickets 
+    : tickets.filter(t => t.status === filter);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   const styles = {
-    container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
-    content: { maxWidth: '900px', margin: '0 auto' },
-    header: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' },
-    title: { fontSize: '28px', fontWeight: '700', color: '#1e293b', marginBottom: '8px' },
-    card: { background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' },
-    backBtn: { padding: '10px 20px', background: '#f1f5f9', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '500', marginBottom: '20px' },
-    emptyState: { textAlign: 'center', padding: '60px 20px', color: '#64748b', background: 'white', borderRadius: '16px' },
-    badge: { padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' },
+    container: {
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
+      padding: '32px',
+    },
+    content: {
+      maxWidth: '1000px',
+      margin: '0 auto',
+    },
+    header: {
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px 32px',
+      marginBottom: '24px',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: '24px',
+      fontWeight: '700',
+      color: '#1f2937',
+      margin: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+    },
+    headerButtons: {
+      display: 'flex',
+      gap: '12px',
+    },
+    backButton: {
+      padding: '10px 20px',
+      background: '#6b7280',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+    },
+    createButton: {
+      padding: '10px 20px',
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+    },
+    filterBar: {
+      background: 'white',
+      borderRadius: '16px',
+      padding: '16px 24px',
+      marginBottom: '24px',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      display: 'flex',
+      gap: '12px',
+      flexWrap: 'wrap',
+    },
+    filterButton: {
+      padding: '8px 16px',
+      border: '2px solid #e5e7eb',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+    },
+    filterActive: {
+      background: '#10b981',
+      color: 'white',
+      borderColor: '#10b981',
+    },
+    ticketList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+    },
+    ticketCard: {
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    },
+    ticketHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: '12px',
+    },
+    ticketSubject: {
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#1f2937',
+      margin: 0,
+    },
+    ticketId: {
+      fontSize: '13px',
+      color: '#6b7280',
+      fontFamily: 'monospace',
+    },
+    ticketMeta: {
+      display: 'flex',
+      gap: '12px',
+      marginBottom: '12px',
+      flexWrap: 'wrap',
+    },
+    badge: {
+      padding: '4px 12px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: '600',
+    },
+    ticketDescription: {
+      fontSize: '15px',
+      color: '#4b5563',
+      lineHeight: '1.6',
+      margin: '0 0 16px 0',
+    },
+    ticketFooter: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingTop: '12px',
+      borderTop: '1px solid #e5e7eb',
+      fontSize: '14px',
+      color: '#6b7280',
+    },
+    emptyState: {
+      background: 'white',
+      borderRadius: '16px',
+      padding: '60px 24px',
+      textAlign: 'center',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    },
+    error: {
+      background: '#fee2e2',
+      color: '#991b1b',
+      padding: '16px',
+      borderRadius: '12px',
+      marginBottom: '24px',
+    },
+    loading: {
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '300px',
+    },
   };
 
   if (loading) {
-    return <div style={styles.container}><div style={styles.content}><div style={{ textAlign: 'center', padding: '60px' }}><p>Loading tickets...</p></div></div></div>;
+    return (
+      <div style={styles.container}>
+        <div style={styles.loading}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '5px solid #e5e7eb',
+            borderTop: '5px solid #10b981',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }}></div>
+        </div>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   return (
     <div style={styles.container}>
       <div style={styles.content}>
-        <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
-        
+        {/* Header */}
         <div style={styles.header}>
-          <h1 style={styles.title}>🎫 Support Tickets</h1>
-          <p style={{ color: '#64748b' }}>Track your support requests</p>
+          <h1 style={styles.title}>
+            <span>📋</span> My Support Tickets
+          </h1>
+          <div style={styles.headerButtons}>
+            <button
+              style={styles.createButton}
+              onClick={() => navigate('/teacher/support/create')}
+            >
+              + New Ticket
+            </button>
+            <button style={styles.backButton} onClick={() => navigate('/teacher')}>
+              ← Back
+            </button>
+          </div>
         </div>
 
-        {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>{error}</div>}
+        {error && <div style={styles.error}>{error}</div>}
 
-        {tickets.length === 0 ? (
+        {/* Filter Bar */}
+        <div style={styles.filterBar}>
+          {['all', 'open', 'in-progress', 'resolved', 'closed'].map(f => (
+            <button
+              key={f}
+              style={{
+                ...styles.filterButton,
+                ...(filter === f ? styles.filterActive : { background: 'white', color: '#374151' })
+              }}
+              onClick={() => setFilter(f)}
+            >
+              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1).replace('-', ' ')}
+              {' '}({f === 'all' ? tickets.length : tickets.filter(t => t.status === f).length})
+            </button>
+          ))}
+        </div>
+
+        {/* Ticket List */}
+        {filteredTickets.length === 0 ? (
           <div style={styles.emptyState}>
-            <p style={{ fontSize: '48px', marginBottom: '10px' }}>🎫</p>
-            <p style={{ fontSize: '18px', fontWeight: '500' }}>No tickets yet</p>
-            <p>Your support tickets will appear here</p>
+            <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎫</div>
+            <p style={{ fontSize: '18px', color: '#6b7280', margin: 0 }}>
+              {filter === 'all' ? 'No support tickets yet' : `No ${filter} tickets`}
+            </p>
+            <button
+              style={{ ...styles.createButton, marginTop: '20px' }}
+              onClick={() => navigate('/teacher/support/create')}
+            >
+              Create Your First Ticket
+            </button>
           </div>
         ) : (
-          tickets.map((ticket) => (
-            <div key={ticket._id} style={styles.card}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontWeight: '600', color: '#1e293b' }}>{ticket.subject}</span>
-                <span style={{ ...styles.badge, ...getStatusStyle(ticket.status) }}>{ticket.status}</span>
-              </div>
-              <p style={{ color: '#475569', marginBottom: '12px' }}>{ticket.description}</p>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                Priority: {ticket.priority} | Created: {new Date(ticket.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-          ))
+          <div style={styles.ticketList}>
+            {filteredTickets.map((ticket) => {
+              const statusStyle = getStatusColor(ticket.status);
+              return (
+                <div key={ticket._id} style={styles.ticketCard}>
+                  <div style={styles.ticketHeader}>
+                    <div>
+                      <h3 style={styles.ticketSubject}>{ticket.subject}</h3>
+                      <span style={styles.ticketId}>Ticket #{ticket._id?.slice(-6) || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div style={styles.ticketMeta}>
+                    <span style={{
+                      ...styles.badge,
+                      background: statusStyle.bg,
+                      color: statusStyle.text
+                    }}>
+                      {statusStyle.label}
+                    </span>
+                    <span style={{
+                      ...styles.badge,
+                      background: `${getPriorityColor(ticket.priority)}20`,
+                      color: getPriorityColor(ticket.priority)
+                    }}>
+                      {ticket.priority || 'medium'} priority
+                    </span>
+                    <span style={{
+                      ...styles.badge,
+                      background: '#f3f4f6',
+                      color: '#6b7280'
+                    }}>
+                      {ticket.category || 'general'}
+                    </span>
+                  </div>
+                  <p style={styles.ticketDescription}>
+                    {ticket.description?.length > 200 
+                      ? ticket.description.substring(0, 200) + '...' 
+                      : ticket.description}
+                  </p>
+                  <div style={styles.ticketFooter}>
+                    <span>Created: {formatDate(ticket.createdAt)}</span>
+                    {ticket.updatedAt && ticket.updatedAt !== ticket.createdAt && (
+                      <span>Updated: {formatDate(ticket.updatedAt)}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

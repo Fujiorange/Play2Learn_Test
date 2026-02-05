@@ -263,7 +263,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/quiz/history`, {
+      const response = await fetch(`${API_URL}/mongo/student/quiz-history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -308,12 +308,22 @@ const studentService = {
   },
 
   // ==================== LEADERBOARD ====================
-  async getLeaderboard() {
+  async getLeaderboard(schoolId, classId) {
     try {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/leaderboard`, {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (schoolId) params.append('schoolId', schoolId);
+      if (classId) params.append('class', classId);
+
+      const queryString = params.toString();
+      const url = queryString 
+        ? `${API_URL}/mongo/student/leaderboard?${queryString}`
+        : `${API_URL}/mongo/student/leaderboard`;
+
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
