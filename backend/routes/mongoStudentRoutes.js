@@ -42,6 +42,7 @@ const MathSkill = require('../models/MathSkill');
 const SupportTicket = require('../models/SupportTicket');
 const Testimonial = require('../models/Testimonial');
 const Quiz = require('../models/Quiz');
+const QuizAttempt = require('../models/QuizAttempt');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
@@ -963,28 +964,69 @@ router.get("/quiz-results", async (req, res) => {
 router.get("/quiz-history", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    // Use lean() for read-only query to improve performance
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
+    
+    // Get regular quizzes from StudentQuiz collection
+    const regularQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
       .sort({ completed_at: -1 })
       .lean();
 
     // Filter out unsubmitted quizzes using the shared isQuizCompleted function
-    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
+    const completedRegularQuizzes = regularQuizzes.filter(isQuizCompleted);
+
+    // Get adaptive quizzes from QuizAttempt collection
+    const adaptiveAttempts = await QuizAttempt.find({ 
+      userId: studentId, 
+      is_completed: true 
+    })
+      .populate('quizId', 'title')
+      .sort({ completedAt: -1 })
+      .lean();
+
+    // Format regular quizzes
+    const regularHistory = completedRegularQuizzes.map((q) => ({
+      id: q._id,
+      quizType: 'regular',
+      quizTitle: 'Math Practice Quiz',
+      profile: q.profile_level,
+      profile_level: q.profile_level,
+      date: q.completed_at ? q.completed_at.toLocaleDateString() : 'N/A',
+      time: q.completed_at ? q.completed_at.toLocaleTimeString() : 'N/A',
+      score: q.score,
+      maxScore: q.total_questions,
+      totalQuestions: q.total_questions,
+      percentage: q.percentage,
+      points_earned: q.points_earned,
+      completedAt: q.completed_at
+    }));
+
+    // Format adaptive quizzes
+    const adaptiveHistory = adaptiveAttempts.map((a) => ({
+      id: a._id,
+      quizType: 'adaptive',
+      quizTitle: a.quizId?.title || 'Adaptive Quiz',
+      profile: a.current_difficulty || 1,
+      profile_level: a.current_difficulty || 1,
+      date: a.completedAt ? new Date(a.completedAt).toLocaleDateString() : 'N/A',
+      time: a.completedAt ? new Date(a.completedAt).toLocaleTimeString() : 'N/A',
+      score: a.correct_count || 0,
+      maxScore: a.total_answered || 0,
+      totalQuestions: a.total_answered || 0,
+      percentage: a.total_answered > 0 ? Math.round((a.correct_count / a.total_answered) * 100) : 0,
+      // Calculate approximate points: 10 points per correct answer (adaptive quizzes don't store points_earned)
+      points_earned: (a.correct_count || 0) * 10,
+      completedAt: a.completedAt
+    }));
+
+    // Combine and sort by completion date
+    const allHistory = [...regularHistory, ...adaptiveHistory].sort((a, b) => {
+      const dateA = a.completedAt ? new Date(a.completedAt) : new Date(0);
+      const dateB = b.completedAt ? new Date(b.completedAt) : new Date(0);
+      return dateB - dateA;
+    });
 
     res.json({
       success: true,
-      history: completedQuizzes.map((q) => ({
-        id: q._id,
-        profile: q.profile_level,
-        profile_level: q.profile_level,
-        date: q.completed_at.toLocaleDateString(),
-        time: q.completed_at.toLocaleTimeString(),
-        score: q.score,
-        maxScore: q.total_questions,
-        totalQuestions: q.total_questions,
-        percentage: q.percentage,
-        points_earned: q.points_earned,
-      })),
+      history: allHistory.map(({ completedAt, ...rest }) => rest), // Remove completedAt from response
     });
   } catch (error) {
     console.error("❌ Quiz history error:", error);

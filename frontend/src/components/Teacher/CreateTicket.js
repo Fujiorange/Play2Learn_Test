@@ -2,17 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function CreateTicket() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
-    category: 'technical',
+    category: 'website',
     priority: 'normal',
+    routeTo: 'website',
     subject: '',
     description: '',
   });
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
     const loadData = async () => {
@@ -28,13 +35,41 @@ export default function CreateTicket() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setMessage({ type: 'success', text: 'Support ticket created successfully! We will get back to you soon.' });
-    setSubmitting(false);
-    setTimeout(() => {
-      setFormData({ category: 'technical', priority: 'normal', subject: '', description: '' });
-      setMessage({ type: '', text: '' });
-    }, 3000);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const user = authService.getCurrentUser();
+      
+      const response = await fetch(`${API_BASE_URL}/api/mongo/student/support-tickets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          ...formData,
+          student_email: user?.email,
+          student_name: user?.name
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessage({ type: 'success', text: `Support ticket #${data.ticketId} created successfully! We will get back to you soon.` });
+        setTimeout(() => {
+          setFormData({ category: 'website', priority: 'normal', routeTo: 'website', subject: '', description: '' });
+          setMessage({ type: '', text: '' });
+        }, 3000);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to create support ticket' });
+      }
+    } catch (error) {
+      console.error('Create ticket error:', error);
+      setMessage({ type: 'error', text: 'Failed to create support ticket. Please try again.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const styles = {
@@ -52,6 +87,7 @@ export default function CreateTicket() {
     submitButton: { padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
     message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
     successMessage: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
+    errorMessage: { background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
   };
@@ -65,36 +101,34 @@ export default function CreateTicket() {
           <h1 style={styles.title}>🎫 Create Support Ticket</h1>
           <button style={styles.backButton} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
         </div>
-        {message.text && <div style={{...styles.message, ...styles.successMessage}}>{message.text}</div>}
+        {message.text && <div style={{...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)}}>{message.text}</div>}
         <form style={styles.form} onSubmit={handleSubmit}>
           <div style={styles.formGroup}>
             <label style={styles.label}>Category *</label>
-            <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} required style={styles.select}>
-              <option value="technical">Technical Issue</option>
-              <option value="account">Account Issue</option>
-              <option value="feature">Feature Request</option>
-              <option value="billing">Billing Question</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Priority *</label>
-            <select value={formData.priority} onChange={(e) => setFormData({...formData, priority: e.target.value})} required style={styles.select}>
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
+            <select 
+              value={formData.category} 
+              onChange={(e) => {
+                const category = e.target.value;
+                const routeTo = category === 'school' ? 'school' : 'website';
+                setFormData({...formData, category, routeTo});
+              }} 
+              required 
+              disabled={submitting}
+              style={styles.select}
+            >
+              <option value="website">Website-Related Problem</option>
+              <option value="school">School-Related Problem</option>
             </select>
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>Subject *</label>
-            <input type="text" value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} required placeholder="Brief description of the issue" style={styles.input} />
+            <input type="text" value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} required disabled={submitting} placeholder="Brief description of the issue" style={styles.input} />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>Description *</label>
-            <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required placeholder="Please provide detailed information about your issue..." style={styles.textarea} />
+            <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required disabled={submitting} placeholder="Please provide detailed information about your issue..." style={styles.textarea} />
           </div>
-          <button type="submit" disabled={submitting} style={styles.submitButton}>
+          <button type="submit" disabled={submitting} style={{...styles.submitButton, opacity: submitting ? 0.7 : 1}}>
             {submitting ? '📤 Submitting...' : '📤 Submit Ticket'}
           </button>
         </form>

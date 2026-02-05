@@ -2,11 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function ViewFeedback() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [feedbackList, setFeedbackList] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [error, setError] = useState('');
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
     const loadFeedback = async () => {
@@ -15,14 +22,23 @@ export default function ViewFeedback() {
         return;
       }
 
-      const mockFeedback = [
-        { id: 1, from: 'Parent of John Doe', date: '2024-12-10', subject: 'Thank you for the support', category: 'general', status: 'unread', message: 'Thank you for helping John with his mathematics. He is showing great improvement!' },
-        { id: 2, from: 'Parent of Jane Smith', date: '2024-12-09', subject: 'Question about homework', category: 'academic', status: 'read', message: 'I have a question about the homework assigned yesterday...' },
-        { id: 3, from: 'Student - Mike Johnson', date: '2024-12-08', subject: 'Request for extra help', category: 'academic', status: 'read', message: 'Could I get some extra help with the science project?' },
-      ];
-      
-      setFeedbackList(mockFeedback);
-      setLoading(false);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/feedback`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          setFeedbackList(data.feedback || []);
+        } else {
+          setError(data.error || 'Failed to load feedback');
+        }
+      } catch (error) {
+        console.error('Load feedback error:', error);
+        setError('Failed to load feedback');
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadFeedback();
@@ -54,6 +70,7 @@ export default function ViewFeedback() {
     emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
+    errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px' },
   };
 
   if (loading) return (<div style={styles.loadingContainer}><div style={styles.loadingText}>Loading feedback...</div></div>);
@@ -66,6 +83,9 @@ export default function ViewFeedback() {
             <h1 style={styles.title}>📬 Received Feedback</h1>
             <button style={styles.backButton} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
           </div>
+          
+          {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
+          
           <div style={styles.filterButtons}>
             {['all', 'unread', 'read'].map(status => (
               <button key={status} onClick={() => setFilter(status)} style={{...styles.filterButton, ...(filter === status ? styles.filterButtonActive : {})}}>

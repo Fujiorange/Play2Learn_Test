@@ -3,6 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 const ViewAnnouncements = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -19,7 +23,7 @@ const ViewAnnouncements = () => {
       setLoading(true);
       
       // ✅ Uses existing school admin endpoint with teachers audience
-      const response = await fetch('http://localhost:5000/school-admin/announcements/public?audience=teachers', {
+      const response = await fetch(`${API_BASE_URL}/school-admin/announcements/public?audience=teachers`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'

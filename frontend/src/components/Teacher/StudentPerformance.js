@@ -2,12 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function StudentPerformance() {
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState(null);
   const [performanceData, setPerformanceData] = useState(null);
+  const [error, setError] = useState('');
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
     const loadPerformance = async () => {
@@ -17,35 +24,83 @@ export default function StudentPerformance() {
       }
 
       try {
-        // Get student from navigation state or load from API
-        const studentData = location.state?.student || {
-          id: 1,
-          name: 'John Doe',
-          class: 'Primary 5A',
-          grade: 'Primary 5',
-        };
+        // Get student from navigation state
+        const studentFromState = location.state?.student;
+        
+        if (!studentFromState || !studentFromState._id) {
+          setError('No student selected. Please select a student from the list.');
+          setLoading(false);
+          return;
+        }
 
-        // Simulated performance data
-        const mockData = {
-          overallScore: 85,
-          subjects: [
-            { name: 'English', score: 88, quizzes: 12, assignments: 8, progress: '+5%' },
-            { name: 'Mathematics', score: 82, quizzes: 15, assignments: 10, progress: '+3%' },
-            { name: 'Science', score: 85, quizzes: 10, assignments: 6, progress: '+7%' },
-          ],
-          recentActivity: [
-            { date: '2024-12-10', activity: 'Completed Quiz: Fractions', score: 92 },
-            { date: '2024-12-09', activity: 'Submitted Assignment: Essay Writing', score: 85 },
-            { date: '2024-12-08', activity: 'Completed Quiz: Grammar', score: 88 },
-          ],
-          strengths: ['Problem Solving', 'Reading Comprehension', 'Critical Thinking'],
-          improvements: ['Time Management', 'Written Expression'],
-        };
+        // Fetch student details from API
+        const [studentRes, quizRes, skillsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/mongo/teacher/students/${studentFromState._id}`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+          }),
+          fetch(`${API_BASE_URL}/api/mongo/teacher/students/${studentFromState._id}/quiz-results`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+          }),
+          fetch(`${API_BASE_URL}/api/mongo/teacher/students/${studentFromState._id}/skills`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+          })
+        ]);
 
-        setStudent(studentData);
-        setPerformanceData(mockData);
+        const [studentData, quizData, skillsData] = await Promise.all([
+          studentRes.json(),
+          quizRes.json(),
+          skillsRes.json()
+        ]);
+
+        if (studentData.success) {
+          setStudent(studentData.student);
+        } else {
+          setStudent(studentFromState);
+        }
+
+        // Process quiz results to create performance data
+        const quizResults = quizData.success ? quizData.results : [];
+        const skills = skillsData.success ? skillsData.skills : [];
+        
+        // Calculate overall score from quiz results
+        const completedQuizzes = quizResults.filter(q => q.is_completed);
+        const overallScore = completedQuizzes.length > 0
+          ? Math.round(completedQuizzes.reduce((sum, q) => sum + q.accuracy, 0) / completedQuizzes.length)
+          : 0;
+
+        // Get recent activity from quiz attempts
+        const recentActivity = quizResults.slice(0, 5).map(quiz => ({
+          date: quiz.startedAt ? new Date(quiz.startedAt).toLocaleDateString() : 'N/A',
+          activity: `${quiz.is_completed ? 'Completed' : 'Attempted'} Quiz: ${quiz.quizTitle}`,
+          score: quiz.accuracy
+        }));
+
+        // Calculate skill strengths and areas for improvement
+        const sortedSkills = [...skills].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+        const strengths = sortedSkills.slice(0, 3).filter(s => s.current_level >= 2).map(s => s.skill_name);
+        const improvements = sortedSkills.filter(s => s.current_level < 2).slice(0, 3).map(s => s.skill_name);
+
+        // Create skill summary for display
+        const skillSummary = skills.map(skill => ({
+          name: skill.skill_name,
+          level: skill.current_level || 1,
+          xp: skill.xp || 0,
+          unlocked: skill.unlocked !== false
+        }));
+
+        setPerformanceData({
+          overallScore,
+          totalQuizzes: quizResults.length,
+          completedQuizzes: completedQuizzes.length,
+          skills: skillSummary,
+          recentActivity: recentActivity.length > 0 ? recentActivity : [{ date: 'N/A', activity: 'No activity yet', score: 0 }],
+          strengths: strengths.length > 0 ? strengths : ['No strong skills identified yet'],
+          improvements: improvements.length > 0 ? improvements : ['Keep practicing!'],
+          mathProfile: studentData.student?.mathProfile
+        });
       } catch (error) {
         console.error('Error loading performance:', error);
+        setError('Failed to load student performance data');
       } finally {
         setLoading(false);
       }
@@ -219,6 +274,31 @@ export default function StudentPerformance() {
     );
   }
 
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.content}>
+          <div style={styles.header}>
+            <div style={styles.headerTop}>
+              <div>
+                <h1 style={styles.title}>Student Performance</h1>
+              </div>
+              <button
+                style={styles.backButton}
+                onClick={() => navigate('/teacher/students')}
+              >
+                ← Back to Students
+              </button>
+            </div>
+          </div>
+          <div style={{ padding: '20px', background: '#fee2e2', borderRadius: '12px', color: '#991b1b' }}>
+            ⚠️ {error}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.content}>
@@ -226,7 +306,7 @@ export default function StudentPerformance() {
           <div style={styles.headerTop}>
             <div>
               <h1 style={styles.title}>{student?.name}</h1>
-              <p style={styles.subtitle}>{student?.class} • {student?.grade}</p>
+              <p style={styles.subtitle}>{student?.class} • {student?.gradeLevel || 'N/A'}</p>
             </div>
             <button
               style={styles.backButton}
@@ -241,27 +321,37 @@ export default function StudentPerformance() {
 
         <div style={styles.scoreCard}>
           <div style={styles.scoreTitle}>Overall Performance Score</div>
-          <div style={styles.scoreValue}>{performanceData?.overallScore}%</div>
+          <div style={styles.scoreValue}>{performanceData?.overallScore || 0}%</div>
+          <div style={{ marginTop: '12px', fontSize: '14px', opacity: 0.9 }}>
+            {performanceData?.completedQuizzes || 0} of {performanceData?.totalQuizzes || 0} quizzes completed
+          </div>
         </div>
 
         <div style={styles.grid}>
           <div style={styles.card}>
             <h2 style={styles.cardTitle}>
-              <span>📚</span> Subject Performance
+              <span>📚</span> Skill Matrix
             </h2>
-            {performanceData?.subjects.map((subject, index) => (
-              <div key={index} style={styles.subjectItem}>
-                <div style={styles.subjectHeader}>
-                  <div style={styles.subjectName}>{subject.name}</div>
-                  <div style={styles.subjectScore}>{subject.score}%</div>
+            {performanceData?.skills && performanceData.skills.length > 0 ? (
+              performanceData.skills.map((skill, index) => (
+                <div key={index} style={styles.subjectItem}>
+                  <div style={styles.subjectHeader}>
+                    <div style={styles.subjectName}>{skill.name}</div>
+                    <div style={styles.subjectScore}>Level {skill.level}/5</div>
+                  </div>
+                  <div style={styles.subjectDetails}>
+                    <span>⭐ {skill.xp} XP</span>
+                    <span style={{ color: skill.unlocked ? '#10b981' : '#ef4444' }}>
+                      {skill.unlocked ? '✓ Unlocked' : '🔒 Locked'}
+                    </span>
+                  </div>
                 </div>
-                <div style={styles.subjectDetails}>
-                  <span>📝 {subject.quizzes} quizzes</span>
-                  <span>📄 {subject.assignments} assignments</span>
-                  <span style={{ color: '#10b981' }}>{subject.progress}</span>
-                </div>
+              ))
+            ) : (
+              <div style={{ color: '#6b7280', textAlign: 'center', padding: '20px' }}>
+                No skill data available yet
               </div>
-            ))}
+            )}
           </div>
 
           <div style={styles.card}>
@@ -273,9 +363,11 @@ export default function StudentPerformance() {
                 <div style={styles.activityDate}>{activity.date}</div>
                 <div style={styles.activityText}>
                   {activity.activity}
-                  <span style={{ color: '#10b981', marginLeft: '8px', fontWeight: '700' }}>
-                    {activity.score}%
-                  </span>
+                  {activity.score > 0 && (
+                    <span style={{ color: '#10b981', marginLeft: '8px', fontWeight: '700' }}>
+                      {activity.score}%
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -309,6 +401,41 @@ export default function StudentPerformance() {
             </div>
           </div>
         </div>
+
+        {/* Math Profile Info */}
+        {performanceData?.mathProfile && (
+          <div style={{ ...styles.card, marginTop: '24px' }}>
+            <h2 style={styles.cardTitle}>
+              <span>🎓</span> Math Profile
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+              <div style={{ textAlign: 'center', padding: '16px', background: '#f9fafb', borderRadius: '8px' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+                  {performanceData.mathProfile.current_profile || 1}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280' }}>Current Level</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '16px', background: '#f9fafb', borderRadius: '8px' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>
+                  {(performanceData.mathProfile.total_points || 0).toLocaleString()}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280' }}>Total Points</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '16px', background: '#f9fafb', borderRadius: '8px' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>
+                  {performanceData.mathProfile.streak || 0}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280' }}>Day Streak</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '16px', background: '#f9fafb', borderRadius: '8px' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: performanceData.mathProfile.placement_completed ? '#10b981' : '#ef4444' }}>
+                  {performanceData.mathProfile.placement_completed ? '✓' : '✗'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280' }}>Placement Complete</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

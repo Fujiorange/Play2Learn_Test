@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function CreateFeedback() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -17,6 +21,8 @@ export default function CreateFeedback() {
     priority: 'normal',
   });
 
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
     const loadData = async () => {
       if (!authService.isAuthenticated()) {
@@ -25,13 +31,15 @@ export default function CreateFeedback() {
       }
 
       try {
-        // Mock students list
-        const mockStudents = [
-          { id: 1, name: 'John Doe', class: 'Primary 5A' },
-          { id: 2, name: 'Jane Smith', class: 'Primary 5A' },
-          { id: 3, name: 'Mike Johnson', class: 'Primary 5B' },
-        ];
-        setStudents(mockStudents);
+        // Fetch students from API
+        const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/students`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          setStudents(data.students || []);
+        }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -53,24 +61,37 @@ export default function CreateFeedback() {
     setSending(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      setMessage({ type: 'success', text: 'Feedback sent successfully!' });
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(formData)
+      });
       
-      // Reset form after 2 seconds
-      setTimeout(() => {
-        setFormData({
-          recipientType: 'student',
-          studentId: '',
-          subject: '',
-          category: 'academic',
-          message: '',
-          priority: 'normal',
-        });
-        setMessage({ type: '', text: '' });
-      }, 2000);
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Feedback sent successfully!' });
+        
+        // Reset form after 2 seconds
+        setTimeout(() => {
+          setFormData({
+            recipientType: 'student',
+            studentId: '',
+            subject: '',
+            category: 'academic',
+            message: '',
+            priority: 'normal',
+          });
+          setMessage({ type: '', text: '' });
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to send feedback. Please try again.' });
+      }
     } catch (error) {
+      console.error('Send feedback error:', error);
       setMessage({ type: 'error', text: 'Failed to send feedback. Please try again.' });
     } finally {
       setSending(false);
@@ -128,7 +149,7 @@ export default function CreateFeedback() {
             <select name="studentId" value={formData.studentId} onChange={handleChange} required disabled={sending} style={styles.select}>
               <option value="">-- Select --</option>
               {students.map(student => (
-                <option key={student.id} value={student.id}>{student.name} ({student.class})</option>
+                <option key={student._id} value={student._id}>{student.name} ({student.class})</option>
               ))}
             </select>
           </div>
