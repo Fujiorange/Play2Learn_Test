@@ -53,21 +53,33 @@ async function updateSkillsFromAdaptiveQuiz(userId, answers) {
     const skillUpdates = {};
 
     answers.forEach((answer) => {
-      // Get topic from the answer (questions in adaptive quiz have topic property)
+      // Get topic from the answer - prefer explicit topic from question metadata
+      // The topic field should be set on the question when it's created in the quiz
       let topic = answer.topic || 'General';
       
-      // If no topic but we have question text, try to determine topic
-      if (!topic || topic === 'General') {
+      // Fallback: If no explicit topic, try basic pattern matching as last resort
+      // Note: This is a best-effort fallback and may not be accurate for all questions
+      // Ideally, all questions should have explicit topic metadata set
+      if (!topic || topic === 'General' || topic === '') {
         const questionText = (answer.question_text || '').toLowerCase();
-        if (questionText.includes('+') || questionText.includes('add') || questionText.includes('sum')) {
+        // Only use pattern matching for simple arithmetic operators
+        if (questionText.includes('+')) {
           topic = 'Addition';
-        } else if (questionText.includes('-') || questionText.includes('subtract') || questionText.includes('minus')) {
+        } else if (questionText.includes('-') && !questionText.includes('subtract')) {
+          // Check for minus sign without the word 'subtract' to avoid double matching
           topic = 'Subtraction';
-        } else if (questionText.includes('×') || questionText.includes('*') || questionText.includes('multiply') || questionText.includes('times')) {
+        } else if (questionText.includes('subtract') || questionText.includes('minus')) {
+          topic = 'Subtraction';
+        } else if (questionText.includes('×') || questionText.includes('*')) {
           topic = 'Multiplication';
-        } else if (questionText.includes('÷') || questionText.includes('/') || questionText.includes('divide')) {
+        } else if (questionText.includes('multiply') || questionText.includes('times')) {
+          topic = 'Multiplication';
+        } else if (questionText.includes('÷') || questionText.includes('/')) {
+          topic = 'Division';
+        } else if (questionText.includes('divide')) {
           topic = 'Division';
         }
+        // If still 'General', keep it as the default fallback topic
       }
       
       // Capitalize first letter

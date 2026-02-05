@@ -501,15 +501,27 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
     }
 
 
-    // ✅ FIX: Map 'normal' to 'medium' for backward compatibility
+    // Priority mapping for both models - ParentSupportTicket uses 'medium', unified uses 'normal'
+    // We use 'normal' as the standard and convert when needed
     const priorityMap = {
       'normal': 'normal',
       'low': 'low',
-      'medium': 'normal',
+      'medium': 'normal',  // Convert 'medium' to 'normal' for unified model
       'high': 'high',
       'urgent': 'urgent'
     };
-    const finalPriority = priorityMap[priority] || 'normal';
+    const unifiedPriority = priorityMap[priority] || 'normal';
+    
+    // For ParentSupportTicket model which uses 'medium' instead of 'normal'
+    const legacyPriorityMap = {
+      'normal': 'medium',
+      'low': 'low', 
+      'medium': 'medium',
+      'high': 'high',
+      'urgent': 'urgent'
+    };
+    const legacyPriority = legacyPriorityMap[priority] || 'medium';
+    
     const ticketId = `TICKET-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
 
     // Create ticket in unified SupportTicket model for P2L Admin access
@@ -524,7 +536,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
       category: category || 'general',
       message: description,
       status: 'open',
-      priority: finalPriority,
+      priority: unifiedPriority,
       // Legacy fields for backward compatibility
       student_id: parent._id,
       student_name: parent.name,
@@ -532,6 +544,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
     });
 
     // Also create in ParentSupportTicket for backward compatibility
+    // NOTE: This dual-write pattern should be deprecated once migration is complete
     const newTicket = new ParentSupportTicket({
       ticketId,
       userId: parent._id,
@@ -539,7 +552,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
       userName: parent.name,
       userRole: 'Parent',
       category,
-      priority: finalPriority === 'normal' ? 'medium' : finalPriority,
+      priority: legacyPriority,
       subject,
       description,
       status: 'open',

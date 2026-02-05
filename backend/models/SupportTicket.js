@@ -1,5 +1,23 @@
 const mongoose = require('mongoose');
 
+/**
+ * Unified Support Ticket Schema
+ * Supports tickets from students, teachers, and parents
+ * 
+ * Migration Note: The legacy fields (student_id, student_name, student_email) are maintained
+ * for backward compatibility with existing code that references these fields.
+ * 
+ * DEPRECATION TIMELINE:
+ * - v1.0: Legacy fields added for backward compatibility
+ * - v2.0 (planned): Remove legacy fields after migration of all existing tickets
+ *                   and update of all consuming code to use user_* fields
+ * 
+ * To migrate existing tickets, run a database update script to copy:
+ * - student_id → user_id
+ * - student_name → user_name
+ * - student_email → user_email
+ * And set user_role to 'Student' for existing records
+ */
 const supportTicketSchema = new mongoose.Schema({
   // User information - generic for student, teacher, or parent
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -30,13 +48,16 @@ const supportTicketSchema = new mongoose.Schema({
   responded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   responded_at: { type: Date },
   
-  // Legacy field aliases for backward compatibility
+  // DEPRECATED: Legacy field aliases for backward compatibility
+  // TODO: Remove these fields in v2.0 after migration is complete
   student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   student_name: { type: String },
   student_email: { type: String }
 });
 
-// Pre-save hook to sync legacy fields
+// Pre-save hook to sync legacy fields for backward compatibility
+// This ensures data consistency while both field sets are in use
+// TODO: Remove this hook when legacy fields are deprecated
 supportTicketSchema.pre('save', function(next) {
   // Sync user fields to legacy student fields for backward compatibility
   if (this.user_id && !this.student_id) {
@@ -48,7 +69,7 @@ supportTicketSchema.pre('save', function(next) {
   if (this.user_email && !this.student_email) {
     this.student_email = this.user_email;
   }
-  // Also sync the other way if needed
+  // Also sync the other way for legacy code paths
   if (this.student_id && !this.user_id) {
     this.user_id = this.student_id;
   }
