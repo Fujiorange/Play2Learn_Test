@@ -10,6 +10,14 @@ export default function ViewLeaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState('');
+  // selectedSubject is prepared for future functionality when English and Science leaderboards are enabled
+  const [selectedSubject, setSelectedSubject] = useState('mathematics');
+
+  const subjects = [
+    { id: 'mathematics', name: 'Mathematics', enabled: true },
+    { id: 'english', name: 'English', enabled: false },
+    { id: 'science', name: 'Science', enabled: false },
+  ];
 
   useEffect(() => {
     const loadLeaderboard = async () => {
@@ -57,6 +65,12 @@ export default function ViewLeaderboard() {
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', width: '100%' },
+    // Subject tabs styles
+    tabsContainer: { display: 'flex', gap: '8px', marginBottom: '24px', background: 'white', borderRadius: '12px', padding: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    tab: { padding: '12px 24px', borderRadius: '8px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s ease' },
+    tabActive: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: 'white' },
+    tabInactive: { background: '#f3f4f6', color: '#6b7280' },
+    tabDisabled: { background: '#e5e7eb', color: '#9ca3af', cursor: 'not-allowed', opacity: 0.6 },
     podium: { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '16px', marginBottom: '32px', padding: '32px', background: 'white', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
     podiumPlace: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '150px' },
     podiumBase: { width: '100%', borderRadius: '12px 12px 0 0', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' },
@@ -78,6 +92,12 @@ export default function ViewLeaderboard() {
 
   const topThree = leaderboard.slice(0, 3);
 
+  const getTabStyle = (subject) => {
+    if (!subject.enabled) return { ...styles.tab, ...styles.tabDisabled };
+    if (subject.id === selectedSubject) return { ...styles.tab, ...styles.tabActive };
+    return { ...styles.tab, ...styles.tabInactive };
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.content}>
@@ -89,6 +109,22 @@ export default function ViewLeaderboard() {
               ⚠️ {error}
             </div>
           )}
+        </div>
+
+        {/* Subject Selection Tabs */}
+        <div style={styles.tabsContainer}>
+          {subjects.map(subject => (
+            <button
+              key={subject.id}
+              style={getTabStyle(subject)}
+              onClick={() => subject.enabled && setSelectedSubject(subject.id)}
+              disabled={!subject.enabled}
+              title={!subject.enabled ? 'Coming Soon' : ''}
+            >
+              {subject.name}
+              {!subject.enabled && ' (Coming Soon)'}
+            </button>
+          ))}
         </div>
 
         {leaderboard.length >= 3 && (
@@ -130,6 +166,7 @@ export default function ViewLeaderboard() {
                 <tr>
                   <th style={styles.th}>Rank</th>
                   <th style={styles.th}>Player</th>
+                  <th style={styles.th}>Class</th>
                   <th style={styles.th}>Points</th>
                   <th style={styles.th}>Level</th>
                   <th style={styles.th}>Achievements</th>
@@ -144,6 +181,7 @@ export default function ViewLeaderboard() {
                       </span>
                     </td>
                     <td style={styles.td}><strong>{player.name}</strong>{player.isCurrentUser && ' (You)'}</td>
+                    <td style={styles.td}>{player.class || 'N/A'}</td>
                     <td style={styles.td}><strong style={{ color: '#10b981' }}>{player.points?.toLocaleString() || 0}</strong></td>
                     <td style={styles.td}>Level {player.level || 1}</td>
                     <td style={styles.td}>🏆 {player.achievements || 0}</td>

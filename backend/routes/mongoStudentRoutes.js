@@ -1039,23 +1039,46 @@ router.get("/leaderboard", async (req, res) => {
   try {
     const currentUserId = req.user.userId;
     
+    // Get the current user's schoolId to filter by same school
+    const currentUser = await User.findById(currentUserId).lean();
+    const currentSchoolId = currentUser?.schoolId;
+    
+    // Get all students in the same school (for filtering)
+    let schoolStudentIds = [];
+    if (currentSchoolId) {
+      const schoolStudents = await User.find({ 
+        schoolId: currentSchoolId, 
+        role: 'Student' 
+      }).select('_id').lean();
+      schoolStudentIds = schoolStudents.map(s => s._id);
+    }
+    
+    // Build query - filter by school students if schoolId exists
+    const query = currentSchoolId 
+      ? { student_id: { $in: schoolStudentIds } }
+      : {};
+    
     // Use lean() for read-only query to improve performance
-    const students = await MathProfile.find()
-      .populate("student_id", "name email")
+    const students = await MathProfile.find(query)
+      .populate("student_id", "name email class schoolId")
       .sort({ total_points: -1 })
       .limit(20)
       .lean();
+    
+    // Filter out entries where student_id is null or doesn't have valid data
+    const validStudents = students.filter(p => p.student_id && p.student_id.name);
 
     res.json({
       success: true,
-      leaderboard: students.map((p, idx) => ({
+      leaderboard: validStudents.map((p, idx) => ({
         rank: idx + 1,
-        name: p.student_id ? p.student_id.name : "Unknown",
+        name: p.student_id.name,
+        class: p.student_id.class || 'N/A',
         points: p.total_points,
         level: p.current_profile,
         profile: p.current_profile,
         achievements: 0,
-        isCurrentUser: p.student_id && p.student_id._id.toString() === currentUserId,
+        isCurrentUser: p.student_id._id.toString() === currentUserId,
       })),
     });
   } catch (error) {
