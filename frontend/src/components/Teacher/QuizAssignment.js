@@ -447,17 +447,35 @@ export default function QuizAssignment() {
             ) : (
               availableQuizzes.filter(q => !q.launchedByMe).map(quiz => (
                 <div key={quiz._id} style={styles.quizCard}>
-                  <div style={styles.quizTitle}>{quiz.title}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={styles.quizTitle}>{quiz.title}</div>
+                    <span style={{
+                      ...styles.badge,
+                      background: quiz.quiz_type === 'placement' ? '#dbeafe' : '#fef3c7',
+                      color: quiz.quiz_type === 'placement' ? '#1e40af' : '#92400e'
+                    }}>
+                      {quiz.quiz_type === 'placement' ? '📋 Placement' : '🎯 Adaptive'}
+                    </span>
+                  </div>
                   <div style={styles.quizDescription}>
                     {quiz.description || 'No description'}
                   </div>
                   <div style={styles.quizStats}>
-                    <span style={styles.stat}>
-                      🎯 Target: {quiz.adaptive_config?.target_correct_answers || 10} correct
-                    </span>
-                    <span style={styles.stat}>
-                      📊 {quiz.adaptive_config?.difficulty_progression || 'gradual'} progression
-                    </span>
+                    {quiz.quiz_type === 'adaptive' && (
+                      <>
+                        <span style={styles.stat}>
+                          🎯 Target: {quiz.adaptive_config?.target_correct_answers || 10} correct
+                        </span>
+                        <span style={styles.stat}>
+                          📊 {quiz.adaptive_config?.difficulty_progression || 'gradual'} progression
+                        </span>
+                      </>
+                    )}
+                    {quiz.quiz_type === 'placement' && (
+                      <span style={styles.stat}>
+                        📝 Initial skill assessment quiz
+                      </span>
+                    )}
                   </div>
                   <span style={{...styles.badge, ...styles.notLaunchedBadge}}>
                     Not Launched
@@ -489,7 +507,16 @@ export default function QuizAssignment() {
             ) : (
               launchedQuizzes.map(quiz => (
                 <div key={quiz._id} style={styles.quizCard}>
-                  <div style={styles.quizTitle}>{quiz.title}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={styles.quizTitle}>{quiz.title}</div>
+                    <span style={{
+                      ...styles.badge,
+                      background: quiz.quiz_type === 'placement' ? '#dbeafe' : '#fef3c7',
+                      color: quiz.quiz_type === 'placement' ? '#1e40af' : '#92400e'
+                    }}>
+                      {quiz.quiz_type === 'placement' ? '📋 Placement' : '🎯 Adaptive'}
+                    </span>
+                  </div>
                   <div style={styles.quizDescription}>
                     {quiz.description || 'No description'}
                   </div>

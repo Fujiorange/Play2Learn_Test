@@ -467,21 +467,31 @@ router.get('/class-performance', async (req, res) => {
 
 // ==================== QUIZ MANAGEMENT ====================
 
-// Get available quizzes (created by P2L admin)
+// Get available quizzes (created by P2L admin) - includes both placement and adaptive quizzes
 router.get('/available-quizzes', async (req, res) => {
   try {
     const quizzes = await Quiz.find({ 
       is_active: true,
-      quiz_type: 'adaptive'
+      quiz_type: { $in: ['adaptive', 'placement'] }
     })
     .select('title description quiz_type adaptive_config is_launched launched_by launched_for_classes createdAt')
     .sort({ createdAt: -1 });
     
-    // Mark which ones are launched by this teacher
-    const quizzesWithStatus = quizzes.map(quiz => ({
-      ...quiz.toObject(),
-      launchedByMe: quiz.launched_by?.toString() === req.user.userId
-    }));
+    // Mark which ones are launched by this teacher for their classes
+    // A quiz can be launched by multiple teachers for different classes
+    const teacher = req.teacher;
+    const quizzesWithStatus = quizzes.map(quiz => {
+      // Check if this teacher has launched this quiz for any of their assigned classes
+      const launchedByMe = quiz.launched_by?.toString() === req.user.userId;
+      const launchedForMyClasses = quiz.launched_for_classes?.some(c => 
+        teacher.assignedClasses?.includes(c)
+      );
+      
+      return {
+        ...quiz.toObject(),
+        launchedByMe: launchedByMe && launchedForMyClasses
+      };
+    });
     
     res.json({ success: true, quizzes: quizzesWithStatus });
   } catch (error) {
@@ -507,7 +517,7 @@ router.get('/my-launched-quizzes', async (req, res) => {
   }
 });
 
-// Launch a quiz for assigned classes
+// Launch a quiz for assigned classes (supports both placement and adaptive quizzes)
 router.post('/launch-quiz', async (req, res) => {
   try {
     const { quizId, classes, startDate, endDate } = req.body;
@@ -522,8 +532,9 @@ router.post('/launch-quiz', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Quiz not found' });
     }
     
-    if (quiz.quiz_type !== 'adaptive') {
-      return res.status(400).json({ success: false, error: 'Only adaptive quizzes can be launched by teachers' });
+    // Allow both placement and adaptive quizzes to be launched
+    if (quiz.quiz_type !== 'adaptive' && quiz.quiz_type !== 'placement') {
+      return res.status(400).json({ success: false, error: 'Only adaptive or placement quizzes can be launched by teachers' });
     }
     
     // Verify teacher has access to the classes
@@ -534,11 +545,15 @@ router.post('/launch-quiz', async (req, res) => {
       return res.status(400).json({ success: false, error: 'No valid classes selected' });
     }
     
+    // Merge new classes with existing launched classes (if any) to support multiple launches
+    const existingClasses = quiz.launched_for_classes || [];
+    const mergedClasses = [...new Set([...existingClasses, ...validClasses])];
+    
     // Update quiz with launch info
     quiz.is_launched = true;
     quiz.launched_by = req.user.userId;
     quiz.launched_at = new Date();
-    quiz.launched_for_classes = validClasses;
+    quiz.launched_for_classes = mergedClasses;
     quiz.launch_start_date = startDate ? new Date(startDate) : new Date();
     quiz.launch_end_date = endDate ? new Date(endDate) : null;
     
@@ -550,7 +565,8 @@ router.post('/launch-quiz', async (req, res) => {
       quiz: {
         _id: quiz._id,
         title: quiz.title,
-        launched_for_classes: validClasses,
+        quiz_type: quiz.quiz_type,
+        launched_for_classes: mergedClasses,
         launch_start_date: quiz.launch_start_date,
         launch_end_date: quiz.launch_end_date
       }
