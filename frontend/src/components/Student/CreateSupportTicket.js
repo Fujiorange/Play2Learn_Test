@@ -10,7 +10,7 @@ export default function CreateSupportTicket() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
-    category: 'technical',
+    category: 'website',
     priority: 'normal',
     routeTo: 'website',
     subject: '',
@@ -46,7 +46,7 @@ export default function CreateSupportTicket() {
         // Reset form
         setTimeout(() => {
           setFormData({ 
-            category: 'technical', 
+            category: 'website', 
             priority: 'normal', 
             routeTo: 'website',
             subject: '', 
@@ -112,46 +112,18 @@ export default function CreateSupportTicket() {
             <label style={styles.label}>Category *</label>
             <select 
               value={formData.category} 
-              onChange={(e) => setFormData({...formData, category: e.target.value})} 
+              onChange={(e) => {
+                const category = e.target.value;
+                // Auto-set routeTo based on category
+                const routeTo = category === 'school' ? 'school' : 'website';
+                setFormData({...formData, category, routeTo});
+              }} 
               required 
               disabled={submitting}
               style={styles.select}
             >
-              <option value="technical">Technical Issue</option>
-              <option value="account">Account Issue</option>
-              <option value="quiz">Quiz Problem</option>
-              <option value="assignment">Assignment Issue</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Priority *</label>
-            <select 
-              value={formData.priority} 
-              onChange={(e) => setFormData({...formData, priority: e.target.value})} 
-              required 
-              disabled={submitting}
-              style={styles.select}
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-          
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Route To *</label>
-            <select 
-              value={formData.routeTo} 
-              onChange={(e) => setFormData({...formData, routeTo: e.target.value})} 
-              required 
-              disabled={submitting}
-              style={styles.select}
-            >
-              <option value="website">Website-Related Matters (P2L Admin)</option>
-              <option value="school">School-Related Matters (School Admin)</option>
+              <option value="website">Website-Related Problem</option>
+              <option value="school">School-Related Problem</option>
             </select>
           </div>
           

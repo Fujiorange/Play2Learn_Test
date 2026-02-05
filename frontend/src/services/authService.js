@@ -142,6 +142,36 @@ class AuthService {
       return { success: false, error: 'Failed to change password' };
     }
   }
+
+  async getDashboardData() {
+    try {
+      const token = this.getToken();
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const user = this.getCurrentUser();
+      if (!user) return { success: false, error: 'User not found' };
+
+      // Route to the appropriate dashboard endpoint based on user role
+      let endpoint = '';
+      if (user.role === 'Teacher' || user.role === 'Trial Teacher') {
+        endpoint = `${API_URL}/mongo/teacher/dashboard`;
+      } else if (user.role === 'Student') {
+        endpoint = `${API_URL}/mongo/student/dashboard`;
+      } else if (user.role === 'Parent') {
+        endpoint = `${API_URL}/mongo/parent/dashboard`;
+      } else {
+        return { success: false, error: 'Unknown user role' };
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return await res.json();
+    } catch {
+      return { success: false, error: 'Failed to get dashboard data' };
+    }
+  }
 }
 
 export default new AuthService();

@@ -2,14 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function CreateAssignment() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [myClasses, setMyClasses] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
-    subject: 'english',
+    subject: 'mathematics',
     class: '',
     description: '',
     dueDate: '',
@@ -17,13 +22,30 @@ export default function CreateAssignment() {
     attachmentType: 'none',
   });
 
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
     const loadData = async () => {
       if (!authService.isAuthenticated()) {
         navigate('/login');
         return;
       }
-      setLoading(false);
+      
+      try {
+        // Fetch teacher's assigned classes
+        const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          setMyClasses(data.classes || []);
+        }
+      } catch (error) {
+        console.error('Error loading classes:', error);
+      } finally {
+        setLoading(false);
+      }
     };
     loadData();
   }, [navigate]);
@@ -31,10 +53,10 @@ export default function CreateAssignment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setCreating(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setMessage({ type: 'success', text: 'Assignment created successfully!' });
+    // Note: Assignment creation endpoint would need to be implemented in backend
+    // For now, show informational message
+    setMessage({ type: 'info', text: 'Assignment feature is being implemented. Please use Quiz Assignment for now.' });
     setCreating(false);
-    setTimeout(() => navigate('/teacher/assignments/submitted'), 2000);
   };
 
   const styles = {
@@ -52,6 +74,7 @@ export default function CreateAssignment() {
     submitButton: { padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
     message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
     successMessage: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
+    infoMessage: { background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' },
     loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
   };
@@ -65,27 +88,34 @@ export default function CreateAssignment() {
           <h1 style={styles.title}>📝 Create Assignment</h1>
           <button style={styles.backButton} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
         </div>
-        {message.text && <div style={{...styles.message, ...styles.successMessage}}>{message.text}</div>}
+        {message.text && <div style={{...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.infoMessage)}}>{message.text}</div>}
+        
+        {myClasses.length === 0 && (
+          <div style={{...styles.message, ...styles.infoMessage}}>
+            ⚠️ You don't have any classes assigned yet. Please contact your school administrator.
+          </div>
+        )}
+        
         <form style={styles.form} onSubmit={handleSubmit}>
           <div style={styles.formGroup}>
             <label style={styles.label}>Assignment Title *</label>
-            <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required placeholder="e.g., Essay on Climate Change" style={styles.input} />
+            <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required placeholder="e.g., Math Practice Set 1" style={styles.input} />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>Subject *</label>
             <select value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} required style={styles.select}>
-              <option value="english">English</option>
               <option value="mathematics">Mathematics</option>
+              <option value="english">English</option>
               <option value="science">Science</option>
-              <option value="history">History</option>
             </select>
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>Class *</label>
             <select value={formData.class} onChange={(e) => setFormData({...formData, class: e.target.value})} required style={styles.select}>
               <option value="">Select class</option>
-              <option value="Primary 5A">Primary 5A</option>
-              <option value="Primary 5B">Primary 5B</option>
+              {myClasses.map(className => (
+                <option key={className} value={className}>{className}</option>
+              ))}
             </select>
           </div>
           <div style={styles.formGroup}>
@@ -100,7 +130,7 @@ export default function CreateAssignment() {
             <label style={styles.label}>Total Marks *</label>
             <input type="number" value={formData.totalMarks} onChange={(e) => setFormData({...formData, totalMarks: e.target.value})} required min="1" style={styles.input} />
           </div>
-          <button type="submit" disabled={creating} style={styles.submitButton}>
+          <button type="submit" disabled={creating || myClasses.length === 0} style={{...styles.submitButton, opacity: (creating || myClasses.length === 0) ? 0.6 : 1}}>
             {creating ? '📤 Creating...' : '📤 Create Assignment'}
           </button>
         </form>
