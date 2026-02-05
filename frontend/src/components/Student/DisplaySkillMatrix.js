@@ -1,18 +1,23 @@
 // src/pages/student/DisplaySkillMatrix.js
-// DisplaySkillMatrix.js - 4 Math Skills (Skill Matrix) for Students
+// DisplaySkillMatrix.js - Dynamic Math Skills (Skill Matrix) for Students
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import authService from "../../services/authService";
 import studentService from "../../services/studentService";
 
-const SKILL_ORDER = ["Addition", "Subtraction", "Multiplication", "Division"];
+// Base skills that should appear at the top
+const BASE_SKILL_ORDER = ["Addition", "Subtraction", "Multiplication", "Division"];
 
 function sortSkillsBySequence(skills) {
-  const orderIndex = new Map(SKILL_ORDER.map((name, idx) => [name, idx]));
+  const orderIndex = new Map(BASE_SKILL_ORDER.map((name, idx) => [name, idx]));
   return [...skills].sort((a, b) => {
     const ai = orderIndex.has(a.skill_name) ? orderIndex.get(a.skill_name) : 999;
     const bi = orderIndex.has(b.skill_name) ? orderIndex.get(b.skill_name) : 999;
+    // If both are not in base skills, sort alphabetically
+    if (ai === 999 && bi === 999) {
+      return a.skill_name.localeCompare(b.skill_name);
+    }
     return ai - bi;
   });
 }
@@ -41,10 +46,10 @@ export default function DisplaySkillMatrix() {
         } else {
           setError("Failed to load skill matrix");
           const fallback = sortSkillsBySequence([
-            { skill_name: "Addition", current_level: 0, xp: 0, max_level: 5, unlocked: true, percentage: 0 },
-            { skill_name: "Subtraction", current_level: 0, xp: 0, max_level: 5, unlocked: true, percentage: 0 },
-            { skill_name: "Multiplication", current_level: 0, xp: 0, max_level: 5, unlocked: false, percentage: 0 },
-            { skill_name: "Division", current_level: 0, xp: 0, max_level: 5, unlocked: false, percentage: 0 },
+            { skill_name: "Addition", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
+            { skill_name: "Subtraction", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
+            { skill_name: "Multiplication", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: false, percentage: 0 },
+            { skill_name: "Division", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: false, percentage: 0 },
           ]);
           setSkills(fallback);
           setCurrentProfile(1);
@@ -252,7 +257,7 @@ export default function DisplaySkillMatrix() {
             const color = getSkillColor(skill.current_level, skill.max_level);
             const levelInfo = getSkillLevel(skill.current_level);
 
-            // Lock rule by profile (spec): ×/÷ locked below 6
+            // Lock rule by profile (spec): ×/÷ locked below 6 (only for base skills)
             const isAdvanced = ["Multiplication", "Division"].includes(skill.skill_name);
             const isLocked = isAdvanced && currentProfile < 6;
 
@@ -293,6 +298,17 @@ export default function DisplaySkillMatrix() {
 
                 <div style={{ ...styles.badge, background: levelInfo.color }}>{levelInfo.label}</div>
                 <div style={styles.xp}>XP: {skill.xp || 0} / 100</div>
+                <div style={{
+                  marginTop: "8px",
+                  fontSize: "14px",
+                  color: "#3b82f6",
+                  fontWeight: "600",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}>
+                  🎯 Skill Points: {skill.points || 0}
+                </div>
               </div>
             );
           })}

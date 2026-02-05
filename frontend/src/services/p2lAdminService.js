@@ -362,6 +362,45 @@ export const deleteMaintenanceBroadcast = async (id) => {
   });
 };
 
+// ==================== SUPPORT TICKETS ====================
+export const getSupportTickets = async (filters = {}) => {
+  const queryString = new URLSearchParams(filters).toString();
+  return apiCall(`/api/p2ladmin/support-tickets${queryString ? `?${queryString}` : ''}`);
+};
+
+export const getSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}`);
+};
+
+export const replySupportTicket = async (id, response) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ response }),
+  });
+};
+
+export const closeSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}/close`, {
+    method: 'POST',
+  });
+};
+
+export const getSupportTicketStats = async () => {
+  return apiCall('/api/p2ladmin/support-tickets-stats');
+};
+
+// ==================== SKILL POINTS CONFIGURATION ====================
+export const getSkillPointsConfig = async () => {
+  return apiCall('/api/p2ladmin/skill-points-config');
+};
+
+export const updateSkillPointsConfig = async (difficultyPoints) => {
+  return apiCall('/api/p2ladmin/skill-points-config', {
+    method: 'PUT',
+    body: JSON.stringify({ difficultyPoints }),
+  });
+};
+
 export default {
   seedP2LAdmin,
   registerP2LAdmin,
@@ -404,4 +443,11 @@ export default {
   getAllUsers,
   getUserSchools,
   bulkDeleteUsers,
+  getSupportTickets,
+  getSupportTicket,
+  replySupportTicket,
+  closeSupportTicket,
+  getSupportTicketStats,
+  getSkillPointsConfig,
+  updateSkillPointsConfig,
 };

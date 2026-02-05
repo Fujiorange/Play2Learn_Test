@@ -12,6 +12,7 @@ const StudentQuiz = require('../models/StudentQuiz');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const Testimonial = require('../models/Testimonial');
+const SupportTicket = require('../models/SupportTicket');
 const { authMiddleware } = require('../middleware/auth');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
@@ -502,15 +503,35 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
 
     // ✅ FIX: Map 'normal' to 'medium' for backward compatibility
     const priorityMap = {
-      'normal': 'medium',
+      'normal': 'normal',
       'low': 'low',
-      'medium': 'medium',
+      'medium': 'normal',
       'high': 'high',
       'urgent': 'urgent'
     };
-    const finalPriority = priorityMap[priority] || 'medium';
+    const finalPriority = priorityMap[priority] || 'normal';
     const ticketId = `TICKET-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
 
+    // Create ticket in unified SupportTicket model for P2L Admin access
+    const unifiedTicket = await SupportTicket.create({
+      user_id: parent._id,
+      user_name: parent.name,
+      user_email: parent.email,
+      user_role: 'Parent',
+      school_id: parent.school,
+      school_name: parent.schoolName || '',
+      subject,
+      category: category || 'general',
+      message: description,
+      status: 'open',
+      priority: finalPriority,
+      // Legacy fields for backward compatibility
+      student_id: parent._id,
+      student_name: parent.name,
+      student_email: parent.email,
+    });
+
+    // Also create in ParentSupportTicket for backward compatibility
     const newTicket = new ParentSupportTicket({
       ticketId,
       userId: parent._id,
@@ -518,7 +539,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
       userName: parent.name,
       userRole: 'Parent',
       category,
-      priority: finalPriority,
+      priority: finalPriority === 'normal' ? 'medium' : finalPriority,
       subject,
       description,
       status: 'open',
@@ -531,6 +552,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
     res.status(201).json({
       success: true,
       ticket: newTicket,
+      ticketId: unifiedTicket._id,
       message: 'Support ticket created successfully'
     });
 

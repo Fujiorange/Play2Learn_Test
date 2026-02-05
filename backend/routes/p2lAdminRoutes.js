@@ -2105,5 +2105,316 @@ router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// ==================== SUPPORT TICKET MANAGEMENT ====================
+const SupportTicket = require('../models/SupportTicket');
+
+// Get all website-related support tickets
+router.get('/support-tickets', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { status, sortBy, sortOrder, search } = req.query;
+    
+    // Build query - only website-related tickets
+    const query = { category: 'website' };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    // Build sort object
+    const sortOptions = {};
+    const validSortFields = ['created_at', 'updated_at', 'status', 'priority'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+    sortOptions[sortField] = sortOrder === 'asc' ? 1 : -1;
+    
+    let tickets = await SupportTicket.find(query)
+      .populate('user_id', 'name email school')
+      .populate('school_id', 'name')
+      .sort(sortOptions)
+      .lean();
+    
+    // Apply search filter if provided
+    if (search) {
+      const searchLower = search.toLowerCase();
+      tickets = tickets.filter(ticket => 
+        (ticket.user_name && ticket.user_name.toLowerCase().includes(searchLower)) ||
+        (ticket.user_email && ticket.user_email.toLowerCase().includes(searchLower)) ||
+        (ticket.subject && ticket.subject.toLowerCase().includes(searchLower)) ||
+        (ticket.message && ticket.message.toLowerCase().includes(searchLower)) ||
+        // Legacy field support
+        (ticket.student_name && ticket.student_name.toLowerCase().includes(searchLower)) ||
+        (ticket.student_email && ticket.student_email.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    res.json({
+      success: true,
+      data: tickets.map(ticket => ({
+        _id: ticket._id,
+        user_name: ticket.user_name || ticket.student_name,
+        user_email: ticket.user_email || ticket.student_email,
+        user_role: ticket.user_role || 'Student',
+        school_name: ticket.school_name || (ticket.school_id && ticket.school_id.name) || 'N/A',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      })),
+      total: tickets.length
+    });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support tickets' 
+    });
+  }
+});
+
+// Get single support ticket
+router.get('/support-tickets/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id)
+      .populate('user_id', 'name email school')
+      .populate('school_id', 'name')
+      .lean();
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // If ticket is 'open' and admin is viewing it, change status to 'pending'
+    if (ticket.status === 'open') {
+      await SupportTicket.findByIdAndUpdate(req.params.id, { 
+        status: 'pending',
+        updated_at: new Date()
+      });
+      ticket.status = 'pending';
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        _id: ticket._id,
+        user_name: ticket.user_name || ticket.student_name,
+        user_email: ticket.user_email || ticket.student_email,
+        user_role: ticket.user_role || 'Student',
+        school_name: ticket.school_name || (ticket.school_id && ticket.school_id.name) || 'N/A',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support ticket' 
+    });
+  }
+});
+
+// Reply to a support ticket
+router.post('/support-tickets/:id/reply', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { response } = req.body;
+    
+    if (!response || response.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Response message is required' 
+      });
+    }
+    
+    const ticket = await SupportTicket.findById(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // Update ticket with admin response
+    ticket.admin_response = response;
+    ticket.responded_by = req.user._id;
+    ticket.responded_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Reply sent successfully',
+      data: {
+        _id: ticket._id,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        status: ticket.status
+      }
+    });
+  } catch (error) {
+    console.error('Reply to support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send reply' 
+    });
+  }
+});
+
+// Close a support ticket
+router.post('/support-tickets/:id/close', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    ticket.status = 'closed';
+    ticket.closed_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Ticket closed successfully',
+      data: {
+        _id: ticket._id,
+        status: ticket.status,
+        closed_at: ticket.closed_at
+      }
+    });
+  } catch (error) {
+    console.error('Close support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to close ticket' 
+    });
+  }
+});
+
+// Get support ticket statistics
+router.get('/support-tickets-stats', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const [openCount, pendingCount, closedCount] = await Promise.all([
+      SupportTicket.countDocuments({ category: 'website', status: 'open' }),
+      SupportTicket.countDocuments({ category: 'website', status: 'pending' }),
+      SupportTicket.countDocuments({ category: 'website', status: 'closed' })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        open: openCount,
+        pending: pendingCount,
+        closed: closedCount,
+        total: openCount + pendingCount + closedCount
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch ticket statistics' 
+    });
+  }
+});
+
+// ==================== SKILL POINTS CONFIGURATION ====================
+const SkillPointsConfig = require('../models/SkillPointsConfig');
+
+// Get skill points configuration
+router.get('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const config = await SkillPointsConfig.getConfig();
+    
+    res.json({
+      success: true,
+      data: {
+        difficultyPoints: config.difficultyPoints,
+        updatedAt: config.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Get skill points config error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch skill points configuration' 
+    });
+  }
+});
+
+// Update skill points configuration
+router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { difficultyPoints } = req.body;
+    
+    if (!difficultyPoints) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'difficultyPoints configuration is required' 
+      });
+    }
+    
+    // Validate the structure
+    const requiredLevels = ['1', '2', '3', '4', '5'];
+    for (const level of requiredLevels) {
+      if (!difficultyPoints[level] || 
+          typeof difficultyPoints[level].correct !== 'number' || 
+          typeof difficultyPoints[level].wrong !== 'number') {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Invalid configuration for difficulty level ${level}. Each level must have 'correct' and 'wrong' numeric values.` 
+        });
+      }
+    }
+    
+    let config = await SkillPointsConfig.findOne({ configId: 'default' });
+    
+    if (!config) {
+      config = new SkillPointsConfig({ configId: 'default' });
+    }
+    
+    config.difficultyPoints = difficultyPoints;
+    config.updatedAt = new Date();
+    config.updatedBy = req.user._id;
+    
+    await config.save();
+    
+    res.json({
+      success: true,
+      message: 'Skill points configuration updated successfully',
+      data: {
+        difficultyPoints: config.difficultyPoints,
+        updatedAt: config.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Update skill points config error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update skill points configuration' 
+    });
+  }
+});
+
 // Other Admin Functions...
 module.exports = router;

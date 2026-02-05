@@ -43,6 +43,7 @@ const SupportTicket = require('../models/SupportTicket');
 const Testimonial = require('../models/Testimonial');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
+const SkillPointsConfig = require('../models/SkillPointsConfig');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
@@ -323,20 +324,69 @@ function generateQuestion(range, operation) {
   };
 }
 
-async function updateSkillsFromQuiz(studentId, questions, percentage, currentProfile) {
+// Helper function to get default difficulty points configuration
+function getDefaultDifficultyPoints() {
+  return {
+    1: { correct: 1, wrong: -2.5 },
+    2: { correct: 2, wrong: -2.0 },
+    3: { correct: 3, wrong: -1.5 },
+    4: { correct: 4, wrong: -1.0 },
+    5: { correct: 5, wrong: -0.5 }
+  };
+}
+
+// Updated function to use difficulty-based points system
+async function updateSkillsFromQuiz(studentId, questions, percentage, currentProfile, quizType = 'regular') {
   try {
+    // Get skill points configuration
+    let pointsConfig;
+    try {
+      pointsConfig = await SkillPointsConfig.getConfig();
+    } catch (err) {
+      console.log("Using default points configuration");
+      pointsConfig = { difficultyPoints: getDefaultDifficultyPoints() };
+    }
+    
+    const difficultyPoints = pointsConfig.difficultyPoints || getDefaultDifficultyPoints();
+    
+    // Calculate points change for each skill/topic
     const skillUpdates = {};
 
     questions.forEach((q) => {
-      const skill = q.operation
-        ? q.operation.charAt(0).toUpperCase() + q.operation.slice(1)
-        : "Addition";
+      // Get skill name from operation (for placement/regular quiz) or topic (for adaptive quiz)
+      let skill;
+      if (q.topic && q.topic.trim() !== '') {
+        // Capitalize first letter of topic
+        skill = q.topic.charAt(0).toUpperCase() + q.topic.slice(1);
+      } else if (q.operation) {
+        skill = q.operation.charAt(0).toUpperCase() + q.operation.slice(1);
+      } else {
+        skill = "Addition"; // Default
+      }
+      
+      // Get difficulty level (default to 3 if not specified)
+      const difficulty = q.difficulty || 3;
+      const difficultyStr = String(difficulty);
+      
+      // Get points for this difficulty level
+      const levelPoints = difficultyPoints[difficultyStr] || difficultyPoints['3'];
       
       if (!skillUpdates[skill]) {
-        skillUpdates[skill] = { correct: 0, total: 0 };
+        skillUpdates[skill] = { 
+          correct: 0, 
+          total: 0, 
+          pointsChange: 0 
+        };
       }
+      
       skillUpdates[skill].total++;
-      if (q.is_correct) skillUpdates[skill].correct++;
+      
+      if (q.is_correct || q.isCorrect) {
+        skillUpdates[skill].correct++;
+        skillUpdates[skill].pointsChange += levelPoints.correct;
+      } else {
+        skillUpdates[skill].pointsChange += levelPoints.wrong;
+      }
     });
 
     const skillNames = Object.keys(skillUpdates);
@@ -360,13 +410,19 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
         // Update existing skill using bulk operation
         const newXp = existingSkill.xp + xpGain;
         const newLevel = Math.min(5, Math.floor(newXp / 100));
+        
+        // Calculate new points (minimum 0 - cannot go negative)
+        const currentPoints = existingSkill.points || 0;
+        const newPoints = Math.max(0, currentPoints + stats.pointsChange);
+        
         bulkOps.push({
           updateOne: {
             filter: { _id: existingSkill._id },
             update: { 
               $set: { 
                 xp: newXp, 
-                current_level: newLevel, 
+                current_level: newLevel,
+                points: newPoints,
                 updatedAt: new Date() 
               } 
             }
@@ -376,6 +432,10 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
         // Insert new skill using bulk operation
         const newXp = xpGain;
         const newLevel = Math.min(5, Math.floor(newXp / 100));
+        
+        // New skill starts with calculated points (minimum 0)
+        const newPoints = Math.max(0, stats.pointsChange);
+        
         bulkOps.push({
           insertOne: {
             document: {
@@ -383,6 +443,7 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
               skill_name: skillName,
               current_level: newLevel,
               xp: newXp,
+              points: newPoints,
               unlocked: true,
               updatedAt: new Date()
             }
@@ -526,13 +587,16 @@ router.get("/math-skills", async (req, res) => {
 
     // Use lean() for read-only queries to improve performance
     const mathProfile = await MathProfile.findOne({ student_id: studentId }).lean();
+    
+    // Get all skills for this student (dynamic - includes any topics from quizzes)
     const skills = await MathSkill.find({ student_id: studentId });
 
-    const requiredSkills = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
+    // Ensure base skills exist (Addition, Subtraction, Multiplication, Division)
+    const baseSkills = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
     const existingSkillNames = skills.map(s => s.skill_name);
 
-    // Batch create missing skills instead of creating one at a time
-    const missingSkills = requiredSkills.filter(name => !existingSkillNames.includes(name));
+    // Batch create missing base skills
+    const missingSkills = baseSkills.filter(name => !existingSkillNames.includes(name));
     
     if (missingSkills.length > 0) {
       const newSkillDocs = missingSkills.map(skillName => ({
@@ -540,6 +604,7 @@ router.get("/math-skills", async (req, res) => {
         skill_name: skillName,
         current_level: 0,
         xp: 0,
+        points: 0,
         unlocked: true,
       }));
       const createdSkills = await MathSkill.insertMany(newSkillDocs);
@@ -553,6 +618,7 @@ router.get("/math-skills", async (req, res) => {
         skill_name: s.skill_name,
         current_level: s.current_level,
         xp: s.xp,
+        points: s.points || 0,
         max_level: 5,
         unlocked: s.unlocked,
         percentage: Math.min(100, (s.xp % 100)),
@@ -1117,7 +1183,7 @@ router.get("/leaderboard", async (req, res) => {
 // ==================== SUPPORT TICKETS ====================
 router.post("/support-tickets", async (req, res) => {
   try {
-    const studentId = req.user.userId;
+    const userId = req.user.userId;
     const { subject, category, message, description, student_name, student_email } = req.body;
 
     const finalSubject = subject || 'Support Request';
@@ -1130,15 +1196,38 @@ router.post("/support-tickets", async (req, res) => {
       });
     }
 
+    // Get user info for details
+    const user = await User.findById(userId).lean();
+    
+    // Detect user role for the ticket
+    let userRole = 'Student';
+    if (user?.role) {
+      if (user.role === 'Teacher' || user.role === 'Trial Teacher') {
+        userRole = 'Teacher';
+      } else if (user.role === 'Parent') {
+        userRole = 'Parent';
+      } else {
+        userRole = 'Student';
+      }
+    }
+    
     const ticket = await SupportTicket.create({
-      student_id: studentId,
-      student_name: student_name || req.user.name || 'Unknown',
-      student_email: student_email || req.user.email || 'unknown@email.com',
+      // New unified fields
+      user_id: userId,
+      user_name: student_name || req.user.name || user?.name || 'Unknown',
+      user_email: student_email || req.user.email || user?.email || 'unknown@email.com',
+      user_role: userRole,
+      school_id: user?.school,
+      school_name: user?.schoolName || '',
       subject: finalSubject,
       category: category || 'general',
       message: finalMessage,
       status: 'open',
       priority: req.body.priority || 'normal',
+      // Legacy fields for backward compatibility
+      student_id: userId,
+      student_name: student_name || req.user.name || user?.name || 'Unknown',
+      student_email: student_email || req.user.email || user?.email || 'unknown@email.com',
     });
 
     res.status(201).json({
@@ -1164,7 +1253,9 @@ router.get("/support-tickets", async (req, res) => {
     const studentId = req.user.userId;
 
     // Use lean() for read-only query to improve performance
-    const tickets = await SupportTicket.find({ student_id: studentId })
+    const tickets = await SupportTicket.find({ 
+      $or: [{ student_id: studentId }, { user_id: studentId }] 
+    })
       .sort({ created_at: -1 })
       .lean();
 
