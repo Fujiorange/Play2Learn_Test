@@ -168,7 +168,8 @@ class AuthService {
         headers: { Authorization: `Bearer ${token}` },
       });
       return await res.json();
-    } catch {
+    } catch (error) {
+      console.error('getDashboardData error:', error);
       return { success: false, error: 'Failed to get dashboard data' };
     }
   }

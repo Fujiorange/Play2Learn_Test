@@ -61,24 +61,37 @@ export default function CreateFeedback() {
     setSending(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      setMessage({ type: 'success', text: 'Feedback sent successfully!' });
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(formData)
+      });
       
-      // Reset form after 2 seconds
-      setTimeout(() => {
-        setFormData({
-          recipientType: 'student',
-          studentId: '',
-          subject: '',
-          category: 'academic',
-          message: '',
-          priority: 'normal',
-        });
-        setMessage({ type: '', text: '' });
-      }, 2000);
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Feedback sent successfully!' });
+        
+        // Reset form after 2 seconds
+        setTimeout(() => {
+          setFormData({
+            recipientType: 'student',
+            studentId: '',
+            subject: '',
+            category: 'academic',
+            message: '',
+            priority: 'normal',
+          });
+          setMessage({ type: '', text: '' });
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to send feedback. Please try again.' });
+      }
     } catch (error) {
+      console.error('Send feedback error:', error);
       setMessage({ type: 'error', text: 'Failed to send feedback. Please try again.' });
     } finally {
       setSending(false);
