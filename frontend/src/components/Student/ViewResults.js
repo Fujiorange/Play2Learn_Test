@@ -17,10 +17,14 @@ export default function ViewResults() {
       }
 
       try {
-        const result = await studentService.getMathQuizResults();
+        const result = await studentService.getMathQuizHistory();
 
         if (result.success) {
-          setResults(result.results || []);
+          // Filter to show only adaptive quizzes
+          const adaptiveQuizzes = (result.history || []).filter(
+            (quiz) => quiz.quizType === 'adaptive'
+          );
+          setResults(adaptiveQuizzes);
         } else {
           setError('Failed to load results');
           setResults([]);
@@ -78,7 +82,7 @@ export default function ViewResults() {
       <div style={styles.content}>
         <div style={styles.header}>
           <div style={styles.headerTop}>
-            <h1 style={styles.title}>📊 My Math Quiz Results</h1>
+            <h1 style={styles.title}>🎲 My Adaptive Quiz Results</h1>
             <button
               style={styles.backButton}
               onClick={() => navigate('/student')}
@@ -88,7 +92,7 @@ export default function ViewResults() {
               ← Back to Dashboard
             </button>
           </div>
-          <p style={styles.subtitle}>View all your math quiz attempts and scores</p>
+          <p style={styles.subtitle}>View all your completed adaptive quiz attempts and scores</p>
 
           {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
         </div>
@@ -124,7 +128,7 @@ export default function ViewResults() {
                   <div style={styles.scoreSection}>
                     <div>
                       <div style={{ ...styles.scoreFraction, color: scoreColor }}>
-                        {result.score}/{result.total}
+                        {result.score}/{result.totalQuestions}
                       </div>
                       <div style={styles.questionsLabel}>questions</div>
                     </div>
@@ -151,11 +155,11 @@ export default function ViewResults() {
           </div>
         ) : (
           <div style={styles.emptyState}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No quiz results yet</p>
-            <p>Take your first math quiz to see your results here!</p>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎲</div>
+            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No adaptive quiz results yet</p>
+            <p>Complete the placement quiz first, then start adaptive quizzes to see your results here!</p>
             <button
-              onClick={() => navigate('/student/quiz/attempt')}
+              onClick={() => navigate('/student/adaptive-quizzes')}
               style={{
                 marginTop: '20px',
                 padding: '12px 24px',
@@ -168,7 +172,7 @@ export default function ViewResults() {
                 cursor: 'pointer',
               }}
             >
-              🎯 Take Quiz Now
+              🎲 Start Adaptive Quizzes
             </button>
           </div>
         )}
