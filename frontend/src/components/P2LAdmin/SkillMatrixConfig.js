@@ -25,7 +25,8 @@ function SkillMatrixConfig() {
     try {
       const apiResponse = await getXPRewards();
       if (apiResponse.success) {
-        setRewardMatrix(apiResponse.data);
+        // Backend returns 'rewardSettings' not 'data'
+        setRewardMatrix(apiResponse.rewardSettings || apiResponse.data || []);
       } else {
         displayNotification('Unable to fetch reward data', 'alert');
       }

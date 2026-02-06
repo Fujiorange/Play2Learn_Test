@@ -9,7 +9,8 @@ const quizSchema = new mongoose.Schema({
     text: { type: String },
     choices: [{ type: String }],
     answer: { type: String },
-    difficulty: { type: Number, enum: [1, 2, 3, 4, 5], default: 3 }
+    difficulty: { type: Number, enum: [1, 2, 3, 4, 5], default: 3 },
+    topic: { type: String, default: '' }
   }],
   is_adaptive: { type: Boolean, default: true },
   is_active: { type: Boolean, default: true },

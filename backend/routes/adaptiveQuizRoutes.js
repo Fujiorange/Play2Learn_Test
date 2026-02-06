@@ -77,24 +77,35 @@ const processAdaptiveCompletion = async (userId, attemptRecord) => {
       await studentProfile.save();
     }
 
-    const difficultyGroups = new Map();
+    // Group answers by topic (e.g., "Addition", "Subtraction") for skill matrix updates
+    const topicGroups = new Map();
     
     for (const response of attemptRecord.answers) {
-      const level = response.difficulty || 3;
-      const categoryKey = `Adaptive-Level-${level}`;
+      // Use topic if available, otherwise skip skill update for this question
+      const topic = response.topic || '';
       
-      if (!difficultyGroups.has(categoryKey)) {
-        difficultyGroups.set(categoryKey, { rewardSum: 0, difficultyLevel: level });
+      // Normalize topic name - capitalize first letter for consistency
+      let skillName = topic.trim();
+      if (skillName) {
+        skillName = skillName.charAt(0).toUpperCase() + skillName.slice(1).toLowerCase();
+      } else {
+        // If no topic, skip skill update for this question
+        continue;
       }
-      difficultyGroups.get(categoryKey).rewardSum += (response.xp_earned || 0);
+      
+      if (!topicGroups.has(skillName)) {
+        topicGroups.set(skillName, { rewardSum: 0 });
+      }
+      topicGroups.get(skillName).rewardSum += (response.xp_earned || 0);
     }
 
-    for (const [categoryName, groupData] of difficultyGroups) {
+    // Update skill records for each topic
+    for (const [skillName, groupData] of topicGroups) {
       const rewardToApply = groupData.rewardSum < 0 ? 0 : groupData.rewardSum;
       
       const skillRecord = await MathSkill.findOne({ 
         student_id: userId, 
-        skill_name: categoryName 
+        skill_name: skillName 
       });
 
       if (skillRecord) {
@@ -107,7 +118,7 @@ const processAdaptiveCompletion = async (userId, attemptRecord) => {
         const initialXp = rewardToApply < 0 ? 0 : rewardToApply;
         await MathSkill.create({
           student_id: userId,
-          skill_name: categoryName,
+          skill_name: skillName,
           experience_points: initialXp,
           current_level: computeSkillTier(initialXp),
           unlocked: true,
@@ -491,6 +502,7 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       questionId: matchedQuestion.question_id || matchedQuestion._id,
       question_text: matchedQuestion.text,
       difficulty: matchedQuestion.difficulty,
+      topic: matchedQuestion.topic || '',
       answer: answer,
       correct_answer: matchedQuestion.answer,
       isCorrect: responseCorrect,

@@ -1224,7 +1224,8 @@ router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
               text: questionDoc.text,
               choices: questionDoc.choices,
               answer: questionDoc.answer,
-              difficulty: questionDoc.difficulty
+              difficulty: questionDoc.difficulty,
+              topic: questionDoc.topic || ''
             });
           } else {
             console.warn(`⚠️ Question not found: ${q.question_id}`);
@@ -1419,7 +1420,8 @@ router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res)
             text: q.text,
             choices: q.choices,
             answer: q.answer,
-            difficulty: q.difficulty
+            difficulty: q.difficulty,
+            topic: q.topic || ''
           });
         });
       }

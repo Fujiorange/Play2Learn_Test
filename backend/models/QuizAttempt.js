@@ -8,9 +8,11 @@ const quizAttemptSchema = new mongoose.Schema({
     questionId: { type: mongoose.Schema.Types.ObjectId },
     question_text: { type: String },
     difficulty: { type: Number },
+    topic: { type: String, default: '' },
     answer: { type: String },
     correct_answer: { type: String },
     isCorrect: { type: Boolean },
+    xp_earned: { type: Number, default: 0 },
     answeredAt: { type: Date, default: Date.now }
   }],
   current_difficulty: { type: Number, default: 1 },
