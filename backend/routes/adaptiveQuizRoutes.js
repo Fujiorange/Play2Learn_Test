@@ -4,6 +4,9 @@ const jwt = require('jsonwebtoken');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const User = require('../models/User');
+const MathProfile = require('../models/MathProfile');
+const MathSkill = require('../models/MathSkill');
+const { calculateAnswerPoints, computeStudentTier, computeSkillTier } = require('../utils/experienceCalculator');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -52,6 +55,69 @@ const isQuizAvailableForStudent = async (quiz, userId) => {
   }
   
   return { available: true };
+};
+
+// Helper to process adaptive quiz XP and skill updates upon completion
+const processAdaptiveCompletion = async (userId, attemptRecord) => {
+  try {
+    const rewardsList = attemptRecord.answers
+      .filter(ans => ans.xp_earned !== undefined)
+      .map(ans => ans.xp_earned);
+    
+    const aggregatedReward = rewardsList.reduce((acc, val) => acc + val, 0);
+    const safeReward = aggregatedReward < 0 ? 0 : aggregatedReward;
+
+    const studentProfile = await MathProfile.findOne({ student_id: userId });
+    if (studentProfile) {
+      const currentXp = studentProfile.accumulated_experience || 0;
+      const nextXp = currentXp + safeReward;
+      studentProfile.accumulated_experience = nextXp < 0 ? 0 : nextXp;
+      studentProfile.student_rank = computeStudentTier(studentProfile.accumulated_experience);
+      studentProfile.total_points = (studentProfile.total_points || 0) + safeReward;
+      await studentProfile.save();
+    }
+
+    const difficultyGroups = new Map();
+    
+    for (const response of attemptRecord.answers) {
+      const level = response.difficulty || 3;
+      const categoryKey = `Adaptive-Level-${level}`;
+      
+      if (!difficultyGroups.has(categoryKey)) {
+        difficultyGroups.set(categoryKey, { rewardSum: 0, difficultyLevel: level });
+      }
+      difficultyGroups.get(categoryKey).rewardSum += (response.xp_earned || 0);
+    }
+
+    for (const [categoryName, groupData] of difficultyGroups) {
+      const rewardToApply = groupData.rewardSum < 0 ? 0 : groupData.rewardSum;
+      
+      const skillRecord = await MathSkill.findOne({ 
+        student_id: userId, 
+        skill_name: categoryName 
+      });
+
+      if (skillRecord) {
+        const updatedXp = skillRecord.experience_points + rewardToApply;
+        skillRecord.experience_points = updatedXp < 0 ? 0 : updatedXp;
+        skillRecord.current_level = computeSkillTier(skillRecord.experience_points);
+        skillRecord.updatedAt = new Date();
+        await skillRecord.save();
+      } else {
+        const initialXp = rewardToApply < 0 ? 0 : rewardToApply;
+        await MathSkill.create({
+          student_id: userId,
+          skill_name: categoryName,
+          experience_points: initialXp,
+          current_level: computeSkillTier(initialXp),
+          unlocked: true,
+          updatedAt: new Date()
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error in adaptive completion processing:', error);
+  }
 };
 
 // Get all available adaptive quizzes (for students - only launched ones)
@@ -254,6 +320,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.score = attempt.correct_count;
       await attempt.save();
 
+      await processAdaptiveCompletion(userId, attempt);
+
       return res.json({
         success: true,
         completed: true,
@@ -300,11 +368,12 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
     }
 
     if (!nextQuestion) {
-      // No more questions available, complete the quiz
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
       await attempt.save();
+
+      await processAdaptiveCompletion(userId, attempt);
 
       return res.json({
         success: true,
@@ -345,7 +414,6 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
   }
 });
 
-// Submit answer for current question
 router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -359,118 +427,116 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       });
     }
 
-    const attempt = await QuizAttempt.findOne({ 
+    const attemptDoc = await QuizAttempt.findOne({ 
       _id: attemptId, 
       userId 
     });
 
-    if (!attempt) {
+    if (!attemptDoc) {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz attempt not found' 
       });
     }
 
-    if (attempt.is_completed) {
+    if (attemptDoc.is_completed) {
       return res.status(400).json({ 
         success: false, 
         error: 'Quiz attempt already completed' 
       });
     }
 
-    const quiz = await Quiz.findById(attempt.quizId);
-    if (!quiz) {
+    const quizDoc = await Quiz.findById(attemptDoc.quizId);
+    if (!quizDoc) {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz not found' 
       });
     }
 
-    // Find the question in the quiz
-    const question = quiz.questions.find(q => 
+    const matchedQuestion = quizDoc.questions.find(q => 
       (q.question_id?.toString() === questionId) || (q._id.toString() === questionId)
     );
 
-    if (!question) {
+    if (!matchedQuestion) {
       return res.status(404).json({ 
         success: false, 
         error: 'Question not found in quiz' 
       });
     }
 
-    // Check if question already answered
-    const alreadyAnswered = attempt.answers.some(a => 
+    const previouslyAnswered = attemptDoc.answers.some(a => 
       a.questionId.toString() === questionId
     );
 
-    if (alreadyAnswered) {
+    if (previouslyAnswered) {
       return res.status(400).json({ 
         success: false, 
         error: 'Question already answered' 
       });
     }
 
-    // Check answer
-    const isCorrect = answer.toString().trim().toLowerCase() === question.answer.toString().trim().toLowerCase();
+    const normalizedResponse = answer.toString().trim().toLowerCase();
+    const normalizedCorrect = matchedQuestion.answer.toString().trim().toLowerCase();
+    const responseCorrect = normalizedResponse === normalizedCorrect;
 
-    // Add answer to attempt
-    attempt.answers.push({
-      questionId: question.question_id || question._id,
-      question_text: question.text,
-      difficulty: question.difficulty,
+    const questionDifficulty = matchedQuestion.difficulty || 3;
+    const rewardValue = await calculateAnswerPoints(questionDifficulty, responseCorrect);
+
+    attemptDoc.answers.push({
+      questionId: matchedQuestion.question_id || matchedQuestion._id,
+      question_text: matchedQuestion.text,
+      difficulty: matchedQuestion.difficulty,
       answer: answer,
-      correct_answer: question.answer,
-      isCorrect: isCorrect
+      correct_answer: matchedQuestion.answer,
+      isCorrect: responseCorrect,
+      xp_earned: rewardValue
     });
 
-    attempt.total_answered += 1;
-    if (isCorrect) {
-      attempt.correct_count += 1;
+    attemptDoc.total_answered += 1;
+    if (responseCorrect) {
+      attemptDoc.correct_count += 1;
     }
 
-    // Adjust difficulty based on performance and progression strategy
-    const progression = quiz.adaptive_config?.difficulty_progression || 'gradual';
+    const adaptiveStrategy = quizDoc.adaptive_config?.difficulty_progression || 'gradual';
     
-    if (progression === 'immediate') {
-      // Immediate: increase on correct, decrease on incorrect
-      if (isCorrect && attempt.current_difficulty < 5) {
-        attempt.current_difficulty += 1;
-      } else if (!isCorrect && attempt.current_difficulty > 1) {
-        attempt.current_difficulty -= 1;
+    if (adaptiveStrategy === 'immediate') {
+      if (responseCorrect && attemptDoc.current_difficulty < 5) {
+        attemptDoc.current_difficulty += 1;
+      } else if (!responseCorrect && attemptDoc.current_difficulty > 1) {
+        attemptDoc.current_difficulty -= 1;
       }
-    } else if (progression === 'gradual') {
-      // Gradual: adjust based on recent performance (last 3 answers)
-      const recentAnswers = attempt.answers.slice(-3);
-      const recentCorrect = recentAnswers.filter(a => a.isCorrect).length;
+    } else if (adaptiveStrategy === 'gradual') {
+      const recentResponses = attemptDoc.answers.slice(-3);
+      const recentCorrectCount = recentResponses.filter(a => a.isCorrect).length;
       
-      if (recentCorrect >= 2 && attempt.current_difficulty < 5) {
-        attempt.current_difficulty += 1;
-      } else if (recentCorrect <= 1 && attempt.current_difficulty > 1 && recentAnswers.length >= 3) {
-        attempt.current_difficulty -= 1;
+      if (recentCorrectCount >= 2 && attemptDoc.current_difficulty < 5) {
+        attemptDoc.current_difficulty += 1;
+      } else if (recentCorrectCount <= 1 && attemptDoc.current_difficulty > 1 && recentResponses.length >= 3) {
+        attemptDoc.current_difficulty -= 1;
       }
-    } else if (progression === 'ml-based') {
-      // ML-based: Simple algorithm based on overall accuracy
-      const accuracy = attempt.correct_count / attempt.total_answered;
-      const targetDifficulty = Math.min(5, Math.max(1, Math.ceil(accuracy * 5)));
+    } else if (adaptiveStrategy === 'ml-based') {
+      const successRate = attemptDoc.correct_count / attemptDoc.total_answered;
+      const projectedDifficulty = Math.min(5, Math.max(1, Math.ceil(successRate * 5)));
       
-      // Gradually move towards target difficulty
-      if (targetDifficulty > attempt.current_difficulty && attempt.current_difficulty < 5) {
-        attempt.current_difficulty += 1;
-      } else if (targetDifficulty < attempt.current_difficulty && attempt.current_difficulty > 1) {
-        attempt.current_difficulty -= 1;
+      if (projectedDifficulty > attemptDoc.current_difficulty && attemptDoc.current_difficulty < 5) {
+        attemptDoc.current_difficulty += 1;
+      } else if (projectedDifficulty < attemptDoc.current_difficulty && attemptDoc.current_difficulty > 1) {
+        attemptDoc.current_difficulty -= 1;
       }
     }
 
-    await attempt.save();
+    await attemptDoc.save();
 
     res.json({
       success: true,
       data: {
-        isCorrect,
-        correct_answer: question.answer,
-        new_difficulty: attempt.current_difficulty,
-        correct_count: attempt.correct_count,
-        total_answered: attempt.total_answered
+        isCorrect: responseCorrect,
+        correct_answer: matchedQuestion.answer,
+        xp_earned: rewardValue,
+        new_difficulty: attemptDoc.current_difficulty,
+        correct_count: attemptDoc.correct_count,
+        total_answered: attemptDoc.total_answered
       }
     });
   } catch (error) {

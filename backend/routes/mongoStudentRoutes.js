@@ -46,6 +46,7 @@ const QuizAttempt = require('../models/QuizAttempt');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
+const { calculateAnswerPoints, computeStudentTier, computeSkillTier } = require('../utils/experienceCalculator');
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -325,64 +326,66 @@ function generateQuestion(range, operation) {
 
 async function updateSkillsFromQuiz(studentId, questions, percentage, currentProfile) {
   try {
-    const skillUpdates = {};
+    const operationGroups = new Map();
+    const profileDifficulty = Math.min(5, Math.ceil(currentProfile / 2));
 
-    questions.forEach((q) => {
-      const skill = q.operation
-        ? q.operation.charAt(0).toUpperCase() + q.operation.slice(1)
+    // Accumulate XP rewards per operation type
+    for (const question of questions) {
+      const operationType = question.operation
+        ? question.operation.charAt(0).toUpperCase() + question.operation.slice(1)
         : "Addition";
       
-      if (!skillUpdates[skill]) {
-        skillUpdates[skill] = { correct: 0, total: 0 };
-      }
-      skillUpdates[skill].total++;
-      if (q.is_correct) skillUpdates[skill].correct++;
-    });
-
-    const skillNames = Object.keys(skillUpdates);
-    
-    // Fetch all existing skills in a single query instead of N queries
-    const existingSkills = await MathSkill.find({ 
-      student_id: studentId, 
-      skill_name: { $in: skillNames } 
-    });
-    
-    const skillMap = new Map(existingSkills.map(s => [s.skill_name, s]));
-    const bulkOps = [];
-
-    for (const [skillName, stats] of Object.entries(skillUpdates)) {
-      const skillPercentage = (stats.correct / stats.total) * 100;
-      const xpGain = Math.floor(skillPercentage / 10);
-
-      const existingSkill = skillMap.get(skillName);
+      const rewardPoints = await calculateAnswerPoints(profileDifficulty, question.is_correct);
       
-      if (existingSkill) {
-        // Update existing skill using bulk operation
-        const newXp = existingSkill.xp + xpGain;
-        const newLevel = Math.min(5, Math.floor(newXp / 100));
-        bulkOps.push({
+      if (!operationGroups.has(operationType)) {
+        operationGroups.set(operationType, []);
+      }
+      operationGroups.get(operationType).push(rewardPoints);
+    }
+
+    const operationNames = Array.from(operationGroups.keys());
+    const skillRecords = await MathSkill.find({ 
+      student_id: studentId, 
+      skill_name: { $in: operationNames } 
+    });
+    
+    const recordLookup = new Map(skillRecords.map(rec => [rec.skill_name, rec]));
+    const writeOperations = [];
+
+    for (const [opName, rewardsList] of operationGroups) {
+      const aggregatedReward = rewardsList.reduce((acc, val) => acc + val, 0);
+      const clampedReward = aggregatedReward < 0 ? 0 : aggregatedReward;
+
+      const existingRecord = recordLookup.get(opName);
+      
+      if (existingRecord) {
+        const nextExperience = existingRecord.experience_points + clampedReward;
+        const safeExperience = nextExperience < 0 ? 0 : nextExperience;
+        const nextTier = computeSkillTier(safeExperience);
+        
+        writeOperations.push({
           updateOne: {
-            filter: { _id: existingSkill._id },
+            filter: { _id: existingRecord._id },
             update: { 
               $set: { 
-                xp: newXp, 
-                current_level: newLevel, 
+                experience_points: safeExperience, 
+                current_level: nextTier, 
                 updatedAt: new Date() 
               } 
             }
           }
         });
       } else {
-        // Insert new skill using bulk operation
-        const newXp = xpGain;
-        const newLevel = Math.min(5, Math.floor(newXp / 100));
-        bulkOps.push({
+        const safeExperience = clampedReward < 0 ? 0 : clampedReward;
+        const startingTier = computeSkillTier(safeExperience);
+        
+        writeOperations.push({
           insertOne: {
             document: {
               student_id: studentId,
-              skill_name: skillName,
-              current_level: newLevel,
-              xp: newXp,
+              skill_name: opName,
+              current_level: startingTier,
+              experience_points: safeExperience,
               unlocked: true,
               updatedAt: new Date()
             }
@@ -391,9 +394,8 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
       }
     }
 
-    // Execute all updates in a single bulk operation
-    if (bulkOps.length > 0) {
-      await MathSkill.bulkWrite(bulkOps);
+    if (writeOperations.length > 0) {
+      await MathSkill.bulkWrite(writeOperations);
     }
   } catch (error) {
     console.error("Error updating skills:", error);
@@ -646,7 +648,6 @@ router.post("/placement-quiz/submit", async (req, res) => {
 
     const totalQuestions = quiz.questions.length;
     
-    // Validate answers array length
     if (!Array.isArray(answers) || answers.length !== totalQuestions) {
       return res.status(400).json({ 
         success: false, 
@@ -654,59 +655,77 @@ router.post("/placement-quiz/submit", async (req, res) => {
       });
     }
 
-    let score = 0;
+    let correctAnswerCount = 0;
+    const rewardAccumulator = [];
     
-    quiz.questions.forEach((q, i) => {
-      const studentAnswer = answers[i];
-      q.student_answer = studentAnswer;
+    for (let idx = 0; idx < quiz.questions.length; idx++) {
+      const questionData = quiz.questions[idx];
+      const submittedAnswer = answers[idx];
+      questionData.student_answer = submittedAnswer;
       
-      // Handle undefined/null answers explicitly
-      if (studentAnswer === undefined || studentAnswer === null || studentAnswer === '') {
-        q.is_correct = false;
+      const hasValidAnswer = submittedAnswer !== undefined && 
+                             submittedAnswer !== null && 
+                             submittedAnswer !== '';
+      
+      if (!hasValidAnswer) {
+        questionData.is_correct = false;
       } else {
-        // Compare answers as strings (case-insensitive and trimmed)
-        const correctAnswer = String(q.correct_answer).trim().toLowerCase();
-        const givenAnswer = String(studentAnswer).trim().toLowerCase();
-        q.is_correct = givenAnswer === correctAnswer;
+        const normalizedCorrect = String(questionData.correct_answer).trim().toLowerCase();
+        const normalizedSubmitted = String(submittedAnswer).trim().toLowerCase();
+        questionData.is_correct = normalizedSubmitted === normalizedCorrect;
       }
       
-      if (q.is_correct) score++;
-    });
+      if (questionData.is_correct) correctAnswerCount++;
+      
+      const placementDifficultyLevel = 3;
+      const pointsForAnswer = await calculateAnswerPoints(placementDifficultyLevel, questionData.is_correct);
+      rewardAccumulator.push(pointsForAnswer);
+    }
 
-    quiz.score = score;
-    quiz.percentage = Math.round((score / totalQuestions) * 100);
-    quiz.points_earned = score * 10;
+    const aggregatedReward = rewardAccumulator.reduce((sum, pts) => sum + pts, 0);
+    const finalReward = aggregatedReward < 0 ? 0 : aggregatedReward;
+
+    quiz.score = correctAnswerCount;
+    quiz.percentage = Math.round((correctAnswerCount / totalQuestions) * 100);
+    quiz.points_earned = finalReward;
     quiz.completed_at = new Date();
     await quiz.save();
 
-    const mathProfile = await MathProfile.findOne({ student_id: studentId });
+    const profileDoc = await MathProfile.findOne({ student_id: studentId });
 
-    let startingProfile = 1;
-    if (quiz.percentage >= 90) startingProfile = 7;
-    else if (quiz.percentage >= 80) startingProfile = 6;
-    else if (quiz.percentage >= 70) startingProfile = 5;
-    else if (quiz.percentage >= 60) startingProfile = 4;
-    else if (quiz.percentage >= 50) startingProfile = 3;
-    else if (quiz.percentage >= 40) startingProfile = 2;
-    else startingProfile = 1;
+    let determinedProfile = 1;
+    if (quiz.percentage >= 90) determinedProfile = 7;
+    else if (quiz.percentage >= 80) determinedProfile = 6;
+    else if (quiz.percentage >= 70) determinedProfile = 5;
+    else if (quiz.percentage >= 60) determinedProfile = 4;
+    else if (quiz.percentage >= 50) determinedProfile = 3;
+    else if (quiz.percentage >= 40) determinedProfile = 2;
+    else determinedProfile = 1;
 
-    mathProfile.current_profile = startingProfile;
-    mathProfile.placement_completed = true;
-    mathProfile.total_points += quiz.points_earned;
-    await mathProfile.save();
+    profileDoc.current_profile = determinedProfile;
+    profileDoc.placement_completed = true;
+    profileDoc.total_points += finalReward;
+    
+    const currentExperience = profileDoc.accumulated_experience || 0;
+    const updatedExperience = currentExperience + finalReward;
+    profileDoc.accumulated_experience = updatedExperience < 0 ? 0 : updatedExperience;
+    profileDoc.student_rank = computeStudentTier(profileDoc.accumulated_experience);
+    await profileDoc.save();
 
-    await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, startingProfile);
+    await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, determinedProfile);
 
     res.json({
       success: true,
       result: {
-        score,
+        score: correctAnswerCount,
         total: totalQuestions,
         percentage: quiz.percentage,
-        points_earned: quiz.points_earned,
-        starting_profile: startingProfile,
-        assigned_profile: startingProfile,
+        points_earned: finalReward,
+        starting_profile: determinedProfile,
+        assigned_profile: determinedProfile,
         placement_completed: true,
+        student_rank: profileDoc.student_rank,
+        total_experience: profileDoc.accumulated_experience
       },
     });
   } catch (error) {
@@ -801,71 +820,87 @@ router.post("/quiz/submit", async (req, res) => {
       return res.status(404).json({ success: false, error: "Quiz not found" });
     }
 
-    let score = 0;
-    quiz.questions.forEach((q, i) => {
-      const studentAnswer = answers[i];
-      q.student_answer = studentAnswer;
-      q.is_correct = studentAnswer === q.correct_answer;
-      if (q.is_correct) score++;
-    });
+    let correctCount = 0;
+    const rewardCollector = [];
+    
+    const quizDifficulty = Math.min(5, Math.ceil(quiz.profile_level / 2));
+    
+    for (let idx = 0; idx < quiz.questions.length; idx++) {
+      const questionItem = quiz.questions[idx];
+      const userResponse = answers[idx];
+      questionItem.student_answer = userResponse;
+      questionItem.is_correct = userResponse === questionItem.correct_answer;
+      if (questionItem.is_correct) correctCount++;
+      
+      const pointsAwarded = await calculateAnswerPoints(quizDifficulty, questionItem.is_correct);
+      rewardCollector.push(pointsAwarded);
+    }
 
-    quiz.score = score;
-    quiz.percentage = Math.round((score / 15) * 100);
-    quiz.points_earned = score * 10;
+    const summedRewards = rewardCollector.reduce((total, val) => total + val, 0);
+    const clampedRewards = summedRewards < 0 ? 0 : summedRewards;
+
+    quiz.score = correctCount;
+    quiz.percentage = Math.round((correctCount / 15) * 100);
+    quiz.points_earned = clampedRewards;
     quiz.completed_at = new Date();
     await quiz.save();
 
-    const mathProfile = await MathProfile.findOne({ student_id: studentId });
-    const oldProfile = mathProfile.current_profile;
+    const profileRecord = await MathProfile.findOne({ student_id: studentId });
+    const previousLevel = profileRecord.current_profile;
 
-    let newProfile = oldProfile;
-    let profileChanged = false;
-    let changeType = null;
+    let nextLevel = previousLevel;
+    let levelModified = false;
+    let modificationType = null;
 
     if (quiz.percentage >= 70) {
-      mathProfile.consecutive_fails = 0;
+      profileRecord.consecutive_fails = 0;
 
-      if (mathProfile.current_profile < 10) {
-        newProfile = mathProfile.current_profile + 1;
-        mathProfile.current_profile = newProfile;
-        profileChanged = true;
-        changeType = "advance";
+      if (profileRecord.current_profile < 10) {
+        nextLevel = profileRecord.current_profile + 1;
+        profileRecord.current_profile = nextLevel;
+        levelModified = true;
+        modificationType = "advance";
       }
     } else if (quiz.percentage < 50) {
-      mathProfile.consecutive_fails += 1;
+      profileRecord.consecutive_fails += 1;
 
-      if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile > 1) {
-        newProfile = mathProfile.current_profile - 1;
-        mathProfile.current_profile = newProfile;
-        mathProfile.consecutive_fails = 0;
-        profileChanged = true;
-        changeType = "demote";
-      } else if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile === 1) {
-        // At lowest profile, reset fail counter without demotion
-        mathProfile.consecutive_fails = 0;
+      if (profileRecord.consecutive_fails >= 6 && profileRecord.current_profile > 1) {
+        nextLevel = profileRecord.current_profile - 1;
+        profileRecord.current_profile = nextLevel;
+        profileRecord.consecutive_fails = 0;
+        levelModified = true;
+        modificationType = "demote";
+      } else if (profileRecord.consecutive_fails >= 6 && profileRecord.current_profile === 1) {
+        profileRecord.consecutive_fails = 0;
       }
     } else {
-      mathProfile.consecutive_fails = 0;
+      profileRecord.consecutive_fails = 0;
     }
 
-    mathProfile.total_points += quiz.points_earned;
-    updateStreakOnCompletion(mathProfile);
-    await mathProfile.save();
+    profileRecord.total_points += clampedRewards;
+    const baseExperience = profileRecord.accumulated_experience || 0;
+    const newExperience = baseExperience + clampedRewards;
+    profileRecord.accumulated_experience = newExperience < 0 ? 0 : newExperience;
+    profileRecord.student_rank = computeStudentTier(profileRecord.accumulated_experience);
+    updateStreakOnCompletion(profileRecord);
+    await profileRecord.save();
 
-    await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, mathProfile.current_profile);
+    await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, profileRecord.current_profile);
 
     res.json({
       success: true,
       result: {
-        score,
+        score: correctCount,
         total: 15,
         percentage: quiz.percentage,
-        points_earned: quiz.points_earned,
-        old_profile: oldProfile,
-        new_profile: newProfile,
-        profile_changed: profileChanged,
-        change_type: changeType,
-        consecutive_fails: mathProfile.consecutive_fails,
+        points_earned: clampedRewards,
+        old_profile: previousLevel,
+        new_profile: nextLevel,
+        profile_changed: levelModified,
+        change_type: modificationType,
+        consecutive_fails: profileRecord.consecutive_fails,
+        student_rank: profileRecord.student_rank,
+        total_experience: profileRecord.accumulated_experience
       },
     });
   } catch (error) {
