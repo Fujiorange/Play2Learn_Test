@@ -3016,20 +3016,15 @@ router.get('/parents/:parentId/students', authenticateSchoolAdmin, async (req, r
       'linkedStudents.0': { $exists: true }
     }).select('linkedStudents');
     
-    // Collect all student IDs that are linked to any parent
-    const allLinkedStudentIds = new Set();
-    allParentsWithLinks.forEach(p => {
-      p.linkedStudents.forEach(ls => {
-        allLinkedStudentIds.add(ls.studentId.toString());
-      });
-    });
+    // Collect all student IDs that are linked to any parent (as ObjectIds for efficient query)
+    const allLinkedStudentIds = allParentsWithLinks.flatMap(p => p.linkedStudents.map(ls => ls.studentId));
     
     // Get all students in the school that are NOT linked to ANY parent
     // (since each student can only have 1 parent)
     const availableStudents = await User.find({
       schoolId: schoolAdmin.schoolId,
       role: 'Student',
-      _id: { $nin: Array.from(allLinkedStudentIds).map(id => new mongoose.Types.ObjectId(id)) }
+      _id: { $nin: allLinkedStudentIds }
     }).select('_id name email class gradeLevel');
     
     // Build class lookup map to resolve class IDs to class names

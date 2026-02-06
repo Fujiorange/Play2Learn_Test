@@ -378,69 +378,75 @@ export default function ManageClasses() {
         <label style={styles.label}>Assign Students</label>
         {isEdit ? (
           /* Two-column layout for edit mode: Students in Class vs Available Students */
-          <div style={styles.twoColumnContainer}>
-            {/* Left Column: Students Currently in Class */}
-            <div style={styles.studentColumn}>
-              <div style={styles.columnHeader}>
-                <span style={styles.columnHeaderIcon}>✅</span>
-                <span>Students in Class ({students.filter(s => formData.students.includes(s.id)).length})</span>
+          (() => {
+            const studentsInClass = students.filter(s => formData.students.includes(s.id));
+            const availableStudents = students.filter(s => !formData.students.includes(s.id));
+            return (
+              <div style={styles.twoColumnContainer}>
+                {/* Left Column: Students Currently in Class */}
+                <div style={styles.studentColumn}>
+                  <div style={styles.columnHeader}>
+                    <span style={styles.columnHeaderIcon}>✅</span>
+                    <span>Students in Class ({studentsInClass.length})</span>
+                  </div>
+                  <div style={styles.multiSelectColumn}>
+                    {studentsInClass.length === 0 ? (
+                      <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students assigned yet</p>
+                    ) : (
+                      studentsInClass.map(student => (
+                        <div
+                          key={student.id}
+                          style={styles.checkboxItemInClass}
+                          onClick={() => handleStudentSelection(student.id)}
+                          title="Click to remove from class"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={true}
+                            readOnly
+                            style={styles.checkbox}
+                          />
+                          <span>{student.name} ({student.email})</span>
+                          <span style={styles.removeIcon}>✕</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                
+                {/* Right Column: Available Students */}
+                <div style={styles.studentColumn}>
+                  <div style={styles.columnHeaderAvailable}>
+                    <span style={styles.columnHeaderIcon}>➕</span>
+                    <span>Available Students ({availableStudents.length})</span>
+                  </div>
+                  <div style={styles.multiSelectColumn}>
+                    {availableStudents.length === 0 ? (
+                      <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students available</p>
+                    ) : (
+                      availableStudents.map(student => (
+                        <div
+                          key={student.id}
+                          style={styles.checkboxItemAvailable}
+                          onClick={() => handleStudentSelection(student.id)}
+                          title="Click to add to class"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            readOnly
+                            style={styles.checkbox}
+                          />
+                          <span>{student.name} ({student.email})</span>
+                          <span style={styles.addIcon}>+</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-              <div style={styles.multiSelectColumn}>
-                {students.filter(s => formData.students.includes(s.id)).length === 0 ? (
-                  <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students assigned yet</p>
-                ) : (
-                  students.filter(s => formData.students.includes(s.id)).map(student => (
-                    <div
-                      key={student.id}
-                      style={styles.checkboxItemInClass}
-                      onClick={() => handleStudentSelection(student.id)}
-                      title="Click to remove from class"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={true}
-                        readOnly
-                        style={styles.checkbox}
-                      />
-                      <span>{student.name} ({student.email})</span>
-                      <span style={styles.removeIcon}>✕</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            
-            {/* Right Column: Available Students */}
-            <div style={styles.studentColumn}>
-              <div style={styles.columnHeaderAvailable}>
-                <span style={styles.columnHeaderIcon}>➕</span>
-                <span>Available Students ({students.filter(s => !formData.students.includes(s.id)).length})</span>
-              </div>
-              <div style={styles.multiSelectColumn}>
-                {students.filter(s => !formData.students.includes(s.id)).length === 0 ? (
-                  <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students available</p>
-                ) : (
-                  students.filter(s => !formData.students.includes(s.id)).map(student => (
-                    <div
-                      key={student.id}
-                      style={styles.checkboxItemAvailable}
-                      onClick={() => handleStudentSelection(student.id)}
-                      title="Click to add to class"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        readOnly
-                        style={styles.checkbox}
-                      />
-                      <span>{student.name} ({student.email})</span>
-                      <span style={styles.addIcon}>+</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+            );
+          })()
         ) : (
           /* Single list for add mode */
           <div style={styles.multiSelect}>
