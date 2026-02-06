@@ -2,42 +2,79 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function StudentLeaderboard() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [timeframe, setTimeframe] = useState('all-time');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [myClasses, setMyClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState('all');
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
-    const loadLeaderboard = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    loadClasses();
+  }, [navigate]);
 
-      try {
-        // Simulated leaderboard data
-        const mockData = [
-          { id: 1, rank: 1, name: 'Sarah Williams', class: 'Primary 5A', points: 1250, level: 18, achievements: 24, streak: 15 },
-          { id: 2, rank: 2, name: 'Jane Smith', class: 'Primary 5A', points: 1180, level: 16, achievements: 20, streak: 12 },
-          { id: 3, rank: 3, name: 'John Doe', class: 'Primary 5B', points: 1050, level: 15, achievements: 18, streak: 10 },
-          { id: 4, rank: 4, name: 'Mike Johnson', class: 'Primary 5A', points: 980, level: 14, achievements: 16, streak: 8 },
-          { id: 5, rank: 5, name: 'Emily Davis', class: 'Primary 5B', points: 920, level: 13, achievements: 15, streak: 7 },
-          { id: 6, rank: 6, name: 'David Brown', class: 'Primary 5A', points: 850, level: 12, achievements: 14, streak: 6 },
-          { id: 7, rank: 7, name: 'Lisa Wilson', class: 'Primary 5B', points: 780, level: 11, achievements: 12, streak: 5 },
-          { id: 8, rank: 8, name: 'Tom Anderson', class: 'Primary 5A', points: 720, level: 10, achievements: 10, streak: 4 },
-        ];
-        
-        setLeaderboard(mockData);
-      } catch (error) {
-        console.error('Error loading leaderboard:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  useEffect(() => {
+    if (myClasses.length >= 0) {
+      loadLeaderboard();
+    }
+  }, [selectedClass, myClasses]);
 
-    loadLeaderboard();
-  }, [navigate, timeframe]);
+  const loadClasses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMyClasses(data.classes || []);
+      }
+    } catch (error) {
+      console.error('Error loading classes:', error);
+    }
+  };
+
+  const loadLeaderboard = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const url = selectedClass === 'all' 
+        ? `${API_BASE_URL}/api/mongo/teacher/leaderboard`
+        : `${API_BASE_URL}/api/mongo/teacher/leaderboard?className=${encodeURIComponent(selectedClass)}`;
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add rank to each student
+        const rankedLeaderboard = (data.leaderboard || []).map((student, index) => ({
+          ...student,
+          rank: index + 1
+        }));
+        setLeaderboard(rankedLeaderboard);
+      } else {
+        setError(data.error || 'Failed to load leaderboard');
+      }
+    } catch (error) {
+      console.error('Error loading leaderboard:', error);
+      setError('Failed to connect to server');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getRankBadgeStyle = (rank) => {
     if (rank === 1) return { background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', color: 'white' };
@@ -47,176 +84,36 @@ export default function StudentLeaderboard() {
   };
 
   const styles = {
-    container: {
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-      padding: '32px',
-    },
-    content: {
-      maxWidth: '1200px',
-      margin: '0 auto',
-    },
-    header: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '32px',
-      marginBottom: '24px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-    },
-    headerTop: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '24px',
-    },
-    title: {
-      fontSize: '28px',
-      fontWeight: '700',
-      color: '#1f2937',
-      margin: 0,
-    },
-    backButton: {
-      padding: '10px 20px',
-      background: '#6b7280',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    timeframeSection: {
-      display: 'flex',
-      gap: '8px',
-      alignItems: 'center',
-    },
-    timeframeButton: {
-      padding: '8px 16px',
-      border: '2px solid #e5e7eb',
-      borderRadius: '8px',
-      fontSize: '14px',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-      background: 'white',
-      fontWeight: '500',
-    },
-    timeframeButtonActive: {
-      borderColor: '#10b981',
-      background: '#d1fae5',
-      color: '#065f46',
-      fontWeight: '600',
-    },
-    podium: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-end',
-      gap: '16px',
-      marginBottom: '32px',
-      padding: '32px',
-      background: 'white',
-      borderRadius: '16px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-    },
-    podiumPlace: {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      minWidth: '150px',
-    },
-    podiumBase: {
-      width: '100%',
-      borderRadius: '12px 12px 0 0',
-      padding: '16px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-    },
-    podiumAvatar: {
-      width: '60px',
-      height: '60px',
-      borderRadius: '50%',
-      background: '#f3f4f6',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '28px',
-      marginBottom: '12px',
-      border: '3px solid white',
-    },
-    podiumName: {
-      fontSize: '14px',
-      fontWeight: '600',
-      color: 'white',
-      marginBottom: '4px',
-      textAlign: 'center',
-    },
-    podiumPoints: {
-      fontSize: '18px',
-      fontWeight: '700',
-      color: 'white',
-    },
-    tableContainer: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '24px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      overflowX: 'auto',
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-    },
-    th: {
-      textAlign: 'left',
-      padding: '12px',
-      borderBottom: '2px solid #e5e7eb',
-      fontSize: '13px',
-      fontWeight: '600',
-      color: '#6b7280',
-      textTransform: 'uppercase',
-    },
-    td: {
-      padding: '16px 12px',
-      borderBottom: '1px solid #f3f4f6',
-      fontSize: '14px',
-      color: '#1f2937',
-    },
-    rankBadge: {
-      display: 'inline-block',
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      textAlign: 'center',
-      lineHeight: '40px',
-      fontWeight: '700',
-      fontSize: '16px',
-    },
-    medal: {
-      fontSize: '24px',
-    },
-    statBadge: {
-      padding: '4px 8px',
-      borderRadius: '6px',
-      fontSize: '12px',
-      fontWeight: '600',
-      background: '#f3f4f6',
-      color: '#6b7280',
-      display: 'inline-block',
-    },
-    loadingContainer: {
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-    },
-    loadingText: {
-      fontSize: '24px',
-      color: '#6b7280',
-      fontWeight: '600',
-    },
+    container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
+    content: { maxWidth: '1000px', margin: '0 auto' },
+    header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' },
+    title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
+    backButton: { padding: '10px 20px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    filterContainer: { display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' },
+    select: { padding: '10px 16px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', minWidth: '150px' },
+    podium: { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '20px', marginBottom: '32px', padding: '20px' },
+    podiumItem: { textAlign: 'center', padding: '20px', borderRadius: '16px', background: 'white', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' },
+    podiumFirst: { minWidth: '140px', transform: 'scale(1.1)' },
+    podiumSecond: { minWidth: '120px' },
+    podiumThird: { minWidth: '120px' },
+    podiumRank: { fontSize: '32px', marginBottom: '8px' },
+    podiumName: { fontSize: '16px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' },
+    podiumClass: { fontSize: '12px', color: '#6b7280', marginBottom: '8px' },
+    podiumPoints: { fontSize: '20px', fontWeight: '700', color: '#10b981' },
+    tableContainer: { background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    th: { textAlign: 'left', padding: '12px', borderBottom: '2px solid #e5e7eb', fontSize: '13px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' },
+    td: { padding: '16px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '14px' },
+    rankBadge: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', fontWeight: '700', fontSize: '14px' },
+    studentName: { fontWeight: '600', color: '#1f2937' },
+    points: { fontWeight: '700', color: '#10b981', fontSize: '16px' },
+    level: { padding: '4px 12px', background: '#dbeafe', color: '#1d4ed8', borderRadius: '12px', fontSize: '12px', fontWeight: '600' },
+    streak: { display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: '600' },
+    emptyState: { textAlign: 'center', padding: '60px 20px', color: '#6b7280' },
+    errorState: { textAlign: 'center', padding: '40px', background: '#fee2e2', borderRadius: '12px', color: '#dc2626' },
+    loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
+    loadingText: { fontSize: '18px', color: '#6b7280' },
   };
 
   if (loading) {
@@ -235,120 +132,154 @@ export default function StudentLeaderboard() {
       <div style={styles.content}>
         <div style={styles.header}>
           <div style={styles.headerTop}>
-            <h1 style={styles.title}>🏆 Student Leaderboard</h1>
-            <button
-              style={styles.backButton}
-              onClick={() => navigate('/teacher')}
-              onMouseEnter={(e) => e.target.style.background = '#4b5563'}
-              onMouseLeave={(e) => e.target.style.background = '#6b7280'}
-            >
+            <h1 style={styles.title}>🏆 Class Leaderboard</h1>
+            <button style={styles.backButton} onClick={() => navigate('/teacher')}>
               ← Back to Dashboard
             </button>
           </div>
-
-          <div style={styles.timeframeSection}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>Timeframe:</span>
-            {['all-time', 'this-month', 'this-week'].map(period => (
-              <button
-                key={period}
-                onClick={() => setTimeframe(period)}
-                style={{
-                  ...styles.timeframeButton,
-                  ...(timeframe === period ? styles.timeframeButtonActive : {})
-                }}
-              >
-                {period === 'all-time' ? 'All Time' : period === 'this-month' ? 'This Month' : 'This Week'}
-              </button>
-            ))}
+          
+          <div style={styles.filterContainer}>
+            <label style={{ fontWeight: '500', color: '#374151' }}>Filter by Class:</label>
+            <select 
+              style={styles.select}
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+            >
+              <option value="all">All Classes</option>
+              {myClasses.map(cls => (
+                <option key={cls} value={cls}>{cls}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Top 3 Podium */}
-        <div style={styles.podium}>
-          {/* 2nd Place */}
-          {topThree[1] && (
-            <div style={styles.podiumPlace}>
-              <div style={styles.medal}>🥈</div>
-              <div style={{ ...styles.podiumBase, background: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%)', height: '180px' }}>
-                <div style={styles.podiumAvatar}>👤</div>
+        {error && (
+          <div style={styles.errorState}>
+            <p>⚠️ {error}</p>
+            <button onClick={loadLeaderboard} style={{ ...styles.backButton, marginTop: '16px' }}>
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {!error && leaderboard.length === 0 && (
+          <div style={styles.emptyState}>
+            <p style={{ fontSize: '48px', marginBottom: '16px' }}>🏆</p>
+            <p style={{ fontSize: '18px', fontWeight: '500' }}>No students found</p>
+            <p>Students in your classes will appear here once they start earning points</p>
+          </div>
+        )}
+
+        {!error && topThree.length > 0 && (
+          <div style={styles.podium}>
+            {topThree[1] && (
+              <div style={{ ...styles.podiumItem, ...styles.podiumSecond }}>
+                <div style={styles.podiumRank}>🥈</div>
                 <div style={styles.podiumName}>{topThree[1].name}</div>
-                <div style={styles.podiumPoints}>{topThree[1].points} pts</div>
+                <div style={styles.podiumClass}>{topThree[1].class || 'N/A'}</div>
+                <div style={styles.podiumPoints}>{topThree[1].points || 0} pts</div>
               </div>
-            </div>
-          )}
-
-          {/* 1st Place */}
-          {topThree[0] && (
-            <div style={styles.podiumPlace}>
-              <div style={styles.medal}>🥇</div>
-              <div style={{ ...styles.podiumBase, background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', height: '220px' }}>
-                <div style={styles.podiumAvatar}>👤</div>
+            )}
+            {topThree[0] && (
+              <div style={{ ...styles.podiumItem, ...styles.podiumFirst }}>
+                <div style={styles.podiumRank}>🥇</div>
                 <div style={styles.podiumName}>{topThree[0].name}</div>
-                <div style={styles.podiumPoints}>{topThree[0].points} pts</div>
+                <div style={styles.podiumClass}>{topThree[0].class || 'N/A'}</div>
+                <div style={styles.podiumPoints}>{topThree[0].points || 0} pts</div>
               </div>
-            </div>
-          )}
-
-          {/* 3rd Place */}
-          {topThree[2] && (
-            <div style={styles.podiumPlace}>
-              <div style={styles.medal}>🥉</div>
-              <div style={{ ...styles.podiumBase, background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)', height: '140px' }}>
-                <div style={styles.podiumAvatar}>👤</div>
+            )}
+            {topThree[2] && (
+              <div style={{ ...styles.podiumItem, ...styles.podiumThird }}>
+                <div style={styles.podiumRank}>🥉</div>
                 <div style={styles.podiumName}>{topThree[2].name}</div>
-                <div style={styles.podiumPoints}>{topThree[2].points} pts</div>
+                <div style={styles.podiumClass}>{topThree[2].class || 'N/A'}</div>
+                <div style={styles.podiumPoints}>{topThree[2].points || 0} pts</div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* Full Leaderboard Table */}
-        <div style={styles.tableContainer}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Rank</th>
-                <th style={styles.th}>Student Name</th>
-                <th style={styles.th}>Class</th>
-                <th style={styles.th}>Points</th>
-                <th style={styles.th}>Level</th>
-                <th style={styles.th}>Achievements</th>
-                <th style={styles.th}>Streak</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map(student => (
-                <tr key={student.id}>
-                  <td style={styles.td}>
-                    <span style={{ ...styles.rankBadge, ...getRankBadgeStyle(student.rank) }}>
-                      {student.rank <= 3 ? (student.rank === 1 ? '🥇' : student.rank === 2 ? '🥈' : '🥉') : student.rank}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <strong>{student.name}</strong>
-                  </td>
-                  <td style={styles.td}>{student.class}</td>
-                  <td style={styles.td}>
-                    <strong style={{ color: '#10b981', fontSize: '16px' }}>{student.points.toLocaleString()}</strong>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.statBadge}>Level {student.level}</span>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={{ ...styles.statBadge, background: '#fef3c7', color: '#92400e' }}>
-                      🏆 {student.achievements}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={{ ...styles.statBadge, background: '#ffedd5', color: '#9a3412' }}>
-                      🔥 {student.streak} days
-                    </span>
-                  </td>
+        {!error && remaining.length > 0 && (
+          <div style={styles.tableContainer}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Rank</th>
+                  <th style={styles.th}>Student</th>
+                  <th style={styles.th}>Class</th>
+                  <th style={styles.th}>Points</th>
+                  <th style={styles.th}>Level</th>
+                  <th style={styles.th}>Streak</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {remaining.map(student => (
+                  <tr key={student._id}>
+                    <td style={styles.td}>
+                      <span style={{ ...styles.rankBadge, ...getRankBadgeStyle(student.rank) }}>
+                        {student.rank}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.studentName}>{student.name}</span>
+                    </td>
+                    <td style={styles.td}>{student.class || 'N/A'}</td>
+                    <td style={styles.td}>
+                      <span style={styles.points}>{student.points || 0}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.level}>Level {student.level || 1}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.streak}>🔥 {student.streak || 0}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!error && leaderboard.length > 0 && leaderboard.length <= 3 && (
+          <div style={styles.tableContainer}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Rank</th>
+                  <th style={styles.th}>Student</th>
+                  <th style={styles.th}>Class</th>
+                  <th style={styles.th}>Points</th>
+                  <th style={styles.th}>Level</th>
+                  <th style={styles.th}>Streak</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.map(student => (
+                  <tr key={student._id}>
+                    <td style={styles.td}>
+                      <span style={{ ...styles.rankBadge, ...getRankBadgeStyle(student.rank) }}>
+                        {student.rank}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.studentName}>{student.name}</span>
+                    </td>
+                    <td style={styles.td}>{student.class || 'N/A'}</td>
+                    <td style={styles.td}>
+                      <span style={styles.points}>{student.points || 0}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.level}>Level {student.level || 1}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.streak}>🔥 {student.streak || 0}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
