@@ -46,7 +46,7 @@ const QuizAttempt = require('../models/QuizAttempt');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
-const { calculateAnswerPoints, computeStudentTier, computeSkillTier, fetchRewardConfiguration } = require('../utils/experienceCalculator');
+const { calculateAnswerPoints, computeStudentTier, computeSkillTier, fetchRewardConfiguration, calculateTierProgress } = require('../utils/experienceCalculator');
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -445,6 +445,11 @@ router.get("/dashboard", async (req, res) => {
       .toArray();
     const achievementsCount = earnedBadges.length || 0;
 
+    // Calculate tier progress
+    const accumulatedXp = mathProfile.accumulated_experience || 0;
+    const studentTier = mathProfile.student_rank || 1;
+    const tierProgress = calculateTierProgress(accumulatedXp);
+
     res.json({
       success: true,
       dashboard: {
@@ -455,6 +460,9 @@ router.get("/dashboard", async (req, res) => {
         streak: effectiveStreak || 0,
         placementCompleted: mathProfile.placement_completed || false,
         achievements: achievementsCount,
+        accumulatedExperience: accumulatedXp,
+        studentRank: studentTier,
+        tierProgress: tierProgress,
       },
       data: {
         points: mathProfile.total_points || 0,
@@ -463,6 +471,9 @@ router.get("/dashboard", async (req, res) => {
         gradeLevel: user?.gradeLevel || 'Primary 1',
         streak: effectiveStreak || 0,
         achievements: achievementsCount,
+        accumulatedExperience: accumulatedXp,
+        studentRank: studentTier,
+        tierProgress: tierProgress,
       }
     });
   } catch (error) {

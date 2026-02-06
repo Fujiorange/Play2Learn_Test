@@ -44,8 +44,14 @@ export default function StudentDashboard() {
         const completedQuizzes =
           dashboardInfo.completedQuizzes ?? dashboardInfo.quizzesTaken ?? 0;
 
-        const level =
-          dashboardInfo.level ?? dashboardInfo.currentProfile ?? 1;
+        const accumulatedXp =
+          dashboardInfo.accumulatedExperience ?? dashboardInfo.accumulated_experience ?? 0;
+
+        const studentRank = dashboardInfo.studentRank ?? dashboardInfo.student_rank ?? 1;
+
+        const tierProgress = dashboardInfo.tierProgress ?? 0;
+
+        const streak = dashboardInfo.streak ?? 0;
 
         const gradeLevel = dashboardInfo.gradeLevel ?? 'Primary 1';
 
@@ -66,12 +72,11 @@ export default function StudentDashboard() {
         }
 
         setDashboardData({
-          points,
-          level,
-          levelProgress: ((points % 500) / 500) * 100,
-          achievements: dashboardInfo.achievements || 0,
-          rank: userRank,
+          experience: accumulatedXp,
+          rank: studentRank,
+          tierProgress: tierProgress,
           completedQuizzes,
+          streak: streak,
           grade_level: gradeLevel,
         });
         console.log('✅ Dashboard data set successfully');
@@ -79,24 +84,22 @@ export default function StudentDashboard() {
         console.error('❌ Failed to load dashboard:', dashData.error);
         // Set default values
         setDashboardData({
-          points: 0,
-          level: 1,
-          levelProgress: 0,
-          achievements: 0,
-          rank: '#-',
+          experience: 0,
+          rank: 1,
+          tierProgress: 0,
           completedQuizzes: 0,
+          streak: 0,
           grade_level: 'Primary 1',
         });
       }
     } catch (error) {
       console.error('Error loading dashboard:', error);
       setDashboardData({
-        points: 0,
-        level: 1,
-        levelProgress: 0,
-        achievements: 0,
-        rank: '#-',
+        experience: 0,
+        rank: 1,
+        tierProgress: 0,
         completedQuizzes: 0,
+        streak: 0,
         grade_level: 'Primary 1',
       });
     } finally {
@@ -260,36 +263,86 @@ export default function StudentDashboard() {
     },
   ];
 
+  // Helper function to get tier name
+  const getTierName = (rank) => {
+    const tierNames = {
+      1: 'Bronze',
+      2: 'Silver',
+      3: 'Gold',
+      4: 'Platinum',
+      5: 'Diamond',
+      6: 'Master',
+      7: 'Grandmaster',
+      8: 'Elite',
+      9: 'Legend',
+      10: 'Mythic',
+    };
+    return tierNames[rank] || 'Bronze';
+  };
+
+  // Helper function to get tier color
+  const getTierColor = (rank) => {
+    const tierColors = {
+      1: '#CD7F32', // Bronze
+      2: '#C0C0C0', // Silver
+      3: '#FFD700', // Gold
+      4: '#E5E4E2', // Platinum
+      5: '#B9F2FF', // Diamond
+      6: '#9370DB', // Master
+      7: '#FF1493', // Grandmaster
+      8: '#FF4500', // Elite
+      9: '#FF6347', // Legend
+      10: '#8B008B', // Mythic
+    };
+    return tierColors[rank] || '#CD7F32';
+  };
+
+  // Helper function to get tier emoji
+  const getTierEmoji = (rank) => {
+    const tierEmojis = {
+      1: '🥉',
+      2: '🥈',
+      3: '🥇',
+      4: '💎',
+      5: '💠',
+      6: '👑',
+      7: '⭐',
+      8: '🌟',
+      9: '🔥',
+      10: '🏆',
+    };
+    return tierEmojis[rank] || '🥉';
+  };
+
   const statCards = [
     {
-      id: 'points',
-      title: 'Total Points',
-      value: dashboardData.points,
-      icon: '⭐',
-    },
-    {
-      id: 'level',
-      title: 'Current Level',
-      value: dashboardData.level,
-      icon: '🎯',
-    },
-    {
-      id: 'achievements',
-      title: 'Achievements',
-      value: dashboardData.achievements,
-      icon: '🏅',
+      id: 'experience',
+      title: 'Total XP',
+      value: dashboardData.experience?.toLocaleString() || '0',
+      icon: '⚡',
+      subtitle: 'Experience Points',
     },
     {
       id: 'rank',
-      title: 'Leaderboard Rank',
-      value: dashboardData.rank,
-      icon: '🏆',
+      title: `${getTierName(dashboardData.rank)} Tier`,
+      value: `Tier ${dashboardData.rank}`,
+      icon: getTierEmoji(dashboardData.rank),
+      subtitle: `${dashboardData.tierProgress}% to next tier`,
+      tierColor: getTierColor(dashboardData.rank),
     },
     {
       id: 'quizzes',
-      title: 'Completed Quizzes',
+      title: 'Quizzes Completed',
       value: dashboardData.completedQuizzes,
       icon: '📝',
+      subtitle: 'Keep it up!',
+    },
+    {
+      id: 'streak',
+      title: 'Current Streak',
+      value: `${dashboardData.streak} days`,
+      icon: '🔥',
+      subtitle: 'Daily activity',
     },
   ];
 
@@ -323,16 +376,24 @@ export default function StudentDashboard() {
             Welcome back, {user.name?.split(' ')[0] || 'Student'}! 🎮
           </h2>
           <p style={styles.gradeLevel}>{dashboardData.grade_level}</p>
+          <div style={styles.tierBadge}>
+            <span style={{...styles.tierIcon, color: getTierColor(dashboardData.rank)}}>
+              {getTierEmoji(dashboardData.rank)}
+            </span>
+            <span style={styles.tierText}>
+              {getTierName(dashboardData.rank)} Tier {dashboardData.rank}
+            </span>
+          </div>
           <div style={styles.progressContainer}>
             <div style={styles.progressText}>
-              Level {dashboardData.level} - {dashboardData.levelProgress.toFixed(0)}
-              % to Level {dashboardData.level + 1}
+              {dashboardData.experience?.toLocaleString() || '0'} XP - {dashboardData.tierProgress}% to {getTierName(dashboardData.rank + 1)} Tier
             </div>
             <div style={styles.progressBar}>
               <div
                 style={{
                   ...styles.progressFill,
-                  width: `${dashboardData.levelProgress}%`,
+                  width: `${dashboardData.tierProgress}%`,
+                  backgroundColor: getTierColor(dashboardData.rank),
                 }}
               ></div>
             </div>
@@ -346,6 +407,7 @@ export default function StudentDashboard() {
               style={{
                 ...styles.statCard,
                 ...(hoveredStat === stat.id ? styles.cardHover : {}),
+                ...(stat.tierColor ? { borderTop: `4px solid ${stat.tierColor}` } : {}),
               }}
               onMouseEnter={() => setHoveredStat(stat.id)}
               onMouseLeave={() => setHoveredStat(null)}
@@ -353,6 +415,9 @@ export default function StudentDashboard() {
               <div style={styles.statIcon}>{stat.icon}</div>
               <div style={styles.statTitle}>{stat.title}</div>
               <div style={styles.statValue}>{stat.value}</div>
+              {stat.subtitle && (
+                <div style={styles.statSubtitle}>{stat.subtitle}</div>
+              )}
             </div>
           ))}
         </div>
@@ -435,6 +500,17 @@ const styles = {
   },
   welcomeTitle: { margin: 0, fontSize: '28px', fontWeight: 'bold' },
   gradeLevel: { marginTop: '8px', marginBottom: '10px', opacity: 0.95 },
+  tierBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: '8px 16px',
+    borderRadius: '20px',
+    marginBottom: '15px',
+  },
+  tierIcon: { fontSize: '24px', fontWeight: 'bold' },
+  tierText: { fontSize: '16px', fontWeight: 'bold' },
   progressContainer: { marginTop: '10px' },
   progressText: { fontSize: '14px', marginBottom: '8px' },
   progressBar: {
@@ -445,7 +521,6 @@ const styles = {
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#fff',
     borderRadius: '999px',
     transition: 'width 0.3s ease',
   },
@@ -467,6 +542,7 @@ const styles = {
   statIcon: { fontSize: '26px', marginBottom: '8px' },
   statTitle: { color: '#6b7280', fontSize: '13px' },
   statValue: { fontSize: '26px', fontWeight: 'bold', marginTop: '6px' },
+  statSubtitle: { fontSize: '11px', color: '#9ca3af', marginTop: '4px' },
   menuGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
