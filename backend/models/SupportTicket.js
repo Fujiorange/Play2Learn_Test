@@ -41,6 +41,7 @@ const supportTicketSchema = new mongoose.Schema({
   category: { type: String, default: 'general' },
   message: { type: String, required: true },
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   status: { type: String, enum: ['open', 'in-progress', 'resolved', 'closed'], default: 'open' },
   priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
   created_at: { type: Date, default: Date.now },
@@ -48,6 +49,8 @@ const supportTicketSchema = new mongoose.Schema({
   resolved_at: { type: Date },
   admin_response: { type: String }
 =======
+=======
+>>>>>>> Stashed changes
 
   // Status: open (new), pending (admin has read), closed (resolved)
   status: { type: String, enum: ['open', 'pending', 'closed'], default: 'open' },
@@ -94,6 +97,9 @@ supportTicketSchema.pre('save', async function() {
   if (this.student_email && !this.user_email) {
     this.user_email = this.student_email;
   }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 });
 
