@@ -265,7 +265,7 @@ export default function PointsManagement() {
                   <div className="shop-name">{item.name}</div>
                   <div className="shop-description">{item.description}</div>
                   <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-booster">{item.multiplier}x for {item.duration}</span></div>
-                  <div className="shop-stats">Stock: {(item.stock === -1 ? 'Unlimited' : item.stock - (item.purchaseCount || 0))} | Purchased: {item.purchaseCount || 0}</div>
+                  <div className="shop-stats">Stock: {(item.stock === -1 ? 'Unlimited' : Math.max(0, item.stock - (item.purchaseCount || 0)))} | Purchased: {item.purchaseCount || 0}</div>
                   <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
                 </div>
               ))}

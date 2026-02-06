@@ -15,6 +15,9 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
+// Default stock for shop items (unlimited-like value)
+const DEFAULT_SHOP_ITEM_STOCK = 999;
+
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -3809,7 +3812,7 @@ router.post('/shop-items', authenticateSchoolAdmin, async (req, res) => {
       icon: icon || '🎁',
       cost: parseInt(cost) || 50,
       category: category || 'cosmetic',
-      stock: stock === -1 ? -1 : (parseInt(stock) || 999),
+      stock: stock === -1 ? -1 : (parseInt(stock) || DEFAULT_SHOP_ITEM_STOCK),
       isActive: true,
       school_id: schoolId,
       purchaseCount: 0,
@@ -3858,7 +3861,10 @@ router.put('/shop-items/:itemId', authenticateSchoolAdmin, async (req, res) => {
     if (icon) updateData.icon = icon;
     if (cost !== undefined) updateData.cost = parseInt(cost);
     if (category) updateData.category = category;
-    if (stock !== undefined) updateData.stock = stock === -1 ? -1 : parseInt(stock);
+    if (stock !== undefined) {
+      // -1 means unlimited, otherwise parse as integer with fallback
+      updateData.stock = stock === -1 ? -1 : (parseInt(stock) || DEFAULT_SHOP_ITEM_STOCK);
+    }
     if (duration) updateData.duration = duration;
     if (multiplier) updateData.multiplier = parseFloat(multiplier);
     if (typeof isActive === 'boolean') updateData.isActive = isActive;
