@@ -1,8 +1,13 @@
-// CreateSupportTicket.js - School Admin version (only website-related issues)
+// CreateSupportTicket.js - School Admin version using student's working logic
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
-import schoolAdminService from '../../services/schoolAdminService';
+
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : `${window.location.origin}/api`);
 
 export default function CreateSupportTicket() {
   const navigate = useNavigate();
@@ -38,14 +43,72 @@ export default function CreateSupportTicket() {
     setMessage({ type: '', text: '' });
 
     try {
-      const result = await schoolAdminService.createSupportTicket(formData);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setMessage({ type: 'error', text: 'Not authenticated. Please log in again.' });
+        setSubmitting(false);
+        return;
+      }
 
-      if (result.success) {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user) {
+        setMessage({ type: 'error', text: 'User data not found. Please log in again.' });
+        setSubmitting(false);
+        return;
+      }
+
+      const userId = user.id || user._id || user.userId;
+      if (!userId) {
+        setMessage({ type: 'error', text: 'User ID not found. Please log in again.' });
+        setSubmitting(false);
+        return;
+      }
+
+      // Build the payload using the same structure as the working student version
+      const payload = {
+        subject: formData.subject || '',
+        category: 'website', // School admins only submit website-related tickets to P2L Admin
+        description: formData.description || '',
+        message: formData.description || '',
+        priority: formData.priority || 'normal',
+        user_id: userId,
+        user_name: user.name,
+        user_email: user.email,
+      };
+
+      console.log('📤 Sending support ticket:', payload);
+
+      // Use the school admin endpoint
+      const response = await fetch(`${API_URL}/mongo/school-admin/my-support-tickets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (!response.ok) {
+        console.error('❌ Support ticket submission failed:', result);
+        setMessage({ 
+          type: 'error', 
+          text: result?.error || result?.details || 'Failed to create support ticket' 
+        });
+      } else {
+        console.log('✅ Support ticket created successfully:', result);
         setMessage({ 
           type: 'success', 
           text: `Support ticket created successfully! We will get back to you soon.` 
         });
         
+        // Reset form after success
         setTimeout(() => {
           setFormData({ 
             category: 'website',
@@ -55,17 +118,12 @@ export default function CreateSupportTicket() {
           });
           setMessage({ type: '', text: '' });
         }, 3000);
-      } else {
-        setMessage({ 
-          type: 'error', 
-          text: result.error || 'Failed to create support ticket' 
-        });
       }
     } catch (error) {
       console.error('Create ticket error:', error);
       setMessage({ 
         type: 'error', 
-        text: 'Failed to create support ticket. Please try again.' 
+        text: 'Network error. Please check your connection and try again.' 
       });
     } finally {
       setSubmitting(false);

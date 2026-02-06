@@ -4,37 +4,17 @@ import authService from '../../services/authService';
 import schoolAdminService from '../../services/schoolAdminService';
 import './SchoolAdmin.css';
 
-// Point earning rules (automated) - these are display-only for now
-const defaultPointRules = [
-  { id: 'rule_1', action: 'Daily Login', points: 5, isActive: true },
-  { id: 'rule_2', action: 'Login Streak (7 days)', points: 20, isActive: true },
-  { id: 'rule_3', action: 'Complete Quiz', points: 10, isActive: true },
-  { id: 'rule_4', action: 'Score 90%+', points: 15, isActive: true },
-  { id: 'rule_5', action: 'Perfect Score (100%)', points: 25, isActive: true },
-  { id: 'rule_6', action: 'Retry & Improve Score', points: 10, isActive: true },
-  { id: 'rule_7', action: 'Late Quiz Completion', points: 5, isActive: true }
-];
-
 const shopIcons = ['🎁', '🦄', '🐉', '🌈', '🦁', '🐬', '🦋', '🐱', '🐶', '🦊', '🐼', '🐨', '⚡', '🚀', '✨', '💫', '🌟', '💎'];
 
 export default function PointsManagement() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [pointRules, setPointRules] = useState([]);
   const [shopItems, setShopItems] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showEditItemModal, setShowEditItemModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [adjustmentAmount, setAdjustmentAmount] = useState(5);
-  const [adjustmentRemarks, setAdjustmentRemarks] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
   const [newItemForm, setNewItemForm] = useState({ name: '', description: '', icon: '🎁', cost: 50, category: 'cosmetic', stock: 999, duration: '1 day', multiplier: 1.5 });
 
   useEffect(() => {
@@ -52,46 +32,12 @@ export default function PointsManagement() {
       if (shopResult.success) {
         setShopItems(shopResult.items || []);
       }
-      // Keep point rules as static for now
-      setPointRules(defaultPointRules);
-      setStudents([]);
-      setTransactions([]);
     } catch (error) {
       console.error('Error loading data:', error);
       setMessage({ type: 'error', text: 'Failed to load data' });
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleToggleRule = (ruleId) => {
-    setPointRules(pointRules.map(rule => rule.id === ruleId ? { ...rule, isActive: !rule.isActive } : rule));
-    setMessage({ type: 'success', text: 'Point rule updated!' });
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-  };
-
-  const handleUpdateRulePoints = (ruleId, newPoints) => {
-    setPointRules(pointRules.map(rule => rule.id === ruleId ? { ...rule, points: newPoints } : rule));
-  };
-
-  const openAdjustModal = (student) => {
-    setSelectedStudent(student);
-    setAdjustmentAmount(5);
-    setAdjustmentRemarks('');
-    setShowAdjustModal(true);
-  };
-
-  const handleAdjustPoints = () => {
-    if (!adjustmentRemarks.trim()) {
-      setMessage({ type: 'error', text: 'Please provide remarks for the adjustment' });
-      return;
-    }
-    setStudents(students.map(s => s.id === selectedStudent.id ? { ...s, points: s.points + adjustmentAmount } : s));
-    const newTransaction = { id: `tx_${Date.now()}`, studentName: selectedStudent.name, type: 'adjustment', amount: adjustmentAmount, reason: adjustmentRemarks, date: new Date().toISOString().split('T')[0], by: 'School Admin' };
-    setTransactions([newTransaction, ...transactions]);
-    setMessage({ type: 'success', text: `${adjustmentAmount > 0 ? '+' : ''}${adjustmentAmount} points ${adjustmentAmount > 0 ? 'awarded to' : 'deducted from'} ${selectedStudent.name}` });
-    setShowAdjustModal(false);
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
   const openEditItemModal = (item) => { 
@@ -158,13 +104,10 @@ export default function PointsManagement() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.email.toLowerCase().includes(searchTerm.toLowerCase()) || s.class.toLowerCase().includes(searchTerm.toLowerCase()));
-  const totalPoints = students.reduce((sum, s) => sum + s.points, 0);
-  const avgPoints = students.length > 0 ? Math.round(totalPoints / students.length) : 0;
   const cosmetics = shopItems.filter(i => i.category === 'cosmetic');
   const boosters = shopItems.filter(i => i.category === 'booster');
 
-  if (loading) return <div className="sa-loading"><div className="sa-loading-text">Loading points system...</div></div>;
+  if (loading) return <div className="sa-loading"><div className="sa-loading-text">Loading shop...</div></div>;
 
   return (
     <div className="sa-container">
@@ -179,8 +122,8 @@ export default function PointsManagement() {
       </header>
 
       <main className="sa-main-wide">
-        <h1 className="sa-page-title">💰 Points Management</h1>
-        <p className="sa-page-subtitle">Configure point rules, manage the shop, and adjust student points</p>
+        <h1 className="sa-page-title">💰 Points & Shop Management</h1>
+        <p className="sa-page-subtitle">Manage the reward shop items for students</p>
 
         {message.text && (
           <div className={`sa-message ${message.type === 'success' ? 'sa-message-success' : 'sa-message-error'}`}>
@@ -188,166 +131,35 @@ export default function PointsManagement() {
           </div>
         )}
 
-        <div className="points-tabs">
-          {['overview', 'rules', 'shop', 'students', 'history'].map(tab => (
-            <button key={tab} className={`points-tab ${activeTab === tab ? 'points-tab-active' : ''}`} onClick={() => setActiveTab(tab)}>
-              {tab === 'overview' && '📊 Overview'}{tab === 'rules' && '⚙️ Point Rules'}{tab === 'shop' && '🛒 Shop Items'}{tab === 'students' && '👥 Students'}{tab === 'history' && '📜 History'}
-            </button>
+        {/* Shop Items Section */}
+        <button className="sa-button-primary sa-mb-4" onClick={() => setShowAddItemModal(true)}>+ Add Shop Item</button>
+        <h3 className="points-card-title">🦄 Cosmetic Badges ({cosmetics.length})</h3>
+        <div className="shop-grid sa-mb-4">
+          {cosmetics.map(item => (
+            <div key={item._id || item.id} className="sa-card shop-card">
+              <div className="shop-icon">{item.icon}</div>
+              <div className="shop-name">{item.name}</div>
+              <div className="shop-description">{item.description}</div>
+              <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-type">Cosmetic</span></div>
+              <div className="shop-stats">Purchased: {item.purchaseCount || 0} times</div>
+              <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
+            </div>
           ))}
         </div>
-
-        {activeTab === 'overview' && (
-          <>
-            <div className="sa-stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-              <div className="sa-stat-card"><div className="sa-stat-icon">💰</div><p className="sa-stat-label">Total Points in Circulation</p><p className="sa-stat-value">{totalPoints.toLocaleString()}</p></div>
-              <div className="sa-stat-card"><div className="sa-stat-icon">📊</div><p className="sa-stat-label">Average Points per Student</p><p className="sa-stat-value">{avgPoints}</p></div>
-              <div className="sa-stat-card"><div className="sa-stat-icon">🛒</div><p className="sa-stat-label">Shop Items Available</p><p className="sa-stat-value">{shopItems.length}</p></div>
-              <div className="sa-stat-card"><div className="sa-stat-icon">⚙️</div><p className="sa-stat-label">Active Point Rules</p><p className="sa-stat-value">{pointRules.filter(r => r.isActive).length}</p></div>
+        <h3 className="points-card-title">⚡ Point Boosters ({boosters.length})</h3>
+        <div className="shop-grid">
+          {boosters.map(item => (
+            <div key={item._id || item.id} className="sa-card shop-card">
+              <div className="shop-icon">{item.icon}</div>
+              <div className="shop-name">{item.name}</div>
+              <div className="shop-description">{item.description}</div>
+              <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-booster">{item.multiplier}x for {item.duration}</span></div>
+              <div className="shop-stats">Stock: {(item.stock === -1 ? 'Unlimited' : Math.max(0, item.stock - (item.purchaseCount || 0)))} | Purchased: {item.purchaseCount || 0}</div>
+              <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
             </div>
-            <div className="points-overview-grid">
-              <div className="sa-card">
-                <h3 className="points-card-title">🏆 Top Students by Points</h3>
-                 <div style={{ color: '#6b7280', fontSize: '14px' }}>
-                   Live data will appear here once available.
-                 </div>
-               </div>
-               <div className="sa-card">
-                 <h3 className="points-card-title">📜 Recent Transactions</h3>
-                 <div style={{ color: '#6b7280', fontSize: '14px' }}>
-                   Live data will appear here once available.
-                 </div>
-               </div>
-             </div>
-           </>
-        )}
-
-        {activeTab === 'rules' && (
-          <div className="sa-card">
-            <h3 className="points-card-title">⚙️ Automated Point Rules</h3>
-            <p style={{ color: '#6b7280', marginBottom: '20px' }}>Configure how many points students earn for each action</p>
-            {pointRules.map(rule => (
-              <div key={rule.id} className="rule-row">
-                <div className="rule-info">
-                  <div className={`toggle-switch ${rule.isActive ? 'toggle-active' : ''}`} onClick={() => handleToggleRule(rule.id)}><div className="toggle-knob"></div></div>
-                  <span className={rule.isActive ? '' : 'rule-disabled'}>{rule.action}</span>
-                </div>
-                <div className="rule-points">
-                  <span>+</span>
-                  <input type="number" className="points-input" value={rule.points} onChange={(e) => handleUpdateRulePoints(rule.id, parseInt(e.target.value) || 0)} disabled={!rule.isActive} />
-                  <span>points</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'shop' && (
-          <>
-            <button className="sa-button-primary sa-mb-4" onClick={() => setShowAddItemModal(true)}>+ Add Shop Item</button>
-            <h3 className="points-card-title">🦄 Cosmetic Badges ({cosmetics.length})</h3>
-            <div className="shop-grid sa-mb-4">
-              {cosmetics.map(item => (
-                <div key={item._id || item.id} className="sa-card shop-card">
-                  <div className="shop-icon">{item.icon}</div>
-                  <div className="shop-name">{item.name}</div>
-                  <div className="shop-description">{item.description}</div>
-                  <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-type">Cosmetic</span></div>
-                  <div className="shop-stats">Purchased: {item.purchaseCount || 0} times</div>
-                  <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
-                </div>
-              ))}
-            </div>
-            <h3 className="points-card-title">⚡ Point Boosters ({boosters.length})</h3>
-            <div className="shop-grid">
-              {boosters.map(item => (
-                <div key={item._id || item.id} className="sa-card shop-card">
-                  <div className="shop-icon">{item.icon}</div>
-                  <div className="shop-name">{item.name}</div>
-                  <div className="shop-description">{item.description}</div>
-                  <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-booster">{item.multiplier}x for {item.duration}</span></div>
-                  <div className="shop-stats">Stock: {(item.stock === -1 ? 'Unlimited' : Math.max(0, item.stock - (item.purchaseCount || 0)))} | Purchased: {item.purchaseCount || 0}</div>
-                  <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {activeTab === 'students' && (
-          <div className="sa-card">
-            <h3 className="points-card-title">👥 Student Points</h3>
-            <input type="text" className="sa-search-input" placeholder="Search students..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ maxWidth: '300px' }} />
-            <table className="sa-table">
-              <thead><tr><th>Student</th><th>Class</th><th>Points</th><th>Active Booster</th><th>Action</th></tr></thead>
-              <tbody>
-                {filteredStudents.map(student => (
-                  <tr key={student.id}>
-                    <td><div style={{ fontWeight: '600' }}>{student.name}</div><div style={{ fontSize: '12px', color: '#6b7280' }}>{student.email}</div></td>
-                    <td>{student.class}</td>
-                    <td className="points-value">{student.points}</td>
-                    <td>{student.activeBooster ? <span className="booster-active">⚡ {student.activeBooster.name}</span> : <span style={{ color: '#9ca3af' }}>None</span>}</td>
-                    <td><button className="sa-button-action" onClick={() => openAdjustModal(student)}>Adjust Points</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="sa-card">
-            <h3 className="points-card-title">📜 Transaction History</h3>
-            <table className="sa-table">
-              <thead><tr><th>Date</th><th>Student</th><th>Type</th><th>Amount</th><th>Reason</th><th>By</th></tr></thead>
-              <tbody>
-                {transactions.map(tx => (
-                  <tr key={tx.id}>
-                    <td>{tx.date}</td>
-                    <td>{tx.studentName}</td>
-                    <td><span className={`sa-badge ${tx.type === 'earned' ? 'sa-badge-success' : tx.type === 'spent' ? 'sa-badge-danger' : 'sa-badge-primary'}`}>{tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}</span></td>
-                    <td className={tx.amount > 0 ? 'points-positive' : 'points-negative'}>{tx.amount > 0 ? '+' : ''}{tx.amount}</td>
-                    <td>{tx.reason}</td>
-                    <td>{tx.by}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
-
-      {/* Adjust Points Modal */}
-      {showAdjustModal && selectedStudent && (
-        <div className="sa-modal" onClick={() => setShowAdjustModal(false)}>
-          <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 className="sa-modal-title">💰 Adjust Points</h2>
-            <div className="student-info-box">
-              <div style={{ fontWeight: '600', fontSize: '16px' }}>{selectedStudent.name}</div>
-              <div style={{ color: '#6b7280', fontSize: '14px' }}>{selectedStudent.class}</div>
-              <div className="student-points">{selectedStudent.points} points</div>
-            </div>
-            <div className="sa-form-group">
-              <label className="sa-label">Adjustment Amount</label>
-              <div className="adjustment-buttons">
-                {[-10, -5, 5, 10].map(amount => (
-                  <button key={amount} className={`amount-button ${adjustmentAmount === amount ? 'amount-button-selected' : ''} ${amount > 0 ? 'amount-positive' : 'amount-negative'}`} onClick={() => setAdjustmentAmount(amount)}>
-                    {amount > 0 ? '+' : ''}{amount}
-                  </button>
-                ))}
-              </div>
-              <div className="new-balance">New balance: <strong>{selectedStudent.points + adjustmentAmount}</strong></div>
-            </div>
-            <div className="sa-form-group">
-              <label className="sa-label">Remarks (required) *</label>
-              <textarea className="sa-textarea" value={adjustmentRemarks} onChange={(e) => setAdjustmentRemarks(e.target.value)} placeholder="e.g., Good behavior, Helped classmate, Late submission..." style={{ minHeight: '80px' }} />
-            </div>
-            <div className="sa-modal-buttons">
-              <button className="sa-modal-button-cancel" onClick={() => setShowAdjustModal(false)}>Cancel</button>
-              <button className="sa-modal-button-confirm" onClick={handleAdjustPoints}>{adjustmentAmount > 0 ? 'Award' : 'Deduct'} Points</button>
-            </div>
-          </div>
+          ))}
         </div>
-      )}
+      </main>
 
       {/* Edit Shop Item Modal */}
       {showEditItemModal && selectedItem && (

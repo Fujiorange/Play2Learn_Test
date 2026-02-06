@@ -101,6 +101,18 @@ export default function CreateSupportTicket() {
           <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
         </div>
         
+        <div style={{ 
+          padding: '12px 16px', 
+          background: '#dbeafe', 
+          border: '1px solid #93c5fd', 
+          borderRadius: '8px', 
+          color: '#1e40af', 
+          fontSize: '14px',
+          marginBottom: '16px'
+        }}>
+          ℹ️ This form is for website-related issues. Your ticket will be sent to the P2L Admin team.
+        </div>
+        
         {message.text && (
           <div style={{...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)}}>
             {message.type === 'success' ? '✅' : '⚠️'} {message.text}
@@ -109,21 +121,17 @@ export default function CreateSupportTicket() {
         
         <form style={styles.form} onSubmit={handleSubmit}>
           <div style={styles.formGroup}>
-            <label style={styles.label}>Category *</label>
+            <label style={styles.label}>Priority</label>
             <select 
-              value={formData.category} 
-              onChange={(e) => {
-                const category = e.target.value;
-                // Auto-set routeTo based on category
-                const routeTo = category === 'school' ? 'school' : 'website';
-                setFormData({...formData, category, routeTo});
-              }} 
-              required 
+              value={formData.priority} 
+              onChange={(e) => setFormData({...formData, priority: e.target.value})} 
               disabled={submitting}
               style={styles.select}
             >
-              <option value="website">Website-Related Problem</option>
-              <option value="school">School-Related Problem</option>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
             </select>
           </div>
           

@@ -112,6 +112,9 @@ import SchoolAdminCreateSupportTicket from './components/SchoolAdmin/CreateSuppo
 import SchoolAdminTrackSupportTicket from './components/SchoolAdmin/TrackSupportTicket';
 import SchoolAdminSupportTicketManagement from './components/SchoolAdmin/SupportTicketManagement';
 
+// ⭐ NEW IMPORT - School Admin News & Updates
+import SchoolAdminViewNewsUpdates from './components/SchoolAdmin/ViewNewsUpdates';
+
 // ⭐ NEW IMPORT - Teacher Announcements
 import TeacherViewAnnouncements from './components/Teacher/ViewAnnouncements';
 
@@ -276,6 +279,9 @@ function App() {
           
           {/* ⭐ NEW ROUTE - School Admin Announcements */}
           <Route path="/school-admin/announcements" element={<ManageAnnouncements />} />
+          
+          {/* ⭐ NEW ROUTE - School Admin News & Updates */}
+          <Route path="/school-admin/news" element={<SchoolAdminViewNewsUpdates />} />
           
           {/* ⭐ NEW ROUTES - School Admin Support Tickets */}
           <Route path="/school-admin/support/create" element={<SchoolAdminCreateSupportTicket />} />

@@ -297,6 +297,15 @@ export default function SchoolAdminDashboard() {
                 <span>📢 Manage Announcements</span>
                 <span style={styles.arrow}>→</span>
               </li>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'news' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('news')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/news')}
+              >
+                <span>📰 News & Updates</span>
+                <span style={styles.arrow}>→</span>
+              </li>
             </ul>
           </div>
 

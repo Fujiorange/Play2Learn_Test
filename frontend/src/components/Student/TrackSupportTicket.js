@@ -24,7 +24,11 @@ export default function TrackSupportTicket() {
         const result = await studentService.getSupportTickets();
 
         if (result.success) {
-          setTickets(result.tickets || []);
+          // Filter to only show website-related tickets (not school-related)
+          const websiteTickets = (result.tickets || []).filter(t => 
+            t.category !== 'school' && t.category !== 'school-related-problem'
+          );
+          setTickets(websiteTickets);
         } else {
           setError('Failed to load support tickets');
           setTickets([]);

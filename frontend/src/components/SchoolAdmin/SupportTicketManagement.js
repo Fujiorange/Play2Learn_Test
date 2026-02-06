@@ -35,10 +35,11 @@ function SupportTicketManagement() {
       ]);
       
       if (ticketsResponse.success) {
-        setTickets(ticketsResponse.data || []);
+        // Backend returns tickets in 'tickets' field, not 'data'
+        setTickets(ticketsResponse.tickets || ticketsResponse.data || []);
       }
       if (statsResponse.success) {
-        setStats(statsResponse.data || { open: 0, pending: 0, closed: 0, total: 0 });
+        setStats(statsResponse.data || statsResponse.stats || { open: 0, pending: 0, closed: 0, total: 0 });
       }
     } catch (error) {
       console.error('Failed to load tickets:', error);
@@ -68,8 +69,9 @@ function SupportTicketManagement() {
     try {
       const response = await schoolAdminService.getSupportTicket(ticketId);
       if (response.success) {
-        setSelectedTicket(response.data);
-        setReplyText(response.data.admin_response || '');
+        // Backend returns 'ticket' not 'data'
+        setSelectedTicket(response.ticket || response.data);
+        setReplyText((response.ticket || response.data)?.admin_response || '');
       }
     } catch (error) {
       console.error('Failed to load ticket:', error);
