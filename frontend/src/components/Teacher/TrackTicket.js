@@ -25,9 +25,9 @@ export default function TrackTicket() {
       }
 
       try {
-        const response = await fetch(\`\${API_BASE_URL}/api/mongo/teacher/support-tickets\`, {
+        const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
           headers: {
-            'Authorization': \`Bearer \${getToken()}\`
+            'Authorization': `Bearer ${getToken()}`
           }
         });
 
@@ -39,8 +39,8 @@ export default function TrackTicket() {
           setError('Failed to load support tickets');
           setTickets([]);
         }
-      } catch (error) {
-        console.error('Load tickets error:', error);
+      } catch (err) {
+        console.error('Load tickets error:', err);
         setError('Failed to load support tickets');
         setTickets([]);
       } finally {
@@ -195,7 +195,7 @@ export default function TrackTicket() {
             <h1 style={styles.title}>
               🎫 Track Support Tickets
               {unreadReplies > 0 && (
-                <span style={styles.notificationBadge} title={\`\${unreadReplies} ticket(s) with replies\`}>
+                <span style={styles.notificationBadge} title={`${unreadReplies} ticket(s) with replies`}>
                   {unreadReplies}
                 </span>
               )}
