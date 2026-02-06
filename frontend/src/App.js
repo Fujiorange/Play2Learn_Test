@@ -107,6 +107,11 @@ import TeacherAssignment from './components/SchoolAdmin/TeacherAssignment';
 // ⭐ NEW IMPORT - School Admin Announcements
 import ManageAnnouncements from './components/SchoolAdmin/ManageAnnouncements';
 
+// ⭐ NEW IMPORTS - School Admin Support Tickets
+import SchoolAdminCreateSupportTicket from './components/SchoolAdmin/CreateSupportTicket';
+import SchoolAdminTrackSupportTicket from './components/SchoolAdmin/TrackSupportTicket';
+import SchoolAdminSupportTicketManagement from './components/SchoolAdmin/SupportTicketManagement';
+
 // ⭐ NEW IMPORT - Teacher Announcements
 import TeacherViewAnnouncements from './components/Teacher/ViewAnnouncements';
 
@@ -271,6 +276,11 @@ function App() {
           
           {/* ⭐ NEW ROUTE - School Admin Announcements */}
           <Route path="/school-admin/announcements" element={<ManageAnnouncements />} />
+          
+          {/* ⭐ NEW ROUTES - School Admin Support Tickets */}
+          <Route path="/school-admin/support/create" element={<SchoolAdminCreateSupportTicket />} />
+          <Route path="/school-admin/support/track" element={<SchoolAdminTrackSupportTicket />} />
+          <Route path="/school-admin/support-tickets" element={<SchoolAdminSupportTicketManagement />} />
 
           {/* ========== P2LADMIN ROUTES ========== */}
           {/* Redirect /platform-admin to /p2ladmin/dashboard */}

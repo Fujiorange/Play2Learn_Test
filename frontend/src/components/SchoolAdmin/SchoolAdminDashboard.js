@@ -299,6 +299,43 @@ export default function SchoolAdminDashboard() {
               </li>
             </ul>
           </div>
+
+          {/* Support */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionIcon}>🎫</span>
+              <h2 style={styles.sectionTitle}>Support</h2>
+            </div>
+            <ul style={styles.menuList}>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'support-tickets' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('support-tickets')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/support-tickets')}
+              >
+                <span>📥 Manage School Tickets</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'my-tickets' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('my-tickets')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/support/track')}
+              >
+                <span>📤 My Support Tickets</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'create-ticket' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('create-ticket')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/support/create')}
+              >
+                <span>✉️ Contact P2L Support</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </main>
     </div>

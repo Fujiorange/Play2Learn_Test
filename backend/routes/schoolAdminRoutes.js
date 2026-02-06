@@ -3493,4 +3493,98 @@ router.get('/support-tickets-stats', authenticateSchoolAdmin, async (req, res) =
   }
 });
 
+// ==================== SCHOOL ADMIN'S OWN SUPPORT TICKETS ====================
+// These are tickets created by school admin for P2L Admin (website-related)
+
+// Create a support ticket for P2L Admin
+router.post('/my-support-tickets', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { subject, message, priority } = req.body;
+    
+    if (!subject || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Subject and message are required'
+      });
+    }
+    
+    const schoolAdmin = await User.findById(req.user.userId);
+    if (!schoolAdmin) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const ticket = await SupportTicket.create({
+      user_id: schoolAdmin._id,
+      user_name: schoolAdmin.name,
+      user_email: schoolAdmin.email,
+      user_role: 'School Admin',
+      school_id: schoolAdmin.school,
+      school_name: schoolAdmin.schoolName || '',
+      subject,
+      category: 'website', // School admins only create website-related tickets
+      message,
+      status: 'open',
+      priority: priority || 'normal'
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Support ticket created successfully',
+      ticketId: ticket._id,
+      ticket: {
+        id: ticket._id,
+        subject: ticket.subject,
+        status: ticket.status,
+        created_at: ticket.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Create support ticket error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create support ticket'
+    });
+  }
+});
+
+// Get school admin's own tickets
+router.get('/my-support-tickets', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdminId = req.user.userId;
+    
+    const tickets = await SupportTicket.find({
+      user_id: schoolAdminId
+    }).sort({ created_at: -1 }).lean();
+    
+    const formattedTickets = tickets.map(t => ({
+      id: t._id,
+      ticketId: t._id,
+      subject: t.subject,
+      message: t.message,
+      status: t.status,
+      priority: t.priority,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      admin_response: t.admin_response,
+      responded_at: t.responded_at,
+      hasReply: !!t.admin_response
+    }));
+    
+    res.json({
+      success: true,
+      tickets: formattedTickets,
+      totalTickets: formattedTickets.length
+    });
+  } catch (error) {
+    console.error('Get my support tickets error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load support tickets'
+    });
+  }
+});
+
 module.exports = router;

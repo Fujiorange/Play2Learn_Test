@@ -644,6 +644,191 @@ const schoolAdminService = {
       console.error('updateStudentParent error:', error);
       return { success: false, error: error.message || 'Failed to update student-parent link' };
     }
+  },
+
+  // ==================== SUPPORT TICKETS (Own tickets to P2L Admin) ====================
+  async createSupportTicket(ticketData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/my-support-tickets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subject: ticketData.subject,
+          category: 'website', // School admins only submit website-related tickets
+          message: ticketData.description,
+          priority: ticketData.priority || 'normal'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create support ticket');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('createSupportTicket error:', error);
+      return { success: false, error: error.message || 'Failed to create support ticket' };
+    }
+  },
+
+  async getMyTickets() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/my-support-tickets`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch support tickets');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getMyTickets error:', error);
+      return { success: false, error: 'Failed to load support tickets' };
+    }
+  },
+
+  // ==================== SUPPORT TICKETS MANAGEMENT (School-related from users) ====================
+  async getSupportTickets(filters = {}) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const params = new URLSearchParams();
+      if (filters.status && filters.status !== 'all') params.append('status', filters.status);
+      if (filters.sortBy) params.append('sortBy', filters.sortBy);
+      if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+      if (filters.search) params.append('search', filters.search);
+
+      const queryString = params.toString();
+      const response = await fetch(`${API_URL}/mongo/school-admin/support-tickets${queryString ? `?${queryString}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch support tickets');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getSupportTickets error:', error);
+      return { success: false, error: 'Failed to load support tickets' };
+    }
+  },
+
+  async getSupportTicket(ticketId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/support-tickets/${ticketId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch support ticket');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getSupportTicket error:', error);
+      return { success: false, error: 'Failed to load support ticket' };
+    }
+  },
+
+  async replySupportTicket(ticketId, response) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const fetchResponse = await fetch(`${API_URL}/mongo/school-admin/support-tickets/${ticketId}/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ response })
+      });
+
+      if (!fetchResponse.ok) {
+        const error = await fetchResponse.json();
+        throw new Error(error.error || 'Failed to send reply');
+      }
+
+      return await fetchResponse.json();
+    } catch (error) {
+      console.error('replySupportTicket error:', error);
+      return { success: false, error: error.message || 'Failed to send reply' };
+    }
+  },
+
+  async closeSupportTicket(ticketId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/support-tickets/${ticketId}/close`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to close ticket');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('closeSupportTicket error:', error);
+      return { success: false, error: error.message || 'Failed to close ticket' };
+    }
+  },
+
+  async getSupportTicketStats() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/support-tickets-stats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch ticket stats');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getSupportTicketStats error:', error);
+      return { success: false, error: 'Failed to load ticket stats' };
+    }
   }
 };
 
