@@ -273,7 +273,11 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
     console.log(`✅ Found ${users.length} users`);
 
     // Map class IDs to names for display
-    const classIds = [...new Set(users.map(u => u.class).filter(Boolean))];
+    // Collect class IDs from students (class field) and teachers (assignedClasses array)
+    const studentClassIds = users.map(u => u.class).filter(Boolean);
+    const teacherClassIds = users.filter(u => u.role === 'Teacher' && u.assignedClasses && u.assignedClasses.length > 0)
+      .flatMap(u => u.assignedClasses);
+    const classIds = [...new Set([...studentClassIds, ...teacherClassIds])];
     const classLookup = {};
     if (classIds.length > 0) {
       // Filter to only valid ObjectIds to avoid query errors
@@ -340,6 +344,15 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
         const classKey = user.class ? user.class.toString() : null;
         const userIdStr = user._id.toString();
         
+        // For teachers, resolve assignedClasses IDs to class names
+        let teacherClassName = null;
+        if (user.role === 'Teacher' && user.assignedClasses && user.assignedClasses.length > 0) {
+          const resolvedClassNames = user.assignedClasses
+            .map(classId => classLookup[classId] || null)
+            .filter(Boolean);
+          teacherClassName = resolvedClassNames.length > 0 ? resolvedClassNames.join(', ') : null;
+        }
+        
         // Build response object
         const result = {
           id: user._id,
@@ -347,7 +360,7 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
           email: user.email,
           role: user.role,
           class: user.class,
-          className: classKey ? (classLookup[classKey] || classKey) : null,
+          className: user.role === 'Teacher' ? teacherClassName : (classKey ? (classLookup[classKey] || classKey) : null),
           gradeLevel: user.gradeLevel,
           subject: user.subject,
           contact: user.contact,
@@ -2989,18 +3002,34 @@ router.get('/parents/:parentId/students', authenticateSchoolAdmin, async (req, r
       return res.status(403).json({ success: false, error: 'You can only manage users from your school' });
     }
     
-    // Get linked students with details
+    // Get linked students with details (students linked to THIS parent)
     const linkedStudentIds = parent.linkedStudents?.map(ls => ls.studentId) || [];
     const linkedStudents = await User.find({
       _id: { $in: linkedStudentIds },
       role: 'Student'
     }).select('_id name email class gradeLevel');
     
-    // Get all students in the school that are NOT linked to this parent
+    // Find all students that are already linked to ANY parent in the school
+    const allParentsWithLinks = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      role: 'Parent',
+      'linkedStudents.0': { $exists: true }
+    }).select('linkedStudents');
+    
+    // Collect all student IDs that are linked to any parent
+    const allLinkedStudentIds = new Set();
+    allParentsWithLinks.forEach(p => {
+      p.linkedStudents.forEach(ls => {
+        allLinkedStudentIds.add(ls.studentId.toString());
+      });
+    });
+    
+    // Get all students in the school that are NOT linked to ANY parent
+    // (since each student can only have 1 parent)
     const availableStudents = await User.find({
       schoolId: schoolAdmin.schoolId,
       role: 'Student',
-      _id: { $nin: linkedStudentIds }
+      _id: { $nin: Array.from(allLinkedStudentIds).map(id => new mongoose.Types.ObjectId(id)) }
     }).select('_id name email class gradeLevel');
     
     // Build class lookup map to resolve class IDs to class names

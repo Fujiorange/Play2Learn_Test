@@ -259,6 +259,7 @@ export default function ManageClasses() {
     deleteButton: { background: '#fee2e2', color: '#dc2626' },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     modalContent: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '600px', width: '90%', maxHeight: '90vh', overflow: 'auto' },
+    modalContentWide: { background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '900px', width: '95%', maxHeight: '90vh', overflow: 'auto' },
     modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', marginBottom: '24px' },
     label: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' },
     input: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '16px' },
@@ -277,11 +278,22 @@ export default function ManageClasses() {
     note: { fontSize: '13px', color: '#6b7280', marginTop: '-8px', marginBottom: '16px', fontStyle: 'italic' },
     disabledSubject: { opacity: 0.5, cursor: 'not-allowed' },
     loadingSpinner: { textAlign: 'center', padding: '40px', color: '#6b7280' },
+    // Two-column layout styles for edit mode
+    twoColumnContainer: { display: 'flex', gap: '16px', marginBottom: '16px' },
+    studentColumn: { flex: 1, display: 'flex', flexDirection: 'column' },
+    columnHeader: { background: '#dbeafe', border: '2px solid #3b82f6', borderBottom: 'none', borderRadius: '8px 8px 0 0', padding: '10px 12px', fontWeight: '600', fontSize: '14px', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' },
+    columnHeaderAvailable: { background: '#f0fdf4', border: '2px solid #10b981', borderBottom: 'none', borderRadius: '8px 8px 0 0', padding: '10px 12px', fontWeight: '600', fontSize: '14px', color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' },
+    columnHeaderIcon: { fontSize: '16px' },
+    multiSelectColumn: { border: '2px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px', flex: 1, maxHeight: '200px', overflow: 'auto', background: '#f9fafb' },
+    checkboxItemInClass: { display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: '#dbeafe', marginBottom: '4px', border: '1px solid #93c5fd' },
+    checkboxItemAvailable: { display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: '#ffffff', marginBottom: '4px', border: '1px solid #e5e7eb' },
+    removeIcon: { marginLeft: 'auto', color: '#dc2626', fontWeight: 'bold', fontSize: '12px' },
+    addIcon: { marginLeft: 'auto', color: '#10b981', fontWeight: 'bold', fontSize: '16px' },
   };
 
   const renderModal = (isEdit = false) => (
     <div style={styles.modal} onClick={() => isEdit ? setShowEditModal(false) : setShowAddModal(false)}>
-      <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+      <div style={isEdit ? styles.modalContentWide : styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <h2 style={styles.modalTitle}>{isEdit ? 'Edit Class' : 'Add New Class'}</h2>
         
         <label style={styles.label}>Class Name *</label>
@@ -364,27 +376,95 @@ export default function ManageClasses() {
         </div>
 
         <label style={styles.label}>Assign Students</label>
-        <div style={styles.multiSelect}>
-          {students.length === 0 ? (
-            <p style={{ padding: '8px', color: '#6b7280' }}>No students available</p>
-          ) : (
-            students.map(student => (
-              <div
-                key={student.id}
-                style={styles.checkboxItem}
-                onClick={() => handleStudentSelection(student.id)}
-              >
-                <input
-                  type="checkbox"
-                  checked={formData.students.includes(student.id)}
-                  readOnly
-                  style={styles.checkbox}
-                />
-                <span>{student.name} ({student.email})</span>
+        {isEdit ? (
+          /* Two-column layout for edit mode: Students in Class vs Available Students */
+          <div style={styles.twoColumnContainer}>
+            {/* Left Column: Students Currently in Class */}
+            <div style={styles.studentColumn}>
+              <div style={styles.columnHeader}>
+                <span style={styles.columnHeaderIcon}>✅</span>
+                <span>Students in Class ({students.filter(s => formData.students.includes(s.id)).length})</span>
               </div>
-            ))
-          )}
-        </div>
+              <div style={styles.multiSelectColumn}>
+                {students.filter(s => formData.students.includes(s.id)).length === 0 ? (
+                  <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students assigned yet</p>
+                ) : (
+                  students.filter(s => formData.students.includes(s.id)).map(student => (
+                    <div
+                      key={student.id}
+                      style={styles.checkboxItemInClass}
+                      onClick={() => handleStudentSelection(student.id)}
+                      title="Click to remove from class"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={true}
+                        readOnly
+                        style={styles.checkbox}
+                      />
+                      <span>{student.name} ({student.email})</span>
+                      <span style={styles.removeIcon}>✕</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            {/* Right Column: Available Students */}
+            <div style={styles.studentColumn}>
+              <div style={styles.columnHeaderAvailable}>
+                <span style={styles.columnHeaderIcon}>➕</span>
+                <span>Available Students ({students.filter(s => !formData.students.includes(s.id)).length})</span>
+              </div>
+              <div style={styles.multiSelectColumn}>
+                {students.filter(s => !formData.students.includes(s.id)).length === 0 ? (
+                  <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students available</p>
+                ) : (
+                  students.filter(s => !formData.students.includes(s.id)).map(student => (
+                    <div
+                      key={student.id}
+                      style={styles.checkboxItemAvailable}
+                      onClick={() => handleStudentSelection(student.id)}
+                      title="Click to add to class"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        readOnly
+                        style={styles.checkbox}
+                      />
+                      <span>{student.name} ({student.email})</span>
+                      <span style={styles.addIcon}>+</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Single list for add mode */
+          <div style={styles.multiSelect}>
+            {students.length === 0 ? (
+              <p style={{ padding: '8px', color: '#6b7280' }}>No students available</p>
+            ) : (
+              students.map(student => (
+                <div
+                  key={student.id}
+                  style={styles.checkboxItem}
+                  onClick={() => handleStudentSelection(student.id)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.students.includes(student.id)}
+                    readOnly
+                    style={styles.checkbox}
+                  />
+                  <span>{student.name} ({student.email})</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         <div style={styles.modalButtons}>
           <button 
