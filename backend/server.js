@@ -259,7 +259,7 @@ app.use((req, res, next) => {
 // ==================== ROUTE IMPORTS & REGISTRATION ====================
 try {
   app.use('/api/mongo/auth', authRoutes); // User authentication
-  app.use('/api/mongo/student', authenticateToken, studentRoutes); // Student-specific routes
+  app.use('/api/student', authenticateToken, studentRoutes); // Student-specific routes
   app.use('/api/mongo/school-admin', authenticateToken, schoolAdminRoutes); // School admin routes
   app.use('/api/p2ladmin', p2lAdminRoutes); // P2lAdmin routes
   app.use('/api/adaptive-quiz', adaptiveQuizRoutes); // Adaptive quiz routes

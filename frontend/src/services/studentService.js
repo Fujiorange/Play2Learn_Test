@@ -82,7 +82,7 @@ const studentService = {
       if (!token) return { success: false, error: 'Not authenticated' };
 
       const response = await fetch(
-        `${API_URL}/mongo/student/placement-quiz/generate`,
+        `${API_URL}/student/placement-quiz/generate`,
         {
           method: 'POST',
           headers: {
@@ -111,7 +111,7 @@ const studentService = {
       if (!token) return { success: false, error: 'Not authenticated' };
 
       const response = await fetch(
-        `${API_URL}/mongo/student/placement-quiz/submit`,
+        `${API_URL}/student/quiz/submit-placement`,
         {
           method: 'POST',
           headers: {
@@ -135,13 +135,41 @@ const studentService = {
     }
   },
 
+  async getPlacementStatus() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(
+        `${API_URL}/student/placement-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const { json, text } = await parseJsonSafe(response);
+
+      if (!response.ok) {
+        throw new Error(json?.error || text || 'Failed to fetch placement status');
+      }
+
+      return json;
+    } catch (error) {
+      console.error('getPlacementStatus error:', error);
+      return { success: false, error: error.message || 'Failed to fetch placement status' };
+    }
+  },
+
   // ==================== REGULAR QUIZ ====================
   async generateQuiz() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/quiz/generate`, {
+      const response = await fetch(`${API_URL}/student/quiz/generate`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -167,7 +195,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/quiz/submit`, {
+      const response = await fetch(`${API_URL}/student/quiz/submit`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -195,7 +223,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/math-profile`, {
+      const response = await fetch(`${API_URL}/student/math-profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -212,7 +240,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/math-skills`, {
+      const response = await fetch(`${API_URL}/student/math-skills`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -229,7 +257,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/math-progress`, {
+      const response = await fetch(`${API_URL}/student/math-progress`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -246,7 +274,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/quiz-results`, {
+      const response = await fetch(`${API_URL}/student/quiz-results`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -263,7 +291,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/quiz-history`, {
+      const response = await fetch(`${API_URL}/student/quiz-history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -281,7 +309,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/dashboard`, {
+      const response = await fetch(`${API_URL}/student/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -320,8 +348,8 @@ const studentService = {
 
       const queryString = params.toString();
       const url = queryString 
-        ? `${API_URL}/mongo/student/leaderboard?${queryString}`
-        : `${API_URL}/mongo/student/leaderboard`;
+        ? `${API_URL}/student/leaderboard?${queryString}`
+        : `${API_URL}/student/leaderboard`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -410,7 +438,7 @@ const studentService = {
         displayName: formData.displayName
       });
 
-      const response = await fetch(`${API_URL}/mongo/student/testimonials`, {
+      const response = await fetch(`${API_URL}/student/testimonials`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -461,7 +489,7 @@ const studentService = {
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user) return { success: false, error: 'User data not found' };
 
-      const response = await fetch(`${API_URL}/mongo/student/testimonials`, {
+      const response = await fetch(`${API_URL}/student/testimonials`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -485,7 +513,7 @@ const studentService = {
 
   async getTestimonials() {
     try {
-      const response = await fetch(`${API_URL}/mongo/student/testimonials`);
+      const response = await fetch(`${API_URL}/student/testimonials`);
       if (!response.ok) throw new Error('Failed to fetch testimonials');
       return await response.json();
     } catch (error) {
@@ -500,7 +528,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/shop`, {
+      const response = await fetch(`${API_URL}/student/shop`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -517,7 +545,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/shop/${itemId}/purchase`, {
+      const response = await fetch(`${API_URL}/student/shop/${itemId}/purchase`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -539,7 +567,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/shop/purchases`, {
+      const response = await fetch(`${API_URL}/student/shop/purchases`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -557,7 +585,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/badges`, {
+      const response = await fetch(`${API_URL}/student/badges`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -574,7 +602,7 @@ const studentService = {
       const token = localStorage.getItem('token');
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${API_URL}/mongo/student/badges/progress`, {
+      const response = await fetch(`${API_URL}/student/badges/progress`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

@@ -519,6 +519,34 @@ router.get("/math-profile", async (req, res) => {
   }
 });
 
+// ==================== PLACEMENT STATUS ENDPOINT ====================
+router.get("/placement-status", async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+
+    let mathProfile = await MathProfile.findOne({ student_id: studentId });
+    
+    if (!mathProfile) {
+      return res.json({
+        success: true,
+        placementCompleted: false,
+        placementScore: null,
+        placementDate: null
+      });
+    }
+
+    res.json({
+      success: true,
+      placementCompleted: mathProfile.placement_completed || false,
+      placementScore: mathProfile.placement_score || null,
+      placementDate: mathProfile.placement_date || null
+    });
+  } catch (error) {
+    console.error("❌ Placement status error:", error);
+    res.status(500).json({ success: false, error: "Failed to check placement status" });
+  }
+});
+
 // ==================== MATH SKILLS ENDPOINT ====================
 router.get("/math-skills", async (req, res) => {
   try {
@@ -634,7 +662,7 @@ router.post("/placement-quiz/generate", async (req, res) => {
 });
 
 // ==================== PLACEMENT QUIZ - SUBMIT ====================
-router.post("/placement-quiz/submit", async (req, res) => {
+router.post("/quiz/submit-placement", async (req, res) => {
   try {
     const studentId = req.user.userId;
     const { quiz_id, answers } = req.body;
@@ -1548,3 +1576,4 @@ router.get("/badges/progress", async (req, res) => {
 });
 
 module.exports = router;
+

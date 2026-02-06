@@ -10,6 +10,25 @@ export default function StudentDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [hoveredStat, setHoveredStat] = useState(null);
+  const [placementCompleted, setPlacementCompleted] = useState(false);
+
+  // Function to fetch placement status
+  const fetchPlacementStatus = async () => {
+    try {
+      const result = await studentService.getPlacementStatus();
+      
+      if (result.success && result.placementCompleted) {
+        console.log('✅ Placement quiz completed, hiding placement card');
+        setPlacementCompleted(true);
+      } else {
+        console.log('⏳ Placement quiz not completed yet');
+        setPlacementCompleted(false);
+      }
+    } catch (error) {
+      console.error('Error fetching placement status:', error);
+      setPlacementCompleted(false);
+    }
+  };
 
   // Function to load dashboard data
   const loadDashboardData = async () => {
@@ -32,6 +51,9 @@ export default function StudentDashboard() {
       // ✅ FIXED: Load dashboard data from MongoDB
       const dashData = await studentService.getDashboard();
       console.log('📊 Dashboard data loaded:', dashData);
+
+      // 🔍 Fetch placement status
+      await fetchPlacementStatus();
 
       if (dashData.success) {
         // Accept both shapes:
@@ -194,11 +216,11 @@ export default function StudentDashboard() {
       action: () => navigate('/student/leaderboard'),
     },
     // ❌ REMOVED: Duplicate Skill Matrix was here (line 182-188)
-    // 7️⃣ Attempt Quiz
+    // 7️⃣ Placement Quiz
     {
       id: 'quiz',
-      title: 'Attempt Quiz',
-      description: 'Take a quiz to earn points & level up',
+      title: 'Placement Quiz',
+      description: 'Complete placement quiz to unlock adaptive quizzes',
       icon: '🎯',
       action: () => navigate('/student/quiz/attempt'),
     },
@@ -358,7 +380,7 @@ export default function StudentDashboard() {
         </div>
 
         <div style={styles.menuGrid}>
-          {menuItems.map((item) => (
+          {menuItems.filter(item => !(item.id === 'quiz' && placementCompleted)).map((item) => (
             <div
               key={item.id}
               style={{
@@ -531,3 +553,7 @@ const styles = {
     fontWeight: 'bold',
   },
 };
+
+
+
+

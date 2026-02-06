@@ -21,14 +21,45 @@ function AttemptAdaptiveQuiz() {
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
+  const [placementVerified, setPlacementVerified] = useState(false);
 
   useEffect(() => {
     if (quizId) {
-      startQuiz();
+      checkPlacementThenStartQuiz();
     }
   }, [quizId]);
 
   const getToken = () => localStorage.getItem('token');
+
+  const checkPlacementThenStartQuiz = async () => {
+    try {
+      // Verify placement quiz completion status
+      const response = await fetch(`${API_BASE_URL}/api/student/placement-status`, {
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.placementCompleted) {
+        setError('You must complete the placement quiz first!');
+        // Redirect to placement quiz after 2 seconds
+        setTimeout(() => {
+          navigate('/student/placement-quiz');
+        }, 2000);
+        return;
+      }
+
+      // Placement verified, proceed with starting quiz
+      setPlacementVerified(true);
+      await startQuiz();
+    } catch (error) {
+      console.error('Failed to verify placement:', error);
+      setError('Failed to verify placement status. Please try again.');
+      setLoading(false);
+    }
+  };
 
   const startQuiz = async () => {
     try {
