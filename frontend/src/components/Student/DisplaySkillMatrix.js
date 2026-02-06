@@ -258,7 +258,7 @@ export default function DisplaySkillMatrix() {
           {skills.map((skill, idx) => {
             const experiencePoints = skill.experience_points || 0;
             const tierInfo = calculateTierInfo(experiencePoints);
-            const { tier, xpInCurrentTier, xpToNextTier, tierProgress } = tierInfo;
+            const { tier, xpInCurrentTier, tierProgress } = tierInfo;
 
             const color = getSkillColor(tier, skill.max_level);
             const levelInfo = getSkillLevel(tier);
