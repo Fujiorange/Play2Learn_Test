@@ -194,11 +194,11 @@ export default function StudentDashboard() {
       action: () => navigate('/student/leaderboard'),
     },
     // ❌ REMOVED: Duplicate Skill Matrix was here (line 182-188)
-    // 7️⃣ Attempt Quiz
+    // 7️⃣ Placement Quiz
     {
       id: 'quiz',
-      title: 'Attempt Quiz',
-      description: 'Take a quiz to earn points & level up',
+      title: 'Placement Quiz',
+      description: 'Take a placement quiz to assess your skill level',
       icon: '🎯',
       action: () => navigate('/student/quiz/attempt'),
     },
