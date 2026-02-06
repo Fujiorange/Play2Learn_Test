@@ -1117,8 +1117,20 @@ router.get("/leaderboard", async (req, res) => {
 // ==================== SUPPORT TICKETS ====================
 router.post("/support-tickets", async (req, res) => {
   try {
+<<<<<<< Updated upstream
     const studentId = req.user.userId;
     const { subject, category, message, description, student_name, student_email } = req.body;
+=======
+    const userId = req.user.userId;
+    const { subject, category, message, description, student_name, student_email, user_name, user_email } = req.body;
+
+    console.log('📝 Creating support ticket:');
+    console.log('  userId:', userId);
+    console.log('  user_name:', user_name);
+    console.log('  user_email:', user_email);
+    console.log('  subject:', subject);
+    console.log('  message:', message);
+>>>>>>> Stashed changes
 
     const finalSubject = subject || 'Support Request';
     const finalMessage = message || description || '';
@@ -1130,16 +1142,38 @@ router.post("/support-tickets", async (req, res) => {
       });
     }
 
+<<<<<<< Updated upstream
     const ticket = await SupportTicket.create({
       student_id: studentId,
       student_name: student_name || req.user.name || 'Unknown',
       student_email: student_email || req.user.email || 'unknown@email.com',
+=======
+    // Create ticket with proper field mapping (use user_* fields for SupportTicket model)
+    const ticketData = {
+      user_id: userId,
+      user_name: user_name || student_name || req.user.name || 'Unknown',
+      user_email: user_email || student_email || req.user.email || 'unknown@email.com',
+>>>>>>> Stashed changes
       subject: finalSubject,
       category: category || 'general',
       message: finalMessage,
       status: 'open',
       priority: req.body.priority || 'normal',
+<<<<<<< Updated upstream
     });
+=======
+      // Keep legacy fields for backward compatibility
+      student_id: userId,
+      student_name: user_name || student_name || req.user.name || 'Unknown',
+      student_email: user_email || student_email || req.user.email || 'unknown@email.com',
+    };
+
+    console.log('📝 Ticket data to save:', ticketData);
+
+    const ticket = await SupportTicket.create(ticketData);
+
+    console.log('✅ Ticket created successfully:', ticket._id);
+>>>>>>> Stashed changes
 
     res.status(201).json({
       success: true,
@@ -1155,7 +1189,13 @@ router.post("/support-tickets", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Create support ticket error:", error);
-    res.status(500).json({ success: false, error: "Failed to create support ticket" });
+    console.error("❌ Error message:", error.message);
+    console.error("❌ Error details:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || "Failed to create support ticket",
+      details: error.toString()
+    });
   }
 });
 

@@ -12,7 +12,6 @@ export default function CreateSupportTicket() {
   const [formData, setFormData] = useState({
     category: 'website',
     priority: 'normal',
-    routeTo: 'website',
     subject: '',
     description: '',
   });
@@ -47,8 +46,7 @@ export default function CreateSupportTicket() {
         setTimeout(() => {
           setFormData({ 
             category: 'website', 
-            priority: 'normal', 
-            routeTo: 'website',
+            priority: 'normal',
             subject: '', 
             description: '' 
           });
@@ -109,15 +107,25 @@ export default function CreateSupportTicket() {
         
         <form style={styles.form} onSubmit={handleSubmit}>
           <div style={styles.formGroup}>
+            <label style={styles.label}>Priority</label>
+            <select 
+              value={formData.priority} 
+              onChange={(e) => setFormData({...formData, priority: e.target.value})} 
+              disabled={submitting}
+              style={styles.select}
+            >
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </div>
+
+          <div style={styles.formGroup}>
             <label style={styles.label}>Category *</label>
             <select 
               value={formData.category} 
-              onChange={(e) => {
-                const category = e.target.value;
-                // Auto-set routeTo based on category
-                const routeTo = category === 'school' ? 'school' : 'website';
-                setFormData({...formData, category, routeTo});
-              }} 
+              onChange={(e) => setFormData({...formData, category: e.target.value})} 
               required 
               disabled={submitting}
               style={styles.select}

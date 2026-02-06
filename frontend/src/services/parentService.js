@@ -136,6 +136,27 @@ class ParentService {
   async createSupportTicket(ticketData) {
     try {
       const token = authService.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      // Ensure required fields and proper field names
+      const payload = {
+        category: ticketData.category || 'general',
+        priority: ticketData.priority || 'normal',
+        subject: ticketData.subject || '',
+        description: ticketData.description || '',
+      };
+
+      // Validate required fields
+      if (!payload.subject || !payload.subject.trim()) {
+        return { success: false, error: 'Subject is required' };
+      }
+      if (!payload.description || !payload.description.trim()) {
+        return { success: false, error: 'Description is required' };
+      }
+
+      console.log('📤 Parent creating support ticket:', payload);
       
       const response = await fetch(`${API_BASE_URL}/support-tickets`, {
         method: 'POST',
@@ -143,21 +164,30 @@ class ParentService {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(ticketData)
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create support ticket');
+        console.error('❌ Parent ticket creation failed:', data);
+        return {
+          success: false,
+          error: data.error || data.details || 'Failed to create support ticket'
+        };
       }
 
-      return data;
+      console.log('✅ Parent ticket created successfully:', data);
+      return {
+        success: true,
+        ticketId: data.ticketId || data.ticket?.ticketId || data.ticket?._id,
+        message: data.message || 'Support ticket created successfully'
+      };
     } catch (error) {
-      console.error('Error creating support ticket:', error);
+      console.error('❌ Error creating parent support ticket:', error);
       return {
         success: false,
-        error: error.message
+        error: 'Network error. Please check your connection and try again.'
       };
     }
   }

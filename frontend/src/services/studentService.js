@@ -344,25 +344,61 @@ const studentService = {
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user) return { success: false, error: 'User data not found' };
 
+      // Get user ID - it could be id, _id, or userId
+      const userId = user.id || user._id || user.userId;
+      if (!userId) {
+        console.error('❌ User ID not found in localStorage');
+        return { success: false, error: 'User ID not found. Please log in again.' };
+      }
+
+      // Ensure required fields and proper field names
+      const payload = {
+        subject: ticketData.subject || '',
+        category: ticketData.category || 'general',
+        description: ticketData.description || '', // Backend uses 'message' but accepts 'description' as fallback
+        message: ticketData.description || '', // Also send as 'message' for backend compatibility
+        priority: ticketData.priority || 'normal',
+        // Send both user_* and student_* fields for compatibility
+        user_id: userId,
+        user_name: user.name,
+        user_email: user.email,
+        student_name: user.name,  // Legacy field for backward compatibility
+        student_email: user.email, // Legacy field for backward compatibility
+      };
+
+      console.log('📤 Sending support ticket:', payload);
+
       const response = await fetch(`${API_URL}/mongo/student/support-tickets`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...ticketData,
-          student_email: user.email,
-          student_name: user.name,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const json = await response.json();
-      if (!response.ok) return json;
-      return json;
+      const { json, text } = await parseJsonSafe(response);
+
+      if (!response.ok) {
+        console.error('❌ Support ticket submission failed:');
+        console.error('Response status:', response.status);
+        console.error('Response JSON:', json);
+        console.error('Response text:', text);
+        return {
+          success: false,
+          error: json?.error || json?.details || text || 'Failed to create support ticket'
+        };
+      }
+
+      console.log('✅ Support ticket created successfully:', json);
+      return {
+        success: true,
+        ticketId: json?.ticketId || json?.ticket_id || json?._id,
+        message: json?.message || 'Support ticket created successfully!'
+      };
     } catch (error) {
-      console.error('createSupportTicket error:', error);
-      return { success: false, error: 'Failed to create support ticket' };
+      console.error('❌ Error creating support ticket:', error);
+      return { success: false, error: 'Network error. Please check your connection and try again.' };
     }
   },
 
