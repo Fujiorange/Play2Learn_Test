@@ -25,14 +25,20 @@ export default function CreateTicket() {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/mongo/teacher/support-tickets', {
+      const user = authService.getCurrentUser();
+      
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ subject, description, priority })
+        body: JSON.stringify({
+          subject: formData.subject,
+          category: formData.category,
+          description: formData.description,
+          priority: formData.priority
+        })
       });
 
       const data = await response.json();

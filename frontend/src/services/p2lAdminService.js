@@ -240,6 +240,10 @@ export const getQuestionTopics = async () => {
   return apiCall('/api/p2ladmin/questions-topics');
 };
 
+export const getQuestionGrades = async () => {
+  return apiCall('/api/p2ladmin/questions-grades');
+};
+
 export const bulkDeleteQuestions = async (ids) => {
   return apiCall('/api/p2ladmin/questions/bulk-delete', {
     method: 'POST',
@@ -358,7 +362,46 @@ export const deleteMaintenanceBroadcast = async (id) => {
   });
 };
 
-const p2lAdminService = {
+// ==================== SUPPORT TICKETS ====================
+export const getSupportTickets = async (filters = {}) => {
+  const queryString = new URLSearchParams(filters).toString();
+  return apiCall(`/api/p2ladmin/support-tickets${queryString ? `?${queryString}` : ''}`);
+};
+
+export const getSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}`);
+};
+
+export const replySupportTicket = async (id, response) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ response }),
+  });
+};
+
+export const closeSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}/close`, {
+    method: 'POST',
+  });
+};
+
+export const getSupportTicketStats = async () => {
+  return apiCall('/api/p2ladmin/support-tickets-stats');
+};
+
+// ==================== SKILL POINTS CONFIGURATION ====================
+export const getSkillPointsConfig = async () => {
+  return apiCall('/api/p2ladmin/skill-points-config');
+};
+
+export const updateSkillPointsConfig = async (difficultyPoints) => {
+  return apiCall('/api/p2ladmin/skill-points-config', {
+    method: 'PUT',
+    body: JSON.stringify({ difficultyPoints }),
+  });
+};
+
+export default {
   seedP2LAdmin,
   registerP2LAdmin,
   getLandingPage,
@@ -400,6 +443,11 @@ const p2lAdminService = {
   getAllUsers,
   getUserSchools,
   bulkDeleteUsers,
+  getSupportTickets,
+  getSupportTicket,
+  replySupportTicket,
+  closeSupportTicket,
+  getSupportTicketStats,
+  getSkillPointsConfig,
+  updateSkillPointsConfig,
 };
-
-export default p2lAdminService;

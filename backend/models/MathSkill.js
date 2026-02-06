@@ -5,6 +5,8 @@ const mathSkillSchema = new mongoose.Schema({
   skill_name: { type: String, required: true },
   current_level: { type: Number, default: 0, min: 0, max: 5 },
   xp: { type: Number, default: 0 },
+  // New points field for difficulty-based scoring (minimum 0)
+  points: { type: Number, default: 0, min: 0 },
   unlocked: { type: Boolean, default: true },
   updatedAt: { type: Date, default: Date.now }
 });

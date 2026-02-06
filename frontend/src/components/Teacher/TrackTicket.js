@@ -1,6 +1,6 @@
 // frontend/src/components/Teacher/TrackTicket.js
 // ✅ FIXED VERSION - Uses real API
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
@@ -17,32 +17,38 @@ export default function TrackTicket() {
 
   const getToken = () => localStorage.getItem('token');
 
-  const loadTickets = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setTickets(data.tickets || []);
-      } else {
-        setError(data.error || 'Failed to load tickets');
-      }
-    } catch (err) {
-      console.error('Error loading tickets:', err);
-      setError('Failed to load tickets');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
+    const loadTickets = async () => {
+      if (!authService.isAuthenticated()) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
+          headers: {
+            'Authorization': `Bearer ${getToken()}`
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setTickets(data.tickets || []);
+        } else {
+          setError('Failed to load support tickets');
+          setTickets([]);
+        }
+      } catch (error) {
+        console.error('Load tickets error:', error);
+        setError('Failed to load support tickets');
+        setTickets([]);
+      } finally {
+        setLoading(false);
+      }
+    };
     loadTickets();
-  }, [navigate, loadTickets]);
+  }, [navigate]);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -78,157 +84,32 @@ export default function TrackTicket() {
   };
 
   const styles = {
-    container: {
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-      padding: '32px',
-    },
-    content: {
-      maxWidth: '1000px',
-      margin: '0 auto',
-    },
-    header: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '24px 32px',
-      marginBottom: '24px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    title: {
-      fontSize: '24px',
-      fontWeight: '700',
-      color: '#1f2937',
-      margin: 0,
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-    },
-    headerButtons: {
-      display: 'flex',
-      gap: '12px',
-    },
-    backButton: {
-      padding: '10px 20px',
-      background: '#6b7280',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-    },
-    createButton: {
-      padding: '10px 20px',
-      background: '#10b981',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-    },
-    filterBar: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '16px 24px',
-      marginBottom: '24px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      display: 'flex',
-      gap: '12px',
-      flexWrap: 'wrap',
-    },
-    filterButton: {
-      padding: '8px 16px',
-      border: '2px solid #e5e7eb',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.2s',
-    },
-    filterActive: {
-      background: '#10b981',
-      color: 'white',
-      borderColor: '#10b981',
-    },
-    ticketList: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px',
-    },
-    ticketCard: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '24px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-    },
-    ticketHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: '12px',
-    },
-    ticketSubject: {
-      fontSize: '18px',
-      fontWeight: '600',
-      color: '#1f2937',
-      margin: 0,
-    },
-    ticketId: {
-      fontSize: '13px',
-      color: '#6b7280',
-      fontFamily: 'monospace',
-    },
-    ticketMeta: {
-      display: 'flex',
-      gap: '12px',
-      marginBottom: '12px',
-      flexWrap: 'wrap',
-    },
-    badge: {
-      padding: '4px 12px',
-      borderRadius: '12px',
-      fontSize: '12px',
-      fontWeight: '600',
-    },
-    ticketDescription: {
-      fontSize: '15px',
-      color: '#4b5563',
-      lineHeight: '1.6',
-      margin: '0 0 16px 0',
-    },
-    ticketFooter: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingTop: '12px',
-      borderTop: '1px solid #e5e7eb',
-      fontSize: '14px',
-      color: '#6b7280',
-    },
-    emptyState: {
-      background: 'white',
-      borderRadius: '16px',
-      padding: '60px 24px',
-      textAlign: 'center',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-    },
-    error: {
-      background: '#fee2e2',
-      color: '#991b1b',
-      padding: '16px',
-      borderRadius: '12px',
-      marginBottom: '24px',
-    },
-    loading: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      height: '300px',
-    },
+    container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
+    content: { maxWidth: '1200px', margin: '0 auto' },
+    header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
+    title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
+    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    filterButtons: { display: 'flex', gap: '8px' },
+    filterButton: { padding: '8px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', background: 'white' },
+    filterButtonActive: { borderColor: '#10b981', background: '#d1fae5', color: '#065f46' },
+    ticketGrid: { display: 'flex', flexDirection: 'column', gap: '16px' },
+    ticketCard: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    ticketHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' },
+    ticketId: { fontSize: '14px', fontWeight: '700', color: '#10b981' },
+    ticketSubject: { fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '12px' },
+    ticketInfo: { display: 'flex', gap: '16px', marginBottom: '12px' },
+    ticketMeta: { display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' },
+    badge: { display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' },
+    ticketDescription: { fontSize: '15px', color: '#4b5563', lineHeight: '1.6', margin: '0 0 16px 0' },
+    ticketFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #e5e7eb', fontSize: '14px', color: '#6b7280' },
+    emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
+    createButton: { padding: '10px 20px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
+    loading: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' },
+    loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
+    loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
+    ticketList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   };
 
   if (loading) {
@@ -254,39 +135,24 @@ export default function TrackTicket() {
       <div style={styles.content}>
         {/* Header */}
         <div style={styles.header}>
-          <h1 style={styles.title}>
-            <span>📋</span> My Support Tickets
-          </h1>
-          <div style={styles.headerButtons}>
-            <button
-              style={styles.createButton}
-              onClick={() => navigate('/teacher/support/create')}
-            >
-              + New Ticket
-            </button>
-            <button style={styles.backButton} onClick={() => navigate('/teacher')}>
-              ← Back
-            </button>
+          <div style={styles.headerTop}>
+            <h1 style={styles.title}>🎫 Track Support Tickets</h1>
+            <button style={styles.backButton} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
           </div>
-        </div>
-
-        {error && <div style={styles.error}>{error}</div>}
-
-        {/* Filter Bar */}
-        <div style={styles.filterBar}>
-          {['all', 'open', 'in-progress', 'resolved', 'closed'].map(f => (
-            <button
-              key={f}
-              style={{
-                ...styles.filterButton,
-                ...(filter === f ? styles.filterActive : { background: 'white', color: '#374151' })
-              }}
-              onClick={() => setFilter(f)}
-            >
-              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1).replace('-', ' ')}
-              {' '}({f === 'all' ? tickets.length : tickets.filter(t => t.status === f).length})
-            </button>
-          ))}
+          
+          {error && (
+            <div style={styles.errorMessage}>
+              ⚠️ {error}
+            </div>
+          )}
+          
+          <div style={styles.filterButtons}>
+            {['all', 'open', 'in-progress', 'resolved'].map(status => (
+              <button key={status} onClick={() => setFilter(status)} style={{...styles.filterButton, ...(filter === status ? styles.filterButtonActive : {})}}>
+                {status === 'all' ? 'All' : status === 'in-progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Ticket List */}

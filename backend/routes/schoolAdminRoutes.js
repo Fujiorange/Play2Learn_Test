@@ -7,6 +7,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const School = require('../models/School');
 const Class = require('../models/Class');
+const SupportTicket = require('../models/SupportTicket');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
@@ -3249,6 +3250,262 @@ router.put('/students/:studentId/parent', authenticateSchoolAdmin, async (req, r
   } catch (error) {
     console.error('Update student parent error:', error);
     res.status(500).json({ success: false, error: 'Failed to update student-parent link' });
+  }
+});
+
+// ==================== SUPPORT TICKET MANAGEMENT ====================
+// Get all school-related support tickets for this school
+router.get('/support-tickets', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { status, sortBy, sortOrder, search } = req.query;
+    
+    // Get school admin info to filter tickets by school
+    const schoolAdmin = await User.findById(req.user.userId);
+    if (!schoolAdmin || !schoolAdmin.school) {
+      return res.status(400).json({
+        success: false,
+        error: 'School information not found'
+      });
+    }
+    
+    // Build query - only school-related tickets from this school
+    const query = { 
+      category: 'school',
+      school_id: schoolAdmin.school
+    };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    // Build sort object
+    const sortOptions = {};
+    const validSortFields = ['created_at', 'updated_at', 'status', 'priority'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+    sortOptions[sortField] = sortOrder === 'asc' ? 1 : -1;
+    
+    // Get tickets
+    const tickets = await SupportTicket.find(query)
+      .populate('user_id', 'name email role')
+      .populate('school_id', 'name')
+      .sort(sortOptions)
+      .lean();
+    
+    // Filter by search term if provided
+    let filteredTickets = tickets;
+    if (search && search.trim() !== '') {
+      const searchLower = search.toLowerCase();
+      filteredTickets = tickets.filter(ticket => 
+        ticket.subject?.toLowerCase().includes(searchLower) ||
+        ticket.message?.toLowerCase().includes(searchLower) ||
+        ticket.user_name?.toLowerCase().includes(searchLower) ||
+        ticket.user_email?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    res.json({
+      success: true,
+      tickets: filteredTickets.map(ticket => ({
+        _id: ticket._id,
+        user_name: ticket.user_name || 'Unknown',
+        user_email: ticket.user_email || 'N/A',
+        user_role: ticket.user_role || 'Unknown',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      })),
+      total: filteredTickets.length
+    });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support tickets' 
+    });
+  }
+});
+
+// Get single support ticket
+router.get('/support-tickets/:id', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.school // Ensure admin can only view tickets from their school
+    })
+      .populate('user_id', 'name email school')
+      .populate('school_id', 'name')
+      .lean();
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // If ticket is 'open' and admin is viewing it, change status to 'pending'
+    const updatedStatus = ticket.status === 'open' ? 'pending' : ticket.status;
+    if (ticket.status === 'open') {
+      await SupportTicket.findByIdAndUpdate(req.params.id, {
+        status: 'pending',
+        updated_at: new Date()
+      });
+    }
+    
+    res.json({
+      success: true,
+      ticket: {
+        _id: ticket._id,
+        user_name: ticket.user_name || 'Unknown',
+        user_email: ticket.user_email || 'N/A',
+        user_role: ticket.user_role || 'Unknown',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: updatedStatus, // Return the updated status
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support ticket' 
+    });
+  }
+});
+
+// Reply to a support ticket
+router.post('/support-tickets/:id/reply', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { response } = req.body;
+    
+    if (!response || response.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Response message is required' 
+      });
+    }
+    
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.school
+    });
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    ticket.admin_response = response;
+    ticket.responded_by = req.user.userId;
+    ticket.responded_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Reply sent successfully',
+      ticket: {
+        _id: ticket._id,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        status: ticket.status
+      }
+    });
+  } catch (error) {
+    console.error('Reply to support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send reply' 
+    });
+  }
+});
+
+// Close a support ticket
+router.post('/support-tickets/:id/close', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.school
+    });
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    ticket.status = 'closed';
+    ticket.closed_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Ticket closed successfully',
+      ticket: {
+        _id: ticket._id,
+        status: ticket.status,
+        closed_at: ticket.closed_at
+      }
+    });
+  } catch (error) {
+    console.error('Close support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to close ticket' 
+    });
+  }
+});
+
+// Get support ticket statistics
+router.get('/support-tickets-stats', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const [openCount, pendingCount, closedCount] = await Promise.all([
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'open' }),
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'pending' }),
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'closed' })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        open: openCount,
+        pending: pendingCount,
+        closed: closedCount,
+        total: openCount + pendingCount + closedCount
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch ticket statistics' 
+    });
   }
 });
 

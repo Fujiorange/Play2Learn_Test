@@ -113,6 +113,16 @@ function P2LAdminDashboard() {
             <p>Create and manage adaptive quizzes</p>
           </Link>
 
+          <Link to="/p2ladmin/support-tickets" className="management-card">
+            <h3>🎫 Support Tickets</h3>
+            <p>View and reply to website-related support tickets</p>
+          </Link>
+
+          <Link to="/p2ladmin/skill-points" className="management-card">
+            <h3>⚙️ Skill Points Config</h3>
+            <p>Configure difficulty points for skill matrix</p>
+          </Link>
+
           <Link to="/p2ladmin/maintenance" className="management-card">
             <h3>📢 Maintenance Broadcasts</h3>
             <p>Create system-wide announcements and alerts</p>
