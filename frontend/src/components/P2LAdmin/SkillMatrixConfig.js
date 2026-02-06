@@ -4,7 +4,7 @@ import { getXPRewards, updateXPReward } from '../../services/p2lAdminService';
 import './SkillMatrixConfig.css';
 
 function SkillMatrixConfig() {
-  const navigator = useNavigate();
+  const navigate = useNavigate();
   const [rewardMatrix, setRewardMatrix] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [statusUpdate, setStatusUpdate] = useState(null);
@@ -139,7 +139,7 @@ function SkillMatrixConfig() {
   return (
     <div className="matrix-configurator">
       <nav className="top-navigation">
-        <button onClick={() => navigator('/p2ladmin/dashboard')} className="nav-return">
+        <button onClick={() => navigate('/p2ladmin/dashboard')} className="nav-return">
           ← Dashboard
         </button>
         <div className="nav-branding">
