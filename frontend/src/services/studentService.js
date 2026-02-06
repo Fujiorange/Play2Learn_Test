@@ -344,7 +344,6 @@ const studentService = {
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user) return { success: false, error: 'User data not found' };
 
-<<<<<<< Updated upstream
       // Get user ID - it could be id, _id, or userId
       const userId = user.id || user._id || user.userId;
       if (!userId) {
@@ -356,23 +355,17 @@ const studentService = {
       const payload = {
         subject: ticketData.subject || '',
         category: ticketData.category || 'general',
-        description: ticketData.description || '', // Backend uses 'message' but accepts 'description' as fallback
-        message: ticketData.description || '', // Also send as 'message' for backend compatibility
+        description: ticketData.description || '',
+        message: ticketData.description || '',
         priority: ticketData.priority || 'normal',
-        // Send both user_* and student_* fields for compatibility
         user_id: userId,
         user_name: user.name,
         user_email: user.email,
-        student_name: user.name,  // Legacy field for backward compatibility
-        student_email: user.email, // Legacy field for backward compatibility
+        student_name: user.name,
+        student_email: user.email,
       };
 
       console.log('📤 Sending support ticket:', payload);
-=======
-      // Extract userId - check multiple possible locations
-      const userId = user.id || user._id || user.userId;
-      if (!userId) return { success: false, error: 'User ID not found in token' };
->>>>>>> Stashed changes
 
       const response = await fetch(`${API_URL}/mongo/student/support-tickets`, {
         method: 'POST',
@@ -380,7 +373,6 @@ const studentService = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-<<<<<<< Updated upstream
         body: JSON.stringify(payload),
       });
 
@@ -403,26 +395,6 @@ const studentService = {
         ticketId: json?.ticketId || json?.ticket_id || json?._id,
         message: json?.message || 'Support ticket created successfully!'
       };
-=======
-        body: JSON.stringify({
-          ...ticketData,
-          // New unified fields
-          user_id: userId,
-          user_name: user.name,
-          user_email: user.email,
-          // Legacy fields for backward compatibility
-          student_name: user.name,
-          student_email: user.email,
-        }),
-      });
-
-      const { json, text } = await parseJsonSafe(response);
-      if (!response.ok) {
-        console.error('Support ticket error response:', text);
-        return json || { success: false, error: 'Failed to create support ticket' };
-      }
-      return json;
->>>>>>> Stashed changes
     } catch (error) {
       console.error('❌ Error creating support ticket:', error);
       return { success: false, error: 'Network error. Please check your connection and try again.' };

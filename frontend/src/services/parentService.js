@@ -145,7 +145,6 @@ class ParentService {
 
       const token = authService.getToken();
       if (!token) {
-<<<<<<< Updated upstream
         return { success: false, error: 'Not authenticated' };
       }
 
@@ -166,13 +165,6 @@ class ParentService {
       }
 
       console.log('📤 Parent creating support ticket:', payload);
-=======
-        return {
-          success: false,
-          error: 'Not authenticated'
-        };
-      }
->>>>>>> Stashed changes
       
       const response = await fetch(`${API_BASE_URL}/support-tickets`, {
         method: 'POST',
@@ -180,22 +172,12 @@ class ParentService {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-<<<<<<< Updated upstream
         body: JSON.stringify(payload)
-=======
-        body: JSON.stringify({
-          category: ticketData.category || 'general',
-          priority: ticketData.priority || 'normal',
-          subject: ticketData.subject,
-          description: ticketData.description,
-        })
->>>>>>> Stashed changes
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-<<<<<<< Updated upstream
         console.error('❌ Parent ticket creation failed:', data);
         return {
           success: false,
@@ -208,29 +190,12 @@ class ParentService {
         success: true,
         ticketId: data.ticketId || data.ticket?.ticketId || data.ticket?._id,
         message: data.message || 'Support ticket created successfully'
-=======
-        console.error('Support ticket error:', data);
-        return {
-          success: false,
-          error: data.error || 'Failed to create support ticket'
-        };
-      }
-
-      return {
-        success: true,
-        ticket: data,
-        ticketId: data.ticketId || data.ticket?._id
->>>>>>> Stashed changes
       };
     } catch (error) {
       console.error('❌ Error creating parent support ticket:', error);
       return {
         success: false,
-<<<<<<< Updated upstream
         error: 'Network error. Please check your connection and try again.'
-=======
-        error: error.message || 'Failed to create support ticket'
->>>>>>> Stashed changes
       };
     }
   }
