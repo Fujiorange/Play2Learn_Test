@@ -17,10 +17,6 @@ export default function StudentList() {
   
   // Column ordering configuration: { column: 'name', ascending: true }
   const [columnOrder, setColumnOrder] = useState({ column: 'name', ascending: true });
-  
-  // Sorting state
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
 
   const getToken = () => localStorage.getItem('token');
 
