@@ -1468,8 +1468,21 @@ router.get("/testimonials", async (req, res) => {
 router.get("/shop", async (req, res) => {
   try {
     const db = mongoose.connection.db;
+    const userId = req.user.userId;
+
+    // Get user's school
+    const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(userId) });
+    const schoolId = user?.school;
+
+    // Get shop items for this school
     const shopItems = await db.collection('shop_items')
-      .find({ isActive: true })
+      .find({ 
+        isActive: true,
+        $or: [
+          { school_id: schoolId },
+          { school_id: { $exists: false } } // Include legacy items without school_id
+        ]
+      })
       .sort({ category: 1, cost: 1 })
       .toArray();
 
@@ -1606,10 +1619,21 @@ router.get("/badges", async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const userEmail = req.user.email;
+    const userId = req.user.userId;
 
-    // Get all active badges
+    // Get user's school
+    const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(userId) });
+    const schoolId = user?.school;
+
+    // Get all active badges for this school
     const badges = await db.collection('badges')
-      .find({ isActive: true })
+      .find({ 
+        isActive: true,
+        $or: [
+          { school_id: schoolId },
+          { school_id: { $exists: false } } // Include legacy badges without school_id
+        ]
+      })
       .sort({ rarity: 1, criteriaValue: 1 })
       .toArray();
 
@@ -1639,6 +1663,11 @@ router.get("/badges/progress", async (req, res) => {
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
 
     console.log(`📊 Math Profile for ${userEmail}:`, mathProfile);
+
+    // Get user's school for filtering badges
+    const db = mongoose.connection.db;
+    const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(studentId) });
+    const schoolId = user?.school;
 
     // ✅ FIX: Use Quiz model with SAME logic as Dashboard/Progress
     const allQuizzes = await StudentQuiz.find({ 
@@ -1671,9 +1700,14 @@ router.get("/badges/progress", async (req, res) => {
 
     console.log(`📊 Badge progress for ${userEmail}:`, progress);
 
-    // Check and auto-award badges
-    const db = mongoose.connection.db;
-    const badges = await db.collection('badges').find({ isActive: true }).toArray();
+    // Check and auto-award badges - filter by school
+    const badges = await db.collection('badges').find({ 
+      isActive: true,
+      $or: [
+        { school_id: schoolId },
+        { school_id: { $exists: false } }
+      ]
+    }).toArray();
     const earnedBadges = await db.collection('student_badges')
       .find({ student_email: userEmail })
       .toArray();

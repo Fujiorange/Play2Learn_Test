@@ -15,6 +15,9 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
+// Default stock for shop items (unlimited-like value)
+const DEFAULT_SHOP_ITEM_STOCK = 999;
+
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -3584,6 +3587,368 @@ router.get('/my-support-tickets', authenticateSchoolAdmin, async (req, res) => {
       success: false,
       error: 'Failed to load support tickets'
     });
+  }
+});
+
+// ==================== BADGE MANAGEMENT ENDPOINTS ====================
+
+// Get all badges for the school
+router.get('/badges', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const badges = await db.collection('badges')
+      .find({ school_id: schoolId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      badges
+    });
+  } catch (error) {
+    console.error('Get badges error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load badges' });
+  }
+});
+
+// Create a new badge
+router.post('/badges', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, criteriaType, criteriaTarget, criteriaValue, rarity, isActive } = req.body;
+
+    if (!name || !description) {
+      return res.status(400).json({ success: false, error: 'Name and description are required' });
+    }
+
+    const newBadge = {
+      name,
+      description,
+      icon: icon || '🏆',
+      criteriaType: criteriaType || 'quizzes_completed',
+      criteriaTarget: criteriaTarget || null,
+      criteriaValue: parseInt(criteriaValue) || 1,
+      rarity: rarity || 'common',
+      isActive: isActive !== false,
+      school_id: schoolId,
+      earnedCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('badges').insertOne(newBadge);
+    newBadge._id = result.insertedId;
+
+    console.log(`✅ Badge created: ${name} for school ${schoolId}`);
+
+    res.json({
+      success: true,
+      badge: newBadge,
+      message: 'Badge created successfully'
+    });
+  } catch (error) {
+    console.error('Create badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create badge' });
+  }
+});
+
+// Update a badge
+router.put('/badges/:badgeId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, criteriaType, criteriaTarget, criteriaValue, rarity, isActive } = req.body;
+
+    const updateData = {
+      updatedAt: new Date()
+    };
+
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (icon) updateData.icon = icon;
+    if (criteriaType) updateData.criteriaType = criteriaType;
+    if (criteriaTarget !== undefined) updateData.criteriaTarget = criteriaTarget;
+    if (criteriaValue) updateData.criteriaValue = parseInt(criteriaValue);
+    if (rarity) updateData.rarity = rarity;
+    if (typeof isActive === 'boolean') updateData.isActive = isActive;
+
+    const result = await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(badgeId), school_id: schoolId },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+
+    console.log(`✅ Badge updated: ${badgeId}`);
+
+    res.json({
+      success: true,
+      message: 'Badge updated successfully'
+    });
+  } catch (error) {
+    console.error('Update badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update badge' });
+  }
+});
+
+// Delete a badge
+router.delete('/badges/:badgeId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const result = await db.collection('badges').deleteOne({
+      _id: new mongoose.Types.ObjectId(badgeId),
+      school_id: schoolId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+
+    // Also remove student badges associated with this badge
+    await db.collection('student_badges').deleteMany({
+      badge_id: new mongoose.Types.ObjectId(badgeId)
+    });
+
+    console.log(`✅ Badge deleted: ${badgeId}`);
+
+    res.json({
+      success: true,
+      message: 'Badge deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete badge' });
+  }
+});
+
+// Toggle badge active status
+router.patch('/badges/:badgeId/toggle', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const badge = await db.collection('badges').findOne({
+      _id: new mongoose.Types.ObjectId(badgeId),
+      school_id: schoolId
+    });
+
+    if (!badge) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+
+    await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(badgeId) },
+      { $set: { isActive: !badge.isActive, updatedAt: new Date() } }
+    );
+
+    res.json({
+      success: true,
+      isActive: !badge.isActive,
+      message: `Badge ${!badge.isActive ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Toggle badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to toggle badge' });
+  }
+});
+
+// ==================== SHOP MANAGEMENT ENDPOINTS ====================
+
+// Get all shop items for the school
+router.get('/shop-items', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const items = await db.collection('shop_items')
+      .find({ school_id: schoolId })
+      .sort({ category: 1, cost: 1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      items
+    });
+  } catch (error) {
+    console.error('Get shop items error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load shop items' });
+  }
+});
+
+// Create a new shop item
+router.post('/shop-items', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, cost, category, stock, duration, multiplier } = req.body;
+
+    if (!name || !description) {
+      return res.status(400).json({ success: false, error: 'Name and description are required' });
+    }
+
+    const newItem = {
+      name,
+      description,
+      icon: icon || '🎁',
+      cost: parseInt(cost) || 50,
+      category: category || 'cosmetic',
+      stock: stock === -1 ? -1 : (parseInt(stock) || DEFAULT_SHOP_ITEM_STOCK),
+      isActive: true,
+      school_id: schoolId,
+      purchaseCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Add booster-specific fields if applicable
+    if (category === 'booster') {
+      newItem.duration = duration || '1 day';
+      newItem.multiplier = parseFloat(multiplier) || 1.5;
+    }
+
+    const result = await db.collection('shop_items').insertOne(newItem);
+    newItem._id = result.insertedId;
+
+    console.log(`✅ Shop item created: ${name} for school ${schoolId}`);
+
+    res.json({
+      success: true,
+      item: newItem,
+      message: 'Shop item created successfully'
+    });
+  } catch (error) {
+    console.error('Create shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create shop item' });
+  }
+});
+
+// Update a shop item
+router.put('/shop-items/:itemId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, cost, category, stock, duration, multiplier, isActive } = req.body;
+
+    const updateData = {
+      updatedAt: new Date()
+    };
+
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (icon) updateData.icon = icon;
+    if (cost !== undefined) updateData.cost = parseInt(cost);
+    if (category) updateData.category = category;
+    if (stock !== undefined) {
+      // -1 means unlimited, otherwise parse as integer with fallback
+      updateData.stock = stock === -1 ? -1 : (parseInt(stock) || DEFAULT_SHOP_ITEM_STOCK);
+    }
+    if (duration) updateData.duration = duration;
+    if (multiplier) updateData.multiplier = parseFloat(multiplier);
+    if (typeof isActive === 'boolean') updateData.isActive = isActive;
+
+    const result = await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId), school_id: schoolId },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+
+    console.log(`✅ Shop item updated: ${itemId}`);
+
+    res.json({
+      success: true,
+      message: 'Shop item updated successfully'
+    });
+  } catch (error) {
+    console.error('Update shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update shop item' });
+  }
+});
+
+// Delete a shop item
+router.delete('/shop-items/:itemId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const result = await db.collection('shop_items').deleteOne({
+      _id: new mongoose.Types.ObjectId(itemId),
+      school_id: schoolId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+
+    console.log(`✅ Shop item deleted: ${itemId}`);
+
+    res.json({
+      success: true,
+      message: 'Shop item deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete shop item' });
+  }
+});
+
+// Toggle shop item active status
+router.patch('/shop-items/:itemId/toggle', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const item = await db.collection('shop_items').findOne({
+      _id: new mongoose.Types.ObjectId(itemId),
+      school_id: schoolId
+    });
+
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+
+    await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId) },
+      { $set: { isActive: !item.isActive, updatedAt: new Date() } }
+    );
+
+    res.json({
+      success: true,
+      isActive: !item.isActive,
+      message: `Shop item ${!item.isActive ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Toggle shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to toggle shop item' });
   }
 });
 

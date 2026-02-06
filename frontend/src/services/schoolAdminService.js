@@ -829,6 +829,260 @@ const schoolAdminService = {
       console.error('getSupportTicketStats error:', error);
       return { success: false, error: 'Failed to load ticket stats' };
     }
+  },
+
+  // ==================== BADGE MANAGEMENT ====================
+  async getBadges() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/badges`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch badges');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getBadges error:', error);
+      return { success: false, error: 'Failed to load badges' };
+    }
+  },
+
+  async createBadge(badgeData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/badges`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(badgeData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create badge');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('createBadge error:', error);
+      return { success: false, error: error.message || 'Failed to create badge' };
+    }
+  },
+
+  async updateBadge(badgeId, badgeData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/badges/${badgeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(badgeData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update badge');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('updateBadge error:', error);
+      return { success: false, error: error.message || 'Failed to update badge' };
+    }
+  },
+
+  async deleteBadge(badgeId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/badges/${badgeId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete badge');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('deleteBadge error:', error);
+      return { success: false, error: error.message || 'Failed to delete badge' };
+    }
+  },
+
+  async toggleBadge(badgeId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/badges/${badgeId}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to toggle badge');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('toggleBadge error:', error);
+      return { success: false, error: error.message || 'Failed to toggle badge' };
+    }
+  },
+
+  // ==================== SHOP MANAGEMENT ====================
+  async getShopItems() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/shop-items`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch shop items');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getShopItems error:', error);
+      return { success: false, error: 'Failed to load shop items' };
+    }
+  },
+
+  async createShopItem(itemData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/shop-items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(itemData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create shop item');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('createShopItem error:', error);
+      return { success: false, error: error.message || 'Failed to create shop item' };
+    }
+  },
+
+  async updateShopItem(itemId, itemData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/shop-items/${itemId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(itemData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update shop item');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('updateShopItem error:', error);
+      return { success: false, error: error.message || 'Failed to update shop item' };
+    }
+  },
+
+  async deleteShopItem(itemId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/shop-items/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete shop item');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('deleteShopItem error:', error);
+      return { success: false, error: error.message || 'Failed to delete shop item' };
+    }
+  },
+
+  async toggleShopItem(itemId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/shop-items/${itemId}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to toggle shop item');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('toggleShopItem error:', error);
+      return { success: false, error: error.message || 'Failed to toggle shop item' };
+    }
   }
 };
 

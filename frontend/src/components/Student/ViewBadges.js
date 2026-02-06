@@ -24,10 +24,17 @@ export default function ViewBadges() {
 
   const criteriaLabels = {
     quizzes_completed: 'Quizzes Completed',
+    assignments_completed: 'Assignments Completed',
     login_streak: 'Login Streak (days)',
     perfect_scores: 'Perfect Scores',
     high_scores: 'High Scores (90%+)',
-    points_earned: 'Total Points Earned'
+    points_earned: 'Total Points Earned',
+    // Support legacy criteria types
+    quiz_count: 'Quizzes Completed',
+    assignment_count: 'Assignments Completed',
+    perfect_score: 'Perfect Scores',
+    high_score_count: 'High Scores (90%+)',
+    total_points: 'Total Points Earned'
   };
 
   useEffect(() => {
