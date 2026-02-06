@@ -26,7 +26,10 @@ export default function TeacherDashboard() {
   const loadDashboard = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/mongo/teacher/dashboard', {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 
+        (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+      
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/dashboard`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -209,23 +212,23 @@ export default function TeacherDashboard() {
         <div style={styles.statsGrid}>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>👥</div>
-            <p style={styles.statValue}>{dashboardData?.total_students || 0}</p>
+            <p style={styles.statValue}>{dashboardData?.data?.total_students || 0}</p>
             <p style={styles.statLabel}>Total Students</p>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>📚</div>
-            <p style={styles.statValue}>{dashboardData?.assigned_classes?.length || 0}</p>
+            <p style={styles.statValue}>{dashboardData?.data?.total_courses || dashboardData?.data?.assigned_classes?.length || 0}</p>
             <p style={styles.statLabel}>My Classes</p>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>🎯</div>
-            <p style={styles.statValue}>{dashboardData?.active_quizzes || 0}</p>
+            <p style={styles.statValue}>{dashboardData?.data?.active_assignments || 0}</p>
             <p style={styles.statLabel}>Active Quizzes</p>
           </div>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>📊</div>
-            <p style={styles.statValue}>{dashboardData?.average_score?.toFixed(0) || 0}%</p>
-            <p style={styles.statLabel}>Avg. Score</p>
+            <p style={styles.statValue}>{dashboardData?.data?.avg_performance || 0}%</p>
+            <p style={styles.statLabel}>Avg. Performance</p>
           </div>
         </div>
 

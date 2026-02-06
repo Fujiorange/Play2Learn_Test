@@ -14,6 +14,13 @@ export default function StudentList() {
   const [filterClass, setFilterClass] = useState('all');
   const [myClasses, setMyClasses] = useState([]);
   const [error, setError] = useState('');
+  
+  // Column ordering configuration: { column: 'name', ascending: true }
+  const [columnOrder, setColumnOrder] = useState({ column: 'name', ascending: true });
+  
+  // Sorting state
+  const [sortField, setSortField] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   const getToken = () => localStorage.getItem('token');
 
@@ -64,7 +71,57 @@ export default function StudentList() {
     return matchesSearch && matchesClass;
   }), [students, searchTerm, filterClass]);
 
+  // Apply ordering to filtered results
+  const orderedStudents = useMemo(() => {
+    const studentsCopy = [...filteredStudents];
+    const { column, ascending } = columnOrder;
+    
+    studentsCopy.sort((first, second) => {
+      let firstVal, secondVal;
+      
+      if (column === 'name') {
+        firstVal = first.name?.toLowerCase() || '';
+        secondVal = second.name?.toLowerCase() || '';
+      } else if (column === 'class') {
+        firstVal = first.class?.toLowerCase() || '';
+        secondVal = second.class?.toLowerCase() || '';
+      } else if (column === 'grade') {
+        firstVal = first.gradeLevel?.toLowerCase() || '';
+        secondVal = second.gradeLevel?.toLowerCase() || '';
+      } else if (column === 'points') {
+        firstVal = first.points || 0;
+        secondVal = second.points || 0;
+      } else if (column === 'level') {
+        firstVal = first.level || 1;
+        secondVal = second.level || 1;
+      } else if (column === 'status') {
+        firstVal = first.accountActive !== false ? 1 : 0;
+        secondVal = second.accountActive !== false ? 1 : 0;
+      }
+      
+      if (firstVal < secondVal) return ascending ? -1 : 1;
+      if (firstVal > secondVal) return ascending ? 1 : -1;
+      return 0;
+    });
+    
+    return studentsCopy;
+  }, [filteredStudents, columnOrder]);
+
   const uniqueClasses = useMemo(() => ['all', ...myClasses], [myClasses]);
+
+  // Toggle column ordering when header clicked
+  const toggleColumnOrder = (columnName) => {
+    setColumnOrder(current => ({
+      column: columnName,
+      ascending: current.column === columnName ? !current.ascending : true
+    }));
+  };
+
+  // Display indicator for current ordering
+  const getOrderIndicator = (columnName) => {
+    if (columnOrder.column !== columnName) return ' ⇅';
+    return columnOrder.ascending ? ' ▲' : ' ▼';
+  };
 
   const averagePoints = useMemo(() => {
     if (students.length === 0) return 0;
@@ -179,6 +236,18 @@ export default function StudentList() {
       fontWeight: '600',
       color: '#6b7280',
       textTransform: 'uppercase',
+    },
+    thClickable: {
+      textAlign: 'left',
+      padding: '12px',
+      borderBottom: '2px solid #e5e7eb',
+      fontSize: '13px',
+      fontWeight: '600',
+      color: '#6b7280',
+      textTransform: 'uppercase',
+      cursor: 'pointer',
+      userSelect: 'none',
+      transition: 'color 0.2s',
     },
     td: {
       padding: '16px 12px',
@@ -310,21 +379,63 @@ export default function StudentList() {
         </div>
 
         <div style={styles.tableContainer}>
-          {filteredStudents.length > 0 ? (
+          {orderedStudents.length > 0 ? (
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>Student Name</th>
-                  <th style={styles.th}>Class</th>
-                  <th style={styles.th}>Grade</th>
-                  <th style={styles.th}>Points</th>
-                  <th style={styles.th}>Level</th>
-                  <th style={styles.th}>Status</th>
+                  <th 
+                    style={styles.thClickable} 
+                    onClick={() => toggleColumnOrder('name')}
+                    onMouseEnter={(e) => e.target.style.color = '#10b981'}
+                    onMouseLeave={(e) => e.target.style.color = '#6b7280'}
+                  >
+                    Student Name{getOrderIndicator('name')}
+                  </th>
+                  <th 
+                    style={styles.thClickable}
+                    onClick={() => toggleColumnOrder('class')}
+                    onMouseEnter={(e) => e.target.style.color = '#10b981'}
+                    onMouseLeave={(e) => e.target.style.color = '#6b7280'}
+                  >
+                    Class{getOrderIndicator('class')}
+                  </th>
+                  <th 
+                    style={styles.thClickable}
+                    onClick={() => toggleColumnOrder('grade')}
+                    onMouseEnter={(e) => e.target.style.color = '#10b981'}
+                    onMouseLeave={(e) => e.target.style.color = '#6b7280'}
+                  >
+                    Grade{getOrderIndicator('grade')}
+                  </th>
+                  <th 
+                    style={styles.thClickable}
+                    onClick={() => toggleColumnOrder('points')}
+                    onMouseEnter={(e) => e.target.style.color = '#10b981'}
+                    onMouseLeave={(e) => e.target.style.color = '#6b7280'}
+                  >
+                    Points{getOrderIndicator('points')}
+                  </th>
+                  <th 
+                    style={styles.thClickable}
+                    onClick={() => toggleColumnOrder('level')}
+                    onMouseEnter={(e) => e.target.style.color = '#10b981'}
+                    onMouseLeave={(e) => e.target.style.color = '#6b7280'}
+                  >
+                    Level{getOrderIndicator('level')}
+                  </th>
+                  <th 
+                    style={styles.thClickable}
+                    onClick={() => toggleColumnOrder('status')}
+                    onMouseEnter={(e) => e.target.style.color = '#10b981'}
+                    onMouseLeave={(e) => e.target.style.color = '#6b7280'}
+                  >
+                    Status{getOrderIndicator('status')}
+                  </th>
                   <th style={styles.th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map(student => (
+                {orderedStudents.map(student => (
                   <tr
                     key={student._id}
                     style={styles.studentRow}

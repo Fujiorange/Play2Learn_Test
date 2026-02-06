@@ -408,6 +408,12 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
           createdAt: user.createdAt,
         };
         
+        // Add assigned classes for teachers
+        if (user.role === 'Teacher' || user.role === 'Trial Teacher') {
+          result.assignedClasses = user.assignedClasses || [];
+          result.assignedSubjects = user.assignedSubjects || [];
+        }
+        
         // Add linked parent for students
         if (user.role === 'Student' && studentParentLookup[userIdStr]) {
           result.linkedParent = studentParentLookup[userIdStr];

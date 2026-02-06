@@ -72,8 +72,13 @@ export default function TeacherManagement() {
         bValue = b.email?.toLowerCase() || '';
         break;
       case 'className':
-        aValue = a.className?.toLowerCase() || '';
-        bValue = b.className?.toLowerCase() || '';
+        // Handle assignedClasses array or className string
+        aValue = (a.assignedClasses && a.assignedClasses.length > 0) 
+          ? a.assignedClasses.join(', ').toLowerCase() 
+          : (a.className?.toLowerCase() || '');
+        bValue = (b.assignedClasses && b.assignedClasses.length > 0)
+          ? b.assignedClasses.join(', ').toLowerCase()
+          : (b.className?.toLowerCase() || '');
         break;
       default:
         return 0;
@@ -257,7 +262,11 @@ export default function TeacherManagement() {
                     <tr key={teacher.id}>
                       <td style={styles.td}><strong>{teacher.name}</strong></td>
                       <td style={styles.td}>{teacher.email}</td>
-                      <td style={styles.td}>{teacher.className || 'Not assigned'}</td>
+                      <td style={styles.td}>
+                        {teacher.assignedClasses && teacher.assignedClasses.length > 0
+                          ? teacher.assignedClasses.join(', ')
+                          : teacher.className || 'Not assigned'}
+                      </td>
                       <td style={styles.td}>
                         <button style={styles.viewButton} onClick={() => setSelectedTeacher(teacher)}>
                           View
@@ -300,7 +309,11 @@ export default function TeacherManagement() {
             </div>
             <div style={styles.detailRow}>
               <span style={styles.detailLabel}>Class:</span>
-              <span style={styles.detailValue}>{selectedTeacher.className || 'Not assigned'}</span>
+              <span style={styles.detailValue}>
+                {selectedTeacher.assignedClasses && selectedTeacher.assignedClasses.length > 0
+                  ? selectedTeacher.assignedClasses.join(', ')
+                  : selectedTeacher.className || 'Not assigned'}
+              </span>
             </div>
             <div style={styles.detailRow}>
               <span style={styles.detailLabel}>Contact No.:</span>
