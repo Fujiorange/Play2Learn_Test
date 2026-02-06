@@ -326,19 +326,14 @@ const schoolAdminService = {
     }
   },
 
-  async getAvailableTeachers(includeClassId) {
+  async getAvailableTeachers() {
     try {
       const token = this.getToken();
       if (!token) {
         return { success: false, error: 'Not authenticated' };
       }
 
-      let url = `${API_URL}/mongo/school-admin/classes/available/teachers`;
-      if (includeClassId) {
-        url += `?includeClassId=${includeClassId}`;
-      }
-
-      const response = await fetch(url, {
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/available/teachers`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -511,34 +506,6 @@ const schoolAdminService = {
       return await response.json();
     } catch (error) {
       console.error('sendUserCredentials error:', error);
-      return { success: false, error: error.message || 'Failed to send credentials' };
-    }
-  },
-
-  async bulkSendCredentials(userIds) {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const response = await fetch(`${API_URL}/mongo/school-admin/users/bulk-send-credentials`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ userIds })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send credentials');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('bulkSendCredentials error:', error);
       return { success: false, error: error.message || 'Failed to send credentials' };
     }
   },

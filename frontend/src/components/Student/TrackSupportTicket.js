@@ -115,7 +115,7 @@ export default function TrackSupportTicket() {
                 <div style={styles.ticketSubject}>{ticket.subject}</div>
                 <div style={styles.ticketInfo}>
                   <span style={{ fontSize: '13px', color: '#6b7280' }}>📁 {ticket.category}</span>
-
+                  <span style={{ fontSize: '13px', color: '#6b7280' }}>🔔 {ticket.priority} priority</span>
                   <span style={{ fontSize: '13px', color: '#6b7280' }}>📅 Created: {ticket.createdOn}</span>
                   <span style={{ fontSize: '13px', color: '#6b7280' }}>🔄 Updated: {ticket.lastUpdate}</span>
                 </div>

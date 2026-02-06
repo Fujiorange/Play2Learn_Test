@@ -5,8 +5,8 @@ import authService from '../../services/authService';
 export default function ViewFeedback() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState([]);
-  const [error, setError] = useState('');
+  const [feedbackList, setFeedbackList] = useState([]);
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     const loadFeedback = async () => {
@@ -15,83 +15,93 @@ export default function ViewFeedback() {
         return;
       }
 
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/mongo/teacher/feedback', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          setFeedback(data.feedback || []);
-        } else {
-          setError(data.error || 'Failed to load feedback');
-        }
-      } catch (error) {
-        console.error('Error loading feedback:', error);
-        setError('Failed to connect to server');
-      } finally {
-        setLoading(false);
-      }
+      const mockFeedback = [
+        { id: 1, from: 'Parent of John Doe', date: '2024-12-10', subject: 'Thank you for the support', category: 'general', status: 'unread', message: 'Thank you for helping John with his mathematics. He is showing great improvement!' },
+        { id: 2, from: 'Parent of Jane Smith', date: '2024-12-09', subject: 'Question about homework', category: 'academic', status: 'read', message: 'I have a question about the homework assigned yesterday...' },
+        { id: 3, from: 'Student - Mike Johnson', date: '2024-12-08', subject: 'Request for extra help', category: 'academic', status: 'read', message: 'Could I get some extra help with the science project?' },
+      ];
+      
+      setFeedbackList(mockFeedback);
+      setLoading(false);
     };
 
     loadFeedback();
   }, [navigate]);
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-  };
+  const filteredFeedback = filter === 'all' ? feedbackList : feedbackList.filter(f => f.status === filter);
 
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
-    content: { maxWidth: '900px', margin: '0 auto' },
-    header: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' },
-    title: { fontSize: '28px', fontWeight: '700', color: '#1e293b', marginBottom: '8px' },
-    card: { background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' },
-    backBtn: { padding: '10px 20px', background: '#f1f5f9', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '500', marginBottom: '20px' },
-    emptyState: { textAlign: 'center', padding: '60px 20px', color: '#64748b', background: 'white', borderRadius: '16px' },
-    badge: { padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' },
+    content: { maxWidth: '1200px', margin: '0 auto' },
+    header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
+    title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
+    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    filterButtons: { display: 'flex', gap: '8px' },
+    filterButton: { padding: '8px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', background: 'white' },
+    filterButtonActive: { borderColor: '#10b981', background: '#d1fae5', color: '#065f46' },
+    feedbackList: { display: 'flex', flexDirection: 'column', gap: '16px' },
+    feedbackCard: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', cursor: 'pointer', transition: 'all 0.3s' },
+    feedbackHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' },
+    feedbackFrom: { fontSize: '16px', fontWeight: '600', color: '#1f2937' },
+    feedbackDate: { fontSize: '13px', color: '#6b7280' },
+    feedbackSubject: { fontSize: '15px', fontWeight: '600', color: '#374151', marginBottom: '8px' },
+    feedbackMessage: { fontSize: '14px', color: '#6b7280', lineHeight: '1.5' },
+    badge: { display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', marginTop: '12px', marginRight: '8px' },
+    unreadBadge: { background: '#dbeafe', color: '#1e40af' },
+    readBadge: { background: '#f3f4f6', color: '#6b7280' },
+    categoryBadge: { background: '#fef3c7', color: '#92400e' },
+    emptyState: { textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: '16px', color: '#6b7280' },
+    loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
+    loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
   };
 
-  if (loading) {
-    return <div style={styles.container}><div style={styles.content}><div style={{ textAlign: 'center', padding: '60px' }}><p>Loading feedback...</p></div></div></div>;
-  }
+  if (loading) return (<div style={styles.loadingContainer}><div style={styles.loadingText}>Loading feedback...</div></div>);
 
   return (
     <div style={styles.container}>
       <div style={styles.content}>
-        <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
-        
         <div style={styles.header}>
-          <h1 style={styles.title}>📬 Feedback History</h1>
-          <p style={{ color: '#64748b' }}>View feedback you've sent to students</p>
+          <div style={styles.headerTop}>
+            <h1 style={styles.title}>📬 Received Feedback</h1>
+            <button style={styles.backButton} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
+          </div>
+          <div style={styles.filterButtons}>
+            {['all', 'unread', 'read'].map(status => (
+              <button key={status} onClick={() => setFilter(status)} style={{...styles.filterButton, ...(filter === status ? styles.filterButtonActive : {})}}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px' }}>{error}</div>}
-
-        {feedback.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={{ fontSize: '48px', marginBottom: '10px' }}>📭</p>
-            <p style={{ fontSize: '18px', fontWeight: '500' }}>No feedback sent yet</p>
-            <p>Feedback you send will appear here</p>
+        {filteredFeedback.length > 0 ? (
+          <div style={styles.feedbackList}>
+            {filteredFeedback.map(feedback => (
+              <div key={feedback.id} style={styles.feedbackCard} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={styles.feedbackHeader}>
+                  <div style={styles.feedbackFrom}>{feedback.from}</div>
+                  <div style={styles.feedbackDate}>{feedback.date}</div>
+                </div>
+                <div style={styles.feedbackSubject}>{feedback.subject}</div>
+                <div style={styles.feedbackMessage}>{feedback.message}</div>
+                <div>
+                  <span style={{...styles.badge, ...(feedback.status === 'unread' ? styles.unreadBadge : styles.readBadge)}}>
+                    {feedback.status === 'unread' ? '🔵 Unread' : '✓ Read'}
+                  </span>
+                  <span style={{...styles.badge, ...styles.categoryBadge}}>
+                    📁 {feedback.category}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          feedback.map((item) => (
-            <div key={item._id} style={styles.card}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontWeight: '600', color: '#1e293b' }}>To: {item.studentName}</span>
-                <span style={{ ...styles.badge, background: '#dbeafe', color: '#1d4ed8' }}>{item.type}</span>
-              </div>
-              <p style={{ color: '#475569', marginBottom: '12px' }}>{item.content}</p>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>{formatDate(item.createdAt)}</span>
-            </div>
-          ))
+          <div style={styles.emptyState}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No feedback found</p>
+            <p>You don't have any {filter === 'all' ? '' : filter} feedback yet</p>
+          </div>
         )}
       </div>
     </div>

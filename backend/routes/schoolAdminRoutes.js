@@ -1,4 +1,14 @@
-﻿const express = require('express');
+// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX
+// ✅ Queries USERS collection correctly for dashboard stats
+// ✅ Parent CSV import with linkedStudents integration
+// ✅ FIXED: Student credentials email now sends correct parameters
+// backend/routes/schoolAdminRoutes.js - COMPLETE VERSION WITH EMAIL FIX + ANNOUNCEMENTS
+// ✅ Queries USERS collection correctly for dashboard stats
+// ✅ Parent CSV import with linkedStudents integration
+// ✅ FIXED: Student credentials email now sends correct parameters
+// ⭐ NEW: Added announcement routes from Wei Xiang's implementation
+// backend/routes/schoolAdminRoutes.js - COMPREHENSIVE FIX
+const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const csv = require('csv-parser');
@@ -121,20 +131,18 @@ async function checkStudentLinkedToParent(studentId) {
   return { isLinked: false };
 }
 
-// â­ Helper to get MongoDB database (for announcements)
+// ⭐ Helper to get MongoDB database (for announcements)
 const getDb = () => mongoose.connection.db;
 
 // ==================== DASHBOARD STATS (FIXED!) ====================
 router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
   try {
-    console.log('ðŸ“Š Fetching dashboard stats...');
+    console.log('📊 Fetching dashboard stats...');
     
     const schoolAdmin = req.schoolAdmin;
     const schoolId = schoolAdmin.schoolId;
     
-    console.log('ðŸ” Admin:', schoolAdmin.email, 'SchoolId:', schoolId, 'Type:', typeof schoolId);
-    
-    // âœ… FIX: Query the 'users' collection with role field, scoped to school
+    // ✅ FIX: Query the 'users' collection with role field, scoped to school
     const [
       totalStudents,
       totalTeachers,
@@ -147,12 +155,7 @@ router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
       Class.countDocuments({ school_id: schoolId })
     ]);
 
-    console.log(`âœ… Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents, ${totalClasses} classes`);
-    
-    // Debug: Check what's actually in DB
-    const allStudents = await User.countDocuments({ role: 'Student' });
-    const allTeachers = await User.countDocuments({ role: 'Teacher' });
-    console.log(`ðŸ“Š Total in DB (all schools): ${allStudents} students, ${allTeachers} teachers`);
+    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents, ${totalClasses} classes`);
 
     res.json({
       success: true,
@@ -162,7 +165,7 @@ router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
       total_classes: totalClasses
     });
   } catch (error) {
-    console.error('âŒ Dashboard stats error:', error);
+    console.error('❌ Dashboard stats error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to load dashboard stats',
@@ -252,14 +255,6 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
     const schoolAdmin = req.schoolAdmin;
     const { gradeLevel, subject, role } = req.query;
     
-    // âœ… DEBUG: Log admin info
-    console.log('ðŸ” Admin user:', {
-      id: schoolAdmin._id,
-      email: schoolAdmin.email,
-      schoolId: schoolAdmin.schoolId,
-      schoolIdType: typeof schoolAdmin.schoolId
-    });
-    
     // Filter by school ID to ensure school admin only sees their school's users
     const filter = { schoolId: schoolAdmin.schoolId };
     
@@ -278,61 +273,23 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
       filter.subject = subject;
     }
 
-    console.log('ðŸ” Fetching users with filter:', JSON.stringify(filter, null, 2));
-    
-    // âœ… DEBUG: Count all users with this schoolId first
-    const totalWithSchoolId = await User.countDocuments({ schoolId: schoolAdmin.schoolId });
-    console.log(`ðŸ“Š Total users with schoolId ${schoolAdmin.schoolId}: ${totalWithSchoolId}`);
-    
-    // âœ… DEBUG: Check if there are ANY teachers
-    const allTeachers = await User.find({ role: 'Teacher' }).select('email schoolId');
-    console.log('ðŸ“Š All teachers in DB:', allTeachers.map(t => ({ email: t.email, schoolId: t.schoolId })));
+    console.log('🔍 Fetching users with filter:', filter);
 
     const users = await User.find(filter)
       .select('-password')
       .sort({ createdAt: -1 });
 
-    console.log(`âœ… Found ${users.length} users matching filter`);
+    console.log(`✅ Found ${users.length} users`);
 
-    // Map class values to display names
-    // Note: user.class can be either an ObjectId OR a class name string
-    const classValues = [...new Set(users.map(u => u.class).filter(Boolean))];
+    // Map class IDs to names for display
+    const classIds = [...new Set(users.map(u => u.class).filter(Boolean))];
     const classLookup = {};
-    
-    if (classValues.length > 0) {
-      // Filter out non-ObjectId values (class names like "1A", "1-Excellence")
-      const mongoose = require('mongoose');
-      const validObjectIds = classValues.filter(id => {
-        try {
-          return mongoose.Types.ObjectId.isValid(id) && String(new mongoose.Types.ObjectId(id)) === id;
-        } catch {
-          return false;
-        }
+    if (classIds.length > 0) {
+      const classDocs = await Class.find({ _id: { $in: classIds }, school_id: schoolAdmin.schoolId })
+        .select('class_name');
+      classDocs.forEach(cls => {
+        classLookup[cls._id.toString()] = cls.class_name;
       });
-      
-      // Only query if we have valid ObjectIds
-      if (validObjectIds.length > 0) {
-        const classDocs = await Class.find({ _id: { $in: validObjectIds }, school_id: schoolAdmin.schoolId })
-          .select('class_name');
-        classDocs.forEach(cls => {
-          classLookup[cls._id.toString()] = cls.class_name;
-        });
-      }
-      
-      // For string class names, use them directly
-      classValues.forEach(cv => {
-        if (!classLookup[cv]) {
-          classLookup[cv] = cv; // Use the string value as-is
-        }
-      });
-      
-      if (validClassIds.length > 0) {
-        const classDocs = await Class.find({ _id: { $in: validClassIds }, school_id: schoolAdmin.schoolId })
-          .select('class_name');
-        classDocs.forEach(cls => {
-          classLookup[cls._id.toString()] = cls.class_name;
-        });
-      }
     }
 
     // For students, find their linked parent
@@ -420,7 +377,7 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
       })
     });
   } catch (error) {
-    console.error('âŒ Get users error:', error);
+    console.error('❌ Get users error:', error);
     res.status(500).json({ success: false, error: 'Failed to load users' });
   }
 });
@@ -443,14 +400,8 @@ router.get('/users/:id/details', authenticateSchoolAdmin, async (req, res) => {
     // Get class name if applicable
     let className = null;
     if (user.class) {
-      // Only lookup if it's a valid ObjectId
-      if (mongoose.Types.ObjectId.isValid(user.class)) {
-        const classDoc = await Class.findById(user.class).select('class_name');
-        className = classDoc ? classDoc.class_name : user.class;
-      } else {
-        // If it's not a valid ObjectId, it might be a plain class name string
-        className = user.class;
-      }
+      const classDoc = await Class.findById(user.class).select('class_name');
+      className = classDoc ? classDoc.class_name : null;
     }
     
     const result = {
@@ -509,7 +460,7 @@ router.get('/users/:id/details', authenticateSchoolAdmin, async (req, res) => {
     
     res.json({ success: true, user: result });
   } catch (error) {
-    console.error('âŒ Get user details error:', error);
+    console.error('❌ Get user details error:', error);
     res.status(500).json({ success: false, error: 'Failed to load user details' });
   }
 });
@@ -540,14 +491,14 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
     
     res.json({ success: true, message: 'User updated' });
   } catch (error) {
-    console.error('âŒ Update user error:', error);
+    console.error('❌ Update user error:', error);
     res.status(500).json({ success: false, error: 'Failed to update user' });
   }
 });
 
 // ==================== BULK IMPORT STUDENTS (FIXED - NO DUPLICATE PROFILE) ====================
 router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import students request received');
+  console.log('\n📤 Bulk import students request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -562,7 +513,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     });
   }
 
-  console.log('ðŸ“„ Parsing CSV file...');
+  console.log('📄 Parsing CSV file...');
   
   const students = [];
   const results = {
@@ -592,16 +543,16 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           });
         })
         .on('end', () => {
-          console.log(`âœ… Found ${students.length} students in CSV`);
+          console.log(`✅ Found ${students.length} students in CSV`);
           resolve();
         })
         .on('error', (error) => {
-          console.error('âŒ CSV parsing error:', error);
+          console.error('❌ CSV parsing error:', error);
           reject(error);
         });
     });
 
-    console.log('\nðŸ”„ Processing students...\n');
+    console.log('\n🔄 Processing students...\n');
 
     // Get school data once for all operations
     const schoolData = await School.findById(schoolAdmin.schoolId);
@@ -609,27 +560,21 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
       throw new Error('School not found');
     }
 
-    // Build a class name to ID lookup for the school
-    const allClasses = await Class.find({ school_id: schoolAdmin.schoolId }).select('_id class_name');
-    const classNameToId = {};
-    allClasses.forEach(cls => {
-      classNameToId[cls.class_name.toLowerCase()] = cls._id.toString();
-    });
     
     // Track students created in this batch for atomic update at the end
     let studentsCreatedCount = 0;
 
-    // âœ… FIX: Only create user in 'users' collection, NO separate student profile
+    // ✅ FIX: Only create user in 'users' collection, NO separate student profile
     for (const studentData of students) {
       try {
-        console.log(`ðŸ‘¤ Processing: ${studentData.name} (${studentData.email})`);
+        console.log(`👤 Processing: ${studentData.name} (${studentData.email})`);
         
         // Check license availability using cached school data
         const currentStudents = (schoolData.current_students || 0) + studentsCreatedCount;
         const studentLimit = schoolData.plan_info.student_limit;
         
         if (currentStudents >= studentLimit) {
-          console.log(`âš ï¸  License limit reached - stopping bulk import`);
+          console.log(`⚠️  License limit reached - stopping bulk import`);
           results.limitReached = true;
           const processedCount = results.created + results.failed;
           results.errors.push({ 
@@ -643,7 +588,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         
         // Validate required fields
         if (!studentData.name || !studentData.email) {
-          console.log(`âš ï¸  Skipping - Missing required fields`);
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
             email: studentData.email || 'unknown', 
@@ -655,7 +600,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         // Check if user already exists
         const existingUser = await User.findOne({ email: studentData.email });
         if (existingUser) {
-          console.log(`âš ï¸  Skipping - Email already exists: ${studentData.email}`);
+          console.log(`⚠️  Skipping - Email already exists: ${studentData.email}`);
           results.failed++;
           results.errors.push({ 
             email: studentData.email, 
@@ -666,7 +611,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
 
         // Generate password
         const tempPassword = generateTempPassword('Student');
-        console.log(`ðŸ”‘ Generated password: ${tempPassword}`);
+        console.log(`🔑 Generated password: ${tempPassword}`);
         
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const username = studentData.email.split('@')[0];
@@ -693,24 +638,12 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
               parsedDateOfBirth = null;
             }
           } catch (error) {
-            console.log(`âš ï¸  Invalid date format: ${studentData.dateOfBirth}`);
+            console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}`);
             parsedDateOfBirth = null;
           }
         }
 
-        // Resolve class name to class ID
-        let classId = null;
-        const className = studentData.class?.trim() || null;
-        if (className) {
-          const classKey = className.toLowerCase();
-          if (classNameToId[classKey]) {
-            classId = classNameToId[classKey];
-          } else {
-            console.log(`âš ï¸ Class "${className}" not found for student ${studentData.email}. User will be created without class assignment.`);
-          }
-        }
-
-        // âœ… Create ONLY user document in 'users' collection
+        // ✅ Create ONLY user document in 'users' collection
         const newUser = await User.create({
           name: studentData.name.trim(),
           email: studentData.email.toLowerCase().trim(),
@@ -718,7 +651,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           password: hashedPassword,
           role: 'Student',
           schoolId: schoolAdmin.schoolId,
-          class: classId,
+          class: studentData.class?.trim() || null,
           gradeLevel: studentData.gradeLevel?.trim() || 'Primary 1',
           parentEmail: studentData.parentEmail?.toLowerCase().trim() || null,
           contact: studentData.contact?.trim() || null,
@@ -733,22 +666,17 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           createdAt: new Date()
         });
 
-        // If student has a class, add them to the Class.students array
-        if (classId) {
-          await Class.findByIdAndUpdate(classId, { $addToSet: { students: newUser._id } });
-        }
-
-        console.log(`âœ… Student created in users collection: ${newUser.email}`);
+        console.log(`✅ Student created in users collection: ${newUser.email}`);
         results.created++;
         studentsCreatedCount++; // Track for batch update
 
         // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
         // The school admin can manually decide when to send credentials via that page
-        console.log(`ðŸ“‹ Credentials saved to pending page for: ${newUser.email}`);
+        console.log(`📋 Credentials saved to pending page for: ${newUser.email}`);
         results.emailsFailed++; // Count as not sent (available on pending page)
 
       } catch (error) {
-        console.error(`âŒ Error creating student:`, error);
+        console.error(`❌ Error creating student:`, error);
         results.failed++;
         results.errors.push({ 
           email: studentData.email, 
@@ -767,7 +695,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
 
     fs.unlinkSync(req.file.path);
 
-    console.log('\nâœ… Bulk import completed!');
+    console.log('\n✅ Bulk import completed!');
     console.log(`   Created: ${results.created}`);
     console.log(`   Failed: ${results.failed}`);
     console.log(`   Emails sent: ${results.emailsSent}`);
@@ -785,7 +713,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     });
 
   } catch (error) {
-    console.error('âŒ Bulk import error:', error);
+    console.error('❌ Bulk import error:', error);
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -795,7 +723,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
 
 // ==================== BULK IMPORT TEACHERS ====================
 router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import teachers request received');
+  console.log('\n📤 Bulk import teachers request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -834,7 +762,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           });
         })
         .on('end', () => {
-          console.log(`âœ… Found ${teachers.length} teachers in CSV`);
+          console.log(`✅ Found ${teachers.length} teachers in CSV`);
           resolve();
         })
         .on('error', reject);
@@ -856,7 +784,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
         const teacherLimit = schoolData.plan_info.teacher_limit;
         
         if (currentTeachers >= teacherLimit) {
-          console.log(`âš ï¸  License limit reached - stopping bulk import`);
+          console.log(`⚠️  License limit reached - stopping bulk import`);
           results.limitReached = true;
           const processedCount = results.created + results.failed;
           results.errors.push({ 
@@ -907,17 +835,17 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           createdBy: 'school-admin'
         });
 
-        console.log(`âœ… Teacher created: ${newTeacher.email}`);
+        console.log(`✅ Teacher created: ${newTeacher.email}`);
         results.created++;
         teachersCreatedCount++; // Track for batch update
 
         // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
         // The school admin can manually decide when to send credentials via that page
-        console.log(`ðŸ“‹ Credentials saved to pending page for: ${newTeacher.email}`);
+        console.log(`📋 Credentials saved to pending page for: ${newTeacher.email}`);
         results.emailsFailed++; // Count as not sent (available on pending page)
 
       } catch (error) {
-        console.error(`âŒ Error creating teacher:`, error);
+        console.error(`❌ Error creating teacher:`, error);
         results.failed++;
         results.errors.push({ 
           email: teacherData.email, 
@@ -948,7 +876,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
     });
 
   } catch (error) {
-    console.error('âŒ Bulk import error:', error);
+    console.error('❌ Bulk import error:', error);
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -958,7 +886,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
 
 // ==================== BULK IMPORT PARENTS (COMPLETE VERSION WITH LINKEDSTUDENTS) ====================
 router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import parents request received');
+  console.log('\n📤 Bulk import parents request received');
   
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -973,7 +901,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
     });
   }
 
-  console.log('ðŸ“„ Parsing CSV file...');
+  console.log('📄 Parsing CSV file...');
   
   const parents = [];
   const results = {
@@ -1000,16 +928,16 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           });
         })
         .on('end', () => {
-          console.log(`âœ… Found ${parents.length} parent records in CSV`);
+          console.log(`✅ Found ${parents.length} parent records in CSV`);
           resolve();
         })
         .on('error', (error) => {
-          console.error('âŒ CSV parsing error:', error);
+          console.error('❌ CSV parsing error:', error);
           reject(error);
         });
     });
 
-    console.log('\nðŸ”„ Processing parents...\n');
+    console.log('\n🔄 Processing parents...\n');
 
     // Get school name for emails
     const schoolData = await School.findById(schoolAdmin.schoolId);
@@ -1021,11 +949,11 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
       const rowNum = i + 2; // CSV row number (header is row 1)
 
       try {
-        console.log(`\nðŸ‘¤ Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
+        console.log(`\n👤 Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
 
         // Validate required fields
         if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
-          console.log(`âš ï¸  Skipping - Missing required fields`);
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1038,7 +966,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         // Validate email formats
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(parentData.parentEmail)) {
-          console.log(`âš ï¸  Skipping - Invalid parent email format`);
+          console.log(`⚠️  Skipping - Invalid parent email format`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1049,7 +977,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         }
 
         if (!emailRegex.test(parentData.studentEmail)) {
-          console.log(`âš ï¸  Skipping - Invalid student email format`);
+          console.log(`⚠️  Skipping - Invalid student email format`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1066,7 +994,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         });
 
         if (!student) {
-          console.log(`âš ï¸  Skipping - Student not found: ${parentData.studentEmail}`);
+          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1076,7 +1004,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           continue;
         }
 
-        console.log(`âœ… Found student: ${student.name} (${student.email})`);
+        console.log(`✅ Found student: ${student.name} (${student.email})`);
 
         // Check if parent already exists
         const existingParent = await User.findOne({ 
@@ -1085,7 +1013,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 
         if (existingParent) {
           // Parent exists - just add student link if not already linked
-          console.log(`â„¹ï¸  Parent already exists: ${existingParent.email}`);
+          console.log(`ℹ️  Parent already exists: ${existingParent.email}`);
 
           // Initialize linkedStudents array if it doesn't exist
           if (!existingParent.linkedStudents) {
@@ -1098,7 +1026,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           );
 
           if (alreadyLinked) {
-            console.log(`â„¹ï¸  Parent already linked to student ${student.email}`);
+            console.log(`ℹ️  Parent already linked to student ${student.email}`);
             results.details.push({
               row: rowNum,
               parentName: existingParent.name,
@@ -1126,7 +1054,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
               await student.save();
             }
 
-            console.log(`âœ… Linked existing parent to new student`);
+            console.log(`✅ Linked existing parent to new student`);
             results.updated++;
             
             results.details.push({
@@ -1146,7 +1074,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 
         // Parent doesn't exist - create new parent account
         const tempPassword = generateTempPassword('Parent');
-        console.log(`ðŸ”‘ Generated password for new parent: ${tempPassword}`);
+        console.log(`🔑 Generated password for new parent: ${tempPassword}`);
 
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -1176,19 +1104,19 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           createdAt: new Date()
         });
 
-        console.log(`âœ… Created new parent: ${newParent.email}`);
+        console.log(`✅ Created new parent: ${newParent.email}`);
         results.created++;
 
         // Update student's parentEmail
         if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
           student.parentEmail = parentData.parentEmail.toLowerCase().trim();
           await student.save();
-          console.log(`âœ… Updated student's parentEmail field`);
+          console.log(`✅ Updated student's parentEmail field`);
         }
 
         // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
         // The school admin can manually decide when to send credentials via that page
-        console.log(`ðŸ“‹ Credentials saved to pending page for: ${newParent.email}`);
+        console.log(`📋 Credentials saved to pending page for: ${newParent.email}`);
         results.emailsFailed++; // Count as not sent (available on pending page)
 
         results.details.push({
@@ -1204,7 +1132,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         });
 
       } catch (error) {
-        console.error(`âŒ Error processing row ${rowNum}:`, error);
+        console.error(`❌ Error processing row ${rowNum}:`, error);
         results.failed++;
         results.errors.push({
           row: rowNum,
@@ -1217,7 +1145,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
     // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
-    console.log('\nâœ… Parent bulk import completed!');
+    console.log('\n✅ Parent bulk import completed!');
     console.log(`   Created: ${results.created}`);
     console.log(`   Updated (linked): ${results.updated}`);
     console.log(`   Failed: ${results.failed}`);
@@ -1241,7 +1169,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
     });
 
   } catch (error) {
-    console.error('âŒ Bulk import parents error:', error);
+    console.error('❌ Bulk import parents error:', error);
     
     // Clean up uploaded file if it exists
     if (req.file && fs.existsSync(req.file.path)) {
@@ -1257,7 +1185,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 
 // ==================== BULK IMPORT ALL USERS (roles defined per row) ====================
 router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import mixed users request received');
+  console.log('\n📤 Bulk import mixed users request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -1281,13 +1209,6 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
         .on('data', (row) => rows.push(row))
         .on('end', () => resolve())
         .on('error', (error) => reject(error));
-    });
-
-    // Build a class name to ID lookup for the school
-    const allClasses = await Class.find({ school_id: schoolAdmin.schoolId }).select('_id class_name');
-    const classNameToId = {};
-    allClasses.forEach(cls => {
-      classNameToId[cls.class_name.toLowerCase()] = cls._id.toString();
     });
 
     for (const [index, row] of rows.entries()) {
@@ -1340,71 +1261,24 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
           }
         }
 
-        // Resolve class name to class ID for students
-        let classId = null;
-        const className = row.Class || row.class || null;
-        if (role === 'Student' && className) {
-          const classKey = className.toLowerCase().trim();
-          if (classNameToId[classKey]) {
-            classId = classNameToId[classKey];
-          } else {
-            // Class not found - still create user but without class assignment
-            console.log(`âš ï¸ Class "${className}" not found for student ${row.Email}. User will be created without class assignment.`);
-          }
-        }
-
-        // Parse date of birth
-        let parsedDateOfBirth = null;
-        const dateStr = row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || null;
-        if (dateStr) {
-          try {
-            const trimmedDate = dateStr.trim();
-            if (trimmedDate.includes('-')) {
-              parsedDateOfBirth = new Date(trimmedDate);
-            } else if (trimmedDate.includes('/')) {
-              const parts = trimmedDate.split('/');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1;
-                const year = parseInt(parts[2]);
-                parsedDateOfBirth = new Date(year, month, day);
-              }
-            }
-            if (parsedDateOfBirth && isNaN(parsedDateOfBirth.getTime())) {
-              parsedDateOfBirth = null;
-            }
-          } catch (dateErr) {
-            console.log(`âš ï¸ Invalid date format: ${dateStr}`);
-            parsedDateOfBirth = null;
-          }
-        }
-
-        const newUser = await User.create({
+        await User.create({
           name: row.Name,
           email: row.Email,
           password: hashedPassword,
           role,
           schoolId: schoolAdmin.schoolId,
-          salutation: (role === 'Teacher' || role === 'Parent') ? (row.Salutation || row.salutation || null) : null,
           contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || null,
           gender: row.Gender || row.gender || null,
-          date_of_birth: parsedDateOfBirth,
-          class: role === 'Student' ? classId : null,
+          date_of_birth: row.DateOfBirth || row.dateOfBirth || row['Date of Birth'] || row.date_of_birth || null,
+          class: role === 'Student' ? (row.Class || row.class || null) : null,
           gradeLevel: role === 'Student' ? (row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || 'Primary 1') : null,
           subject: role === 'Teacher' ? (row.Subject || row.subject || 'Mathematics') : null,
           linkedStudents: role === 'Parent' ? linkedStudents : undefined,
           emailVerified: true,
           accountActive: true,
           requirePasswordChange: true,
-          tempPassword: tempPassword,
-          credentialsSent: false,
           createdBy: 'school-admin'
         });
-
-        // If student has a class, add them to the Class.students array
-        if (role === 'Student' && classId) {
-          await Class.findByIdAndUpdate(classId, { $addToSet: { students: newUser._id } });
-        }
 
         if (role === 'Teacher' || role === 'Student') {
           const incrementField = role === 'Teacher' ? 'current_teachers' : 'current_students';
@@ -1422,8 +1296,7 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
       }
     }
 
-    // Return both 'results' and 'summary' for backward compatibility
-    res.json({ success: true, message: 'Bulk import completed', results: summary, summary });
+    res.json({ success: true, message: 'Bulk import completed', summary });
   } catch (error) {
     console.error('Bulk import users error:', error);
     res.status(500).json({ success: false, error: 'Failed to import users: ' + error.message });
@@ -1825,7 +1698,6 @@ router.get('/students-without-parent', authenticateSchoolAdmin, async (req, res)
 router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = req.schoolAdmin;
-    const { deleteParents } = req.query; // Optional: comma-separated list of parent IDs to delete
     
     // First find the user to get their role and class assignments
     const user = await User.findById(req.params.id);
@@ -1847,64 +1719,18 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
       );
     }
     
-    // If user is a student, handle parent relationships
-    let affectedParents = [];
+    // If user is a student, remove them from their assigned class
     if (user.role === 'Student') {
-      // Remove student from their assigned class
       await Class.updateMany(
         { students: user._id },
         { $pull: { students: user._id } }
-      );
-      
-      // Find parents who have this student linked
-      const parentsWithStudent = await User.find({
-        role: 'Parent',
-        schoolId: schoolAdmin.schoolId,
-        'linkedStudents.studentId': user._id
-      });
-      
-      // Check each parent and categorize them
-      for (const parent of parentsWithStudent) {
-        const hasOnlyThisStudent = parent.linkedStudents.length === 1;
-        affectedParents.push({
-          id: parent._id,
-          name: parent.name,
-          email: parent.email,
-          hasOnlyThisStudent: hasOnlyThisStudent
-        });
-      }
-      
-      // If deleteParents query param is provided, delete those parents concurrently
-      if (deleteParents) {
-        const parentIdsToDelete = deleteParents.split(',');
-        const deletePromises = parentIdsToDelete
-          .filter(parentId => {
-            const parentToDelete = parentsWithStudent.find(p => String(p._id) === parentId);
-            return parentToDelete && parentToDelete.linkedStudents.length === 1;
-          })
-          .map(parentId => User.findByIdAndDelete(parentId));
-        await Promise.all(deletePromises);
-      }
-      
-      // Remove student from all remaining parents' linkedStudents array
-      await User.updateMany(
-        { 
-          role: 'Parent', 
-          schoolId: schoolAdmin.schoolId,
-          'linkedStudents.studentId': user._id 
-        },
-        { $pull: { linkedStudents: { studentId: user._id } } }
       );
     }
     
     // Now delete the user
     await User.findByIdAndDelete(req.params.id);
     
-    res.json({ 
-      success: true, 
-      message: 'User deleted successfully',
-      affectedParents: affectedParents
-    });
+    res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete user' });
@@ -1974,35 +1800,6 @@ router.get('/users/pending-credentials', authenticateSchoolAdmin, async (req, re
       role: { $in: ['Teacher', 'Student', 'Parent'] }
     }).select('name email role tempPassword class gradeLevel createdAt');
     
-    // Build class lookup map to resolve class IDs to class names
-    const classIds = [...new Set(users.map(u => u.class).filter(Boolean))];
-    const classLookup = {};
-    if (classIds.length > 0) {
-      // Filter to only valid ObjectIds
-      const validClassIds = classIds.filter(id => {
-        try {
-          return mongoose.Types.ObjectId.isValid(id);
-        } catch (e) {
-          return false;
-        }
-      });
-      
-      if (validClassIds.length > 0) {
-        const classDocs = await Class.find({ _id: { $in: validClassIds }, school_id: schoolAdmin.schoolId })
-          .select('class_name');
-        classDocs.forEach(cls => {
-          classLookup[cls._id.toString()] = cls.class_name;
-        });
-      }
-    }
-    
-    // Helper function to resolve class name
-    const resolveClassName = (classId) => {
-      if (!classId) return null;
-      const classKey = classId.toString();
-      return classLookup[classKey] || classKey;
-    };
-    
     // Format response
     const formattedUsers = users.map(user => ({
       id: user._id,
@@ -2010,7 +1807,7 @@ router.get('/users/pending-credentials', authenticateSchoolAdmin, async (req, re
       email: user.email,
       role: user.role,
       tempPassword: user.tempPassword,
-      className: resolveClassName(user.class),
+      className: user.class || null,
       gradeLevel: user.gradeLevel || null,
       createdAt: user.createdAt
     }));
@@ -2125,115 +1922,6 @@ router.post('/users/:id/send-credentials', authenticateSchoolAdmin, async (req, 
   }
 });
 
-// POST bulk send credentials to multiple users
-router.post('/users/bulk-send-credentials', authenticateSchoolAdmin, async (req, res) => {
-  try {
-    const schoolAdmin = req.schoolAdmin;
-    const { userIds } = req.body;
-    
-    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-      return res.status(400).json({ success: false, error: 'No users selected' });
-    }
-    
-    // Get school name
-    const schoolData = await School.findById(schoolAdmin.schoolId);
-    const schoolName = schoolData ? schoolData.organization_name : 'Your School';
-    
-    const results = {
-      success: [],
-      failed: []
-    };
-    
-    // Process each user
-    for (const userId of userIds) {
-      try {
-        const user = await User.findById(userId);
-        
-        if (!user) {
-          results.failed.push({ userId, error: 'User not found' });
-          continue;
-        }
-        
-        // Verify the user belongs to the school admin's school
-        if (String(user.schoolId) !== String(schoolAdmin.schoolId)) {
-          results.failed.push({ userId, email: user.email, error: 'User not from your school' });
-          continue;
-        }
-        
-        // Check if tempPassword exists
-        if (!user.tempPassword) {
-          results.failed.push({ userId, email: user.email, error: 'No temporary password found' });
-          continue;
-        }
-        
-        // Send email based on role
-        let emailSent = false;
-        try {
-          if (user.role === 'Teacher') {
-            await sendTeacherWelcomeEmail(user, user.tempPassword, schoolName);
-            emailSent = true;
-          } else if (user.role === 'Student') {
-            const linkedParent = await User.findOne({
-              role: 'Parent',
-              'linkedStudents.studentId': user._id
-            });
-            
-            if (linkedParent) {
-              await sendStudentCredentialsToParent(user, user.tempPassword, linkedParent.email, schoolName);
-            } else {
-              await sendStudentCredentialsToParent(user, user.tempPassword, user.email, schoolName);
-            }
-            emailSent = true;
-          } else if (user.role === 'Parent') {
-            let studentName = 'your child';
-            if (user.linkedStudents && user.linkedStudents.length > 0) {
-              const firstStudent = await User.findById(user.linkedStudents[0].studentId);
-              if (firstStudent && firstStudent.name) {
-                studentName = firstStudent.name;
-              }
-            }
-            await sendParentWelcomeEmail(user, user.tempPassword, studentName, schoolName);
-            emailSent = true;
-          }
-        } catch (emailError) {
-          console.error(`Email sending error for ${user.email}:`, emailError);
-          results.failed.push({ userId, email: user.email, error: 'Failed to send email' });
-          continue;
-        }
-        
-        if (emailSent) {
-          // Update user to mark credentials as sent
-          await User.findByIdAndUpdate(userId, {
-            credentialsSent: true,
-            credentialsSentAt: new Date(),
-            tempPassword: null
-          });
-          
-          results.success.push({
-            userId,
-            email: user.email,
-            name: user.name
-          });
-        } else {
-          results.failed.push({ userId, email: user.email, error: 'Unable to send email for this user role' });
-        }
-      } catch (error) {
-        console.error(`Error processing user ${userId}:`, error);
-        results.failed.push({ userId, error: error.message });
-      }
-    }
-    
-    res.json({
-      success: true,
-      message: `Sent credentials to ${results.success.length} users. ${results.failed.length} failed.`,
-      results
-    });
-  } catch (error) {
-    console.error('Bulk send credentials error:', error);
-    res.status(500).json({ success: false, error: 'Failed to send credentials' });
-  }
-});
-
 // ==================== GET CLASSES ====================
 // ==================== CLASS MANAGEMENT ROUTES ====================
 
@@ -2282,27 +1970,12 @@ router.get('/classes', authenticateSchoolAdmin, async (req, res) => {
 router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = req.schoolAdmin;
-    const { includeClassId } = req.query;
     
-    // Get all teachers in the school - accountActive filter removed to ensure
-    // all teachers show up when creating/editing classes, regardless of active status
     const teachers = await User.find({
       schoolId: schoolAdmin.schoolId,
-      role: 'Teacher'
-    }).select('name email assignedClasses accountActive');
-    
-    // If includeClassId is provided, get the class to see who's currently assigned
-    let currentClassTeachers = [];
-    if (includeClassId) {
-      try {
-        const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
-        if (cls && cls.teachers && cls.teachers.length > 0) {
-          currentClassTeachers = cls.teachers.map(t => t.toString());
-        }
-      } catch (err) {
-        console.warn('Include class lookup for teachers failed:', err.message);
-      }
-    }
+      role: 'Teacher',
+      accountActive: true
+    }).select('name email assignedClasses');
     
     res.json({
       success: true,
@@ -2310,8 +1983,7 @@ router.get('/classes/available/teachers', authenticateSchoolAdmin, async (req, r
         id: t._id,
         name: t.name,
         email: t.email,
-        assignedClasses: t.assignedClasses || [],
-        isCurrentlyAssigned: currentClassTeachers.includes(t._id.toString())
+        assignedClasses: t.assignedClasses || []
       }))
     });
   } catch (error) {
@@ -2327,42 +1999,32 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
     const schoolAdmin = req.schoolAdmin;
     const { unassigned, includeClassId } = req.query;
     
-    // âœ… FIX: Base filter - get all students from this school
     const filter = {
       schoolId: schoolAdmin.schoolId,
-      role: 'Student'
+      role: 'Student',
+      accountActive: true
     };
     
-    console.log('ðŸ“Š Getting available students for school:', schoolAdmin.schoolId);
-    console.log('ðŸ“Š Query params - unassigned:', unassigned, 'includeClassId:', includeClassId);
+    const orConditions = [{ class: { $in: [null, ''] } }];
     
-    // Only filter by unassigned if explicitly requested with unassigned=true
-    // By default, show ALL students so they can be reassigned to different classes
-    if (unassigned === 'true') {
-      // Only unassigned students (null or empty class)
-      filter.$or = [
-        { class: null },
-        { class: '' },
-        { class: { $exists: false } }
-      ];
-      
-      // Also include students from a specific class if editing that class
-      if (includeClassId) {
-        try {
-          const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
-          if (cls && cls.students && cls.students.length > 0) {
-            filter.$or.push({ _id: { $in: cls.students } });
-          }
-        } catch (err) {
-          console.warn('Include class lookup failed:', err.message);
+    if (includeClassId) {
+      try {
+        const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
+        if (cls && cls.students && cls.students.length > 0) {
+          orConditions.push({ _id: { $in: cls.students } });
         }
+      } catch (err) {
+        console.warn('Include class lookup failed:', err.message);
       }
     }
-    // If unassigned is not 'true', we return ALL students
     
-    const students = await User.find(filter).select('name email class gradeLevel');
+    // Default to unassigned students unless explicitly disabled
+    const limitToUnassigned = unassigned !== 'false';
+    if (limitToUnassigned) {
+      filter.$or = orConditions;
+    }
     
-    console.log(`âœ… Found ${students.length} students`);
+    const students = await User.find(filter).select('name email class');
     
     res.json({
       success: true,
@@ -2370,8 +2032,7 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
         id: s._id,
         name: s.name,
         email: s.email,
-        currentClass: s.class,
-        gradeLevel: s.gradeLevel
+        currentClass: s.class
       }))
     });
   } catch (error) {
@@ -2652,7 +2313,7 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
   }
 });
 // ==================================================================================
-// â­ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
+// ⭐ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
 // ==================================================================================
 // These routes use direct MongoDB access (getDb()) for compatibility with Wei Xiang's admin UI
 
@@ -2665,10 +2326,10 @@ router.get('/announcements', authenticateToken, async (req, res) => {
       .sort({ pinned: -1, createdAt: -1 })
       .toArray();
     
-    console.log(`ðŸ“¢ Admin fetched ${announcements.length} announcements`);
+    console.log(`📢 Admin fetched ${announcements.length} announcements`);
     res.json({ success: true, announcements });
   } catch (error) {
-    console.error('âŒ Get announcements error:', error);
+    console.error('❌ Get announcements error:', error);
     res.status(500).json({ success: false, error: 'Failed to load announcements' });
   }
 });
@@ -2679,7 +2340,7 @@ router.get('/announcements/public', async (req, res) => {
     const db = getDb();
     const { audience } = req.query;
     
-    console.log('ðŸ“¢ Fetching public announcements for:', audience);
+    console.log('📢 Fetching public announcements for:', audience);
     
     const now = new Date();
     
@@ -2728,10 +2389,10 @@ router.get('/announcements/public', async (req, res) => {
       .limit(50)
       .toArray();
     
-    console.log(`âœ… Found ${announcements.length} announcements for ${audience}`);
+    console.log(`✅ Found ${announcements.length} announcements for ${audience}`);
     res.json({ success: true, announcements });
   } catch (error) {
-    console.error('âŒ Get public announcements error:', error);
+    console.error('❌ Get public announcements error:', error);
     res.status(500).json({ success: false, error: 'Failed to load announcements' });
   }
 });
@@ -2763,13 +2424,13 @@ router.post('/announcements', authenticateToken, async (req, res) => {
     
     const result = await db.collection('announcements').insertOne(newAnnouncement);
     
-    console.log(`ðŸ“¢ Announcement created: "${title}" by ${newAnnouncement.author}`);
+    console.log(`📢 Announcement created: "${title}" by ${newAnnouncement.author}`);
     res.json({ 
       success: true, 
       announcement: { ...newAnnouncement, _id: result.insertedId } 
     });
   } catch (error) {
-    console.error('âŒ Create announcement error:', error);
+    console.error('❌ Create announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to create announcement' });
   }
 });
@@ -2794,10 +2455,10 @@ router.put('/announcements/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Announcement not found' });
     }
     
-    console.log(`ðŸ“¢ Announcement updated: ${req.params.id}`);
+    console.log(`📢 Announcement updated: ${req.params.id}`);
     res.json({ success: true, message: 'Announcement updated' });
   } catch (error) {
-    console.error('âŒ Update announcement error:', error);
+    console.error('❌ Update announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to update announcement' });
   }
 });
@@ -2814,10 +2475,10 @@ router.delete('/announcements/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Announcement not found' });
     }
     
-    console.log(`ðŸ“¢ Announcement deleted: ${req.params.id}`);
+    console.log(`📢 Announcement deleted: ${req.params.id}`);
     res.json({ success: true, message: 'Announcement deleted' });
   } catch (error) {
-    console.error('âŒ Delete announcement error:', error);
+    console.error('❌ Delete announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete announcement' });
   }
 });
@@ -2844,7 +2505,7 @@ router.put('/teachers/:teacherId/assignments', authenticateSchoolAdmin, async (r
     teacher.assignedSubjects = subjects || [];
     await teacher.save();
     
-    console.log(`ðŸ“š Teacher ${teacher.name} assigned to classes: ${classes?.join(', ')}`);
+    console.log(`📚 Teacher ${teacher.name} assigned to classes: ${classes?.join(', ')}`);
     res.json({
       success: true,
       message: 'Teacher assignments updated',
@@ -2857,7 +2518,7 @@ router.put('/teachers/:teacherId/assignments', authenticateSchoolAdmin, async (r
       }
     });
   } catch (error) {
-    console.error('âŒ Teacher assignment error:', error);
+    console.error('❌ Teacher assignment error:', error);
     res.status(500).json({ success: false, error: 'Failed to update teacher assignments' });
   }
 });
@@ -2882,7 +2543,7 @@ router.get('/teachers/:teacherId/assignments', authenticateToken, async (req, re
       }
     });
   } catch (error) {
-    console.error('âŒ Get teacher assignments error:', error);
+    console.error('❌ Get teacher assignments error:', error);
     res.status(500).json({ success: false, error: 'Failed to get teacher assignments' });
   }
 });
@@ -2906,7 +2567,7 @@ router.get('/teachers/assignments', authenticateToken, async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('âŒ Get teachers assignments error:', error);
+    console.error('❌ Get teachers assignments error:', error);
     res.status(500).json({ success: false, error: 'Failed to get teachers' });
   }
 });
@@ -2924,7 +2585,7 @@ router.get('/placement-quizzes', authenticateToken, async (req, res) => {
     
     res.json({ success: true, quizzes });
   } catch (error) {
-    console.error('âŒ Get placement quizzes error:', error);
+    console.error('❌ Get placement quizzes error:', error);
     res.status(500).json({ success: false, error: 'Failed to load placement quizzes' });
   }
 });
@@ -2962,7 +2623,7 @@ router.post('/placement-quizzes/:quizId/launch', authenticateSchoolAdmin, async 
     
     await quiz.save();
     
-    console.log(`ðŸŽ¯ Placement quiz "${quiz.title}" launched for school ${schoolAdmin.schoolId}`);
+    console.log(`🎯 Placement quiz "${quiz.title}" launched for school ${schoolAdmin.schoolId}`);
     res.json({
       success: true,
       message: 'Placement quiz launched successfully',
@@ -2975,7 +2636,7 @@ router.post('/placement-quizzes/:quizId/launch', authenticateSchoolAdmin, async 
       }
     });
   } catch (error) {
-    console.error('âŒ Launch placement quiz error:', error);
+    console.error('❌ Launch placement quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to launch placement quiz' });
   }
 });
@@ -3006,10 +2667,10 @@ router.post('/placement-quizzes/:quizId/revoke', authenticateSchoolAdmin, async 
     
     await quiz.save();
     
-    console.log(`ðŸŽ¯ Placement quiz "${quiz.title}" revoked for school ${schoolAdmin.schoolId}`);
+    console.log(`🎯 Placement quiz "${quiz.title}" revoked for school ${schoolAdmin.schoolId}`);
     res.json({ success: true, message: 'Placement quiz launch revoked' });
   } catch (error) {
-    console.error('âŒ Revoke placement quiz error:', error);
+    console.error('❌ Revoke placement quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to revoke placement quiz' });
   }
 });
@@ -3045,39 +2706,20 @@ router.get('/parents/:parentId/students', authenticateSchoolAdmin, async (req, r
       _id: { $nin: linkedStudentIds }
     }).select('_id name email class gradeLevel');
     
-    // Build class lookup map to resolve class IDs to class names
-    const allStudents = [...linkedStudents, ...availableStudents];
-    const classIds = [...new Set(allStudents.map(s => s.class).filter(Boolean))];
-    const classLookup = {};
-    if (classIds.length > 0) {
-      const classDocs = await Class.find({ _id: { $in: classIds }, school_id: schoolAdmin.schoolId })
-        .select('class_name');
-      classDocs.forEach(cls => {
-        classLookup[cls._id.toString()] = cls.class_name;
-      });
-    }
-    
-    // Helper function to resolve class name
-    const resolveClassName = (classId) => {
-      if (!classId) return 'Not assigned';
-      const classKey = classId.toString();
-      return classLookup[classKey] || 'Not assigned';
-    };
-    
     res.json({
       success: true,
       linkedStudents: linkedStudents.map(s => ({
         id: s._id,
         name: s.name,
         email: s.email,
-        className: resolveClassName(s.class),
+        className: s.class || 'Not assigned',
         gradeLevel: s.gradeLevel || 'N/A'
       })),
       availableStudents: availableStudents.map(s => ({
         id: s._id,
         name: s.name,
         email: s.email,
-        className: resolveClassName(s.class),
+        className: s.class || 'Not assigned',
         gradeLevel: s.gradeLevel || 'N/A'
       }))
     });

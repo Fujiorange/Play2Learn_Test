@@ -1,6 +1,5 @@
 // frontend/src/services/parentService.js - WITH SKILL MATRIX METHOD
 // ✅ UPDATED: Added getChildSkills(studentId) method
-// ✅ UPDATED: Added createTestimonial(formData) method for WriteTestimonial.js
 // ✅ Includes everything from Phase 2 + new skills method
 
 import authService from './authService';
@@ -214,64 +213,6 @@ class ParentService {
 
   // ==================== TESTIMONIALS (PHASE 2) ====================
   
-  /**
-   * Create a new testimonial (used by WriteTestimonial.js)
-   * @param {Object} formData - { rating, title, message }
-   * @returns {Promise<Object>} - { success, testimonial?, error? }
-   */
-  async createTestimonial(formData) {
-    try {
-      const token = authService.getToken();
-      
-      if (!token) {
-        console.error('❌ No authentication token');
-        return { success: false, error: 'Not authenticated. Please log in.' };
-      }
-
-      console.log('📤 Parent submitting testimonial:', {
-        title: formData.title,
-        rating: formData.rating
-      });
-
-      const response = await fetch(`${API_BASE_URL}/testimonials`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          rating: formData.rating,
-          title: formData.title,
-          message: formData.message
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error('❌ Testimonial submission failed:', data);
-        return {
-          success: false,
-          error: data.error || 'Failed to submit testimonial'
-        };
-      }
-
-      console.log('✅ Testimonial submitted successfully:', data);
-      return {
-        success: true,
-        testimonial: data.testimonial,
-        message: data.message || 'Thank you for your feedback!'
-      };
-
-    } catch (error) {
-      console.error('❌ Error submitting testimonial:', error);
-      return {
-        success: false,
-        error: 'Network error. Please check your connection and try again.'
-      };
-    }
-  }
-
   async submitTestimonial(testimonialData) {
     try {
       const token = authService.getToken();
@@ -286,13 +227,20 @@ class ParentService {
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit testimonial');
+      }
+
       return data;
     } catch (error) {
-      console.error('createTestimonial error:', error);
-      return { success: false, error: 'Failed to submit testimonial' };
+      console.error('Error submitting testimonial:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
-
 
   async getTestimonials() {
     try {

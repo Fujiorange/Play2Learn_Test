@@ -260,7 +260,16 @@ export default function QuizResult() {
             </button>
           )}
 
-
+          {quizType === 'regular' && (
+            <button
+              style={{ ...styles.button, ...styles.secondaryButton }}
+              onClick={() => navigate('/student/results/history')}
+              onMouseEnter={(e) => e.target.style.background = '#4b5563'}
+              onMouseLeave={(e) => e.target.style.background = '#6b7280'}
+            >
+              📜 View History
+            </button>
+          )}
         </div>
       </div>
 

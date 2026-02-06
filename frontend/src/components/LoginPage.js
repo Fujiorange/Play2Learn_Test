@@ -23,6 +23,11 @@ export default function LoginPage() {
       'teacher': '/teacher',
       'student': '/student',
       'parent': '/parent'
+      ,
+      // trial / demo accounts
+      'trialuser': '/trial',
+      'trialstudent': '/trial',
+      'trialteacher': '/trial'
     };
     
     const route = roleRoutes[normalizedRole];

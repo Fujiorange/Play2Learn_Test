@@ -5,6 +5,9 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
 const User = require('../models/User');
+const TrialClass = require('../models/TrialClass');
+const TrialStudent = require('../models/TrialStudent');
+const { ensureTrialSeedData } = require('../services/trialSeedService');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 function normalizeRole(role) {
@@ -15,10 +18,12 @@ function normalizeRole(role) {
   if (lower.includes('teacher')) return 'Teacher';
   if (lower.includes('student')) return 'Student';
   if (lower.includes('parent')) return 'Parent';
+  if (lower.includes('trial user')) return 'Trial User';
   if (lower.includes('trial student')) return 'Trial Student';
   if (lower.includes('trial teacher')) return 'Trial Teacher';
   return role;
 }
+
 
 router.post('/register', async (req, res) => {
   try {
@@ -35,13 +40,16 @@ router.post('/register', async (req, res) => {
       contact,
       gender,
       date_of_birth,
+      dateOfBirth,
+      organizationName,
     } = req.body;
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ success: false, error: 'Name, email, password, and role are required' });
     }
 
-    const normalizedRole = normalizeRole(role);
+    // If frontend sends organizationName=Trial User, treat as Trial User regardless of role picker
+    const normalizedRole = normalizeRole(organizationName === 'Trial User' ? 'Trial User' : role);
 
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) return res.status(400).json({ success: false, error: 'Email already registered' });
@@ -60,12 +68,18 @@ router.post('/register', async (req, res) => {
       subject: subject || null,
       contact: contact || null,
       gender: gender || null,
-      date_of_birth: date_of_birth ? new Date(date_of_birth) : null,
+      date_of_birth: (date_of_birth || dateOfBirth) ? new Date(date_of_birth || dateOfBirth) : null,
       emailVerified: true,
       accountActive: true,
+      isTrialUser: normalizedRole === 'Trial User' || normalizedRole === 'Trial Student' || normalizedRole === 'Trial Teacher',
     });
 
     await newUser.save();
+
+    // If this is a Trial account, seed TrialClass + TrialStudents.
+    if (newUser.isTrialUser) {
+      await ensureTrialSeedData(newUser._id);
+    }
 
     return res.json({ success: true, message: 'Registration successful' });
   } catch (error) {
@@ -94,6 +108,11 @@ router.post('/login', async (req, res) => {
     // Role is automatically determined from the database, not from user input
     // This improves security by preventing role spoofing attempts
     const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Ensure trial seed exists for trial users (covers older accounts created before seeding)
+    if (user.isTrialUser || String(user.role || '').toLowerCase().includes('trial')) {
+      await ensureTrialSeedData(user._id);
+    }
 
     return res.json({
       success: true,
@@ -287,10 +306,8 @@ router.put('/change-password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
     // Update password and clear requirePasswordChange flag
-    // Also clear tempPassword so user is removed from pending credentials page
     user.password = hashedPassword;
     user.requirePasswordChange = false;
-    user.tempPassword = null;
     user.updatedAt = new Date();
     await user.save();
 

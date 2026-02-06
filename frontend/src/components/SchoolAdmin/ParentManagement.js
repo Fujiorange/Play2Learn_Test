@@ -26,10 +26,6 @@ export default function ParentManagement() {
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [savingChildren, setSavingChildren] = useState(false);
   const [loadingChildren, setLoadingChildren] = useState(false);
-  
-  // Sorting State
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -67,44 +63,6 @@ export default function ParentManagement() {
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Sort parents
-  const sortedParents = [...filteredParents].sort((a, b) => {
-    let aValue, bValue;
-    switch (sortField) {
-      case 'name':
-        aValue = a.name?.toLowerCase() || '';
-        bValue = b.name?.toLowerCase() || '';
-        break;
-      case 'email':
-        aValue = a.email?.toLowerCase() || '';
-        bValue = b.email?.toLowerCase() || '';
-        break;
-      case 'linkedStudents':
-        aValue = a.linkedStudents ? a.linkedStudents.length : 0;
-        bValue = b.linkedStudents ? b.linkedStudents.length : 0;
-        break;
-      default:
-        return 0;
-    }
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortIndicator = (field) => {
-    if (sortField !== field) return ' ↕';
-    return sortDirection === 'asc' ? ' ↑' : ' ↓';
-  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -255,7 +213,6 @@ export default function ParentManagement() {
     searchInput: { width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: '#f9fafb', fontFamily: 'inherit', marginBottom: '24px', boxSizing: 'border-box' },
     table: { width: '100%', borderCollapse: 'collapse' },
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
-    thSortable: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', userSelect: 'none' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
     viewButton: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
     manageChildrenButton: { padding: '6px 12px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
@@ -342,40 +299,18 @@ export default function ParentManagement() {
               <table style={styles.table}>
                 <thead>
                   <tr>
-                    <th style={styles.thSortable} onClick={() => handleSort('name')}>Name{getSortIndicator('name')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('email')}>Email{getSortIndicator('email')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('linkedStudents')}>Linked Children{getSortIndicator('linkedStudents')}</th>
+                    <th style={styles.th}>Name</th>
+                    <th style={styles.th}>Email</th>
+                    <th style={styles.th}>Linked Children</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedParents.map((parent) => (
+                  {filteredParents.map((parent) => (
                     <tr key={parent.id}>
-                      <td style={styles.td}>
-                        <strong>{parent.name}</strong>
-                        {getLinkedChildrenCount(parent) === 0 && (
-                          <span 
-                            style={{ marginLeft: '8px', color: '#ef4444', fontWeight: 'bold' }} 
-                            title="No linked students"
-                            aria-label="Warning: No linked students"
-                            role="img"
-                          >⚠️</span>
-                        )}
-                      </td>
+                      <td style={styles.td}><strong>{parent.name}</strong></td>
                       <td style={styles.td}>{parent.email}</td>
-                      <td style={styles.td}>
-                        {getLinkedChildrenCount(parent) === 0 ? (
-                          <span 
-                            style={{ color: '#ef4444', fontWeight: '600' }}
-                            role="alert"
-                            aria-live="polite"
-                          >
-                            ⚠️ No children linked
-                          </span>
-                        ) : (
-                          `${getLinkedChildrenCount(parent)} child(ren)`
-                        )}
-                      </td>
+                      <td style={styles.td}>{getLinkedChildrenCount(parent)} child(ren)</td>
                       <td style={styles.td}>
                         <button style={styles.viewButton} onClick={() => setSelectedParent(parent)}>
                           View
@@ -395,7 +330,7 @@ export default function ParentManagement() {
                 </tbody>
               </table>
 
-              {sortedParents.length === 0 && (
+              {filteredParents.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
                   No parents found
                 </div>

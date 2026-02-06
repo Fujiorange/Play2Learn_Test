@@ -45,16 +45,17 @@ export default function RegisterPage() {
     setSuccess(false);
 
     // Validation
-    if (!formData.name || !formData.email || !formData.gender || !formData.dateOfBirth || !formData.password) {
-      setError('Please fill in all required fields');
+    if (!formData.name || !formData.email || !formData.password) {
+      setError('Please fill in name, email, and password');
       return;
     }
-
-    // Age validation
-    const age = calculateAge(formData.dateOfBirth);
-    if (age < 6 || age > 100) {
-      setError('Please enter a valid date of birth');
-      return;
+    // Age validation (optional for Trial registration)
+    if (formData.dateOfBirth) {
+      const age = calculateAge(formData.dateOfBirth);
+      if (age < 6 || age > 100) {
+        setError('Please enter a valid date of birth');
+        return;
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -75,9 +76,9 @@ export default function RegisterPage() {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        gender: formData.gender,
-        dateOfBirth: formData.dateOfBirth,
-        role: 'student', // Default trial role
+        gender: formData.gender || null,
+        dateOfBirth: formData.dateOfBirth || null,
+        role: 'Trial User', // Default: trial account
         gradeLevel: 'Not Set', // Will be determined later
         organizationName: 'Trial User',
         organizationType: 'individual',

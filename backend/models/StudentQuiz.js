@@ -21,8 +21,4 @@ const studentQuizSchema = new mongoose.Schema({
   completed_at: { type: Date, default: Date.now }
 });
 
-// Add indexes for performance on frequently queried fields
-studentQuizSchema.index({ student_id: 1, quiz_type: 1 });
-studentQuizSchema.index({ student_id: 1, completed_at: -1 });
-
 module.exports = mongoose.model('StudentQuiz', studentQuizSchema);

@@ -9,7 +9,19 @@ const userSchema = new mongoose.Schema({
 
   role: {
     type: String,
-    enum: ['Platform Admin', 'p2ladmin', 'School Admin', 'Teacher', 'Student', 'Parent', 'Trial Student', 'Trial Teacher'],
+    // NOTE: "Trial User" is the umbrella role used for the demo/trial dashboard.
+    // Some admin UIs also reference "Trial Student" / "Trial Teacher".
+    enum: [
+      'Platform Admin',
+      'p2ladmin',
+      'School Admin',
+      'Teacher',
+      'Student',
+      'Parent',
+      'Trial User',
+      'Trial Student',
+      'Trial Teacher',
+    ],
     required: true,
   },
 
@@ -43,12 +55,6 @@ const userSchema = new mongoose.Schema({
     },
   ],
 
-  // ✅ Placement Quiz Tracking (NEW)
-  placementQuizCompleted: { type: Boolean, default: false },
-  placementQuizScore: { type: Number, default: null },
-  placementQuizDate: { type: Date, default: null },
-  placementQuizAttemptId: { type: mongoose.Schema.Types.ObjectId, default: null },
-
   emailVerified: { type: Boolean, default: false },
   verificationToken: { type: String, default: null },
   
@@ -70,10 +76,5 @@ const userSchema = new mongoose.Schema({
 userSchema.pre('save', function preSave() {
   this.updatedAt = Date.now();
 });
-
-// Add indexes for performance on frequently queried fields
-userSchema.index({ schoolId: 1, role: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ 'linkedStudents.studentId': 1 });
 
 module.exports = mongoose.model('User', userSchema);

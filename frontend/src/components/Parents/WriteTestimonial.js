@@ -51,40 +51,75 @@ export default function WriteTestimonial() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!formData.title || !formData.message) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields' });
+      return;
+    }
 
     setSubmitting(true);
     setMessage({ type: '', text: '' });
 
     try {
+      // ✅ Using createTestimonial() for better error handling and logging
+      const result = await parentService.createTestimonial(formData);
+
+      if (result.success) {
+        setMessage({ 
+          type: 'success', 
+          text: 'Thank you for your testimonial! It will be reviewed before being published.' 
+        });
+        
+        // Clear form
+        setFormData({
+          rating: 5,
+          title: '',
+          message: ''
+        });
+
+        // Redirect after 3 seconds
+        setTimeout(() => {
+          navigate('/parent');
+        }, 3000);
+      } else {
+        setMessage({ 
+          type: 'error', 
+          text: result.error || 'Failed to submit testimonial. Please try again.' 
+        });
+        setSubmitting(false);
+      }
+    } catch (error) {
+      console.error('Error submitting testimonial:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to submit testimonial. Please try again.' 
+      });
+      setSubmitting(false);
+    }
+
+    setSubmitting(true);
+    setError('');
+
+    try {
       const result = await parentService.createTestimonial({
-        rating: formData.rating,
+        rating,
         message: testimonialText,
         title,
         displayName,
       });
 
       if (result.success) {
-        setMessage({
-          type: 'success',
-          text: 'Thank you! Your testimonial has been submitted successfully.',
-        });
-
+        setSubmitted(true);
         setTimeout(() => {
           navigate('/parent');
         }, 2000);
       } else {
-        setMessage({
-          type: 'error',
-          text: result.error || 'Failed to submit testimonial',
-        });
+        setError(result.error || 'Failed to submit testimonial');
         setSubmitting(false);
       }
     } catch (err) {
       console.error('Submit error:', err);
-      setMessage({
-        type: 'error',
-        text: 'Failed to submit testimonial. Please try again.',
-      });
+      setError('Failed to submit testimonial. Please try again.');
       setSubmitting(false);
     }
   };
@@ -127,12 +162,9 @@ export default function WriteTestimonial() {
           <button style={styles.backButton} onClick={() => navigate('/parent')}>← Back to Dashboard</button>
         </div>
 
-        {message.text && (
-          <div style={{
-            ...styles.message, 
-            ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)
-          }}>
-            {message.type === 'success' ? '✅' : '⚠️'} {message.text}
+        {error && (
+          <div style={styles.errorMessage}>
+            ⚠️ {error}
           </div>
         )}
 

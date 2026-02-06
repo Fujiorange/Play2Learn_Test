@@ -42,7 +42,6 @@ const MathSkill = require('../models/MathSkill');
 const SupportTicket = require('../models/SupportTicket');
 const Testimonial = require('../models/Testimonial');
 const Quiz = require('../models/Quiz');
-const QuizAttempt = require('../models/QuizAttempt');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
@@ -339,61 +338,28 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
       if (q.is_correct) skillUpdates[skill].correct++;
     });
 
-    const skillNames = Object.keys(skillUpdates);
-    
-    // Fetch all existing skills in a single query instead of N queries
-    const existingSkills = await MathSkill.find({ 
-      student_id: studentId, 
-      skill_name: { $in: skillNames } 
-    });
-    
-    const skillMap = new Map(existingSkills.map(s => [s.skill_name, s]));
-    const bulkOps = [];
-
     for (const [skillName, stats] of Object.entries(skillUpdates)) {
       const skillPercentage = (stats.correct / stats.total) * 100;
       const xpGain = Math.floor(skillPercentage / 10);
 
-      const existingSkill = skillMap.get(skillName);
-      
-      if (existingSkill) {
-        // Update existing skill using bulk operation
-        const newXp = existingSkill.xp + xpGain;
-        const newLevel = Math.min(5, Math.floor(newXp / 100));
-        bulkOps.push({
-          updateOne: {
-            filter: { _id: existingSkill._id },
-            update: { 
-              $set: { 
-                xp: newXp, 
-                current_level: newLevel, 
-                updatedAt: new Date() 
-              } 
-            }
-          }
-        });
-      } else {
-        // Insert new skill using bulk operation
-        const newXp = xpGain;
-        const newLevel = Math.min(5, Math.floor(newXp / 100));
-        bulkOps.push({
-          insertOne: {
-            document: {
-              student_id: studentId,
-              skill_name: skillName,
-              current_level: newLevel,
-              xp: newXp,
-              unlocked: true,
-              updatedAt: new Date()
-            }
-          }
+      let skill = await MathSkill.findOne({ student_id: studentId, skill_name: skillName });
+
+      if (!skill) {
+        skill = new MathSkill({
+          student_id: studentId,
+          skill_name: skillName,
+          current_level: 0,
+          xp: 0,
+          unlocked: true,
         });
       }
-    }
 
-    // Execute all updates in a single bulk operation
-    if (bulkOps.length > 0) {
-      await MathSkill.bulkWrite(bulkOps);
+      skill.xp += xpGain;
+      const newLevel = Math.min(5, Math.floor(skill.xp / 100));
+      skill.current_level = newLevel;
+      skill.updatedAt = new Date();
+
+      await skill.save();
     }
   } catch (error) {
     console.error("Error updating skills:", error);
@@ -519,59 +485,28 @@ router.get("/math-profile", async (req, res) => {
   }
 });
 
-// ==================== PLACEMENT STATUS ENDPOINT ====================
-router.get("/placement-status", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-
-    let mathProfile = await MathProfile.findOne({ student_id: studentId });
-    
-    if (!mathProfile) {
-      return res.json({
-        success: true,
-        placementCompleted: false,
-        placementScore: null,
-        placementDate: null
-      });
-    }
-
-    res.json({
-      success: true,
-      placementCompleted: mathProfile.placement_completed || false,
-      placementScore: mathProfile.placement_score || null,
-      placementDate: mathProfile.placement_date || null
-    });
-  } catch (error) {
-    console.error("❌ Placement status error:", error);
-    res.status(500).json({ success: false, error: "Failed to check placement status" });
-  }
-});
-
 // ==================== MATH SKILLS ENDPOINT ====================
 router.get("/math-skills", async (req, res) => {
   try {
     const studentId = req.user.userId;
 
-    // Use lean() for read-only queries to improve performance
-    const mathProfile = await MathProfile.findOne({ student_id: studentId }).lean();
+    const mathProfile = await MathProfile.findOne({ student_id: studentId });
     const skills = await MathSkill.find({ student_id: studentId });
 
     const requiredSkills = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
     const existingSkillNames = skills.map(s => s.skill_name);
 
-    // Batch create missing skills instead of creating one at a time
-    const missingSkills = requiredSkills.filter(name => !existingSkillNames.includes(name));
-    
-    if (missingSkills.length > 0) {
-      const newSkillDocs = missingSkills.map(skillName => ({
-        student_id: studentId,
-        skill_name: skillName,
-        current_level: 0,
-        xp: 0,
-        unlocked: true,
-      }));
-      const createdSkills = await MathSkill.insertMany(newSkillDocs);
-      skills.push(...createdSkills);
+    for (const skillName of requiredSkills) {
+      if (!existingSkillNames.includes(skillName)) {
+        const newSkill = await MathSkill.create({
+          student_id: studentId,
+          skill_name: skillName,
+          current_level: 0,
+          xp: 0,
+          unlocked: true,
+        });
+        skills.push(newSkill);
+      }
     }
 
     res.json({
@@ -662,7 +597,7 @@ router.post("/placement-quiz/generate", async (req, res) => {
 });
 
 // ==================== PLACEMENT QUIZ - SUBMIT ====================
-router.post("/quiz/submit-placement", async (req, res) => {
+router.post("/placement-quiz/submit", async (req, res) => {
   try {
     const studentId = req.user.userId;
     const { quiz_id, answers } = req.body;
@@ -916,13 +851,21 @@ router.get("/math-progress", async (req, res) => {
       await mathProfile.save();
     }
 
-    // Use lean() for read-only query to improve performance
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
-      .sort({ completed_at: -1 })
-      .lean();
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({
+      completed_at: -1,
+    });
 
-    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
-    const quizzes = allQuizzes.filter(isQuizCompleted);
+    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
+    const quizzes = allQuizzes.filter(q => {
+      // Include quiz if it has student answers in questions
+      if (q.questions && q.questions.length > 0) {
+        return q.questions.some(question => 
+          question.student_answer !== null && question.student_answer !== undefined
+        );
+      }
+      // Also include if score > 0 or percentage > 0 (submitted)
+      return q.score > 0 || q.percentage > 0;
+    });
 
     const totalQuizzes = quizzes.length;
     const averageScore =
@@ -930,7 +873,7 @@ router.get("/math-progress", async (req, res) => {
         ? Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes)
         : 0;
 
-    // Use total_points from MathProfile (source of truth) instead of recalculating
+    // âœ… FIXED: Use total_points from MathProfile (source of truth) instead of recalculating
     // This ensures consistency with Dashboard and Shop, accounting for both earned and spent points
     const totalPoints = mathProfile ? (mathProfile.total_points || 0) : 0;
 
@@ -962,13 +905,19 @@ router.get("/math-progress", async (req, res) => {
 router.get("/quiz-results", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    // Use lean() for read-only query to improve performance
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
-      .sort({ completed_at: -1 })
-      .lean();
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
 
-    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
-    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
+    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
+    const completedQuizzes = allQuizzes.filter(q => {
+      // Include quiz if it has student answers in questions
+      if (q.questions && q.questions.length > 0) {
+        return q.questions.some(question => 
+          question.student_answer !== null && question.student_answer !== undefined
+        );
+      }
+      // Also include if score > 0 or percentage > 0 (submitted)
+      return q.score > 0 || q.percentage > 0;
+    });
 
     res.json({
       success: true,
@@ -992,69 +941,34 @@ router.get("/quiz-results", async (req, res) => {
 router.get("/quiz-history", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    
-    // Get regular quizzes from StudentQuiz collection
-    const regularQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
-      .sort({ completed_at: -1 })
-      .lean();
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
 
-    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
-    const completedRegularQuizzes = regularQuizzes.filter(isQuizCompleted);
-
-    // Get adaptive quizzes from QuizAttempt collection
-    const adaptiveAttempts = await QuizAttempt.find({ 
-      userId: studentId, 
-      is_completed: true 
-    })
-      .populate('quizId', 'title')
-      .sort({ completedAt: -1 })
-      .lean();
-
-    // Format regular quizzes
-    const regularHistory = completedRegularQuizzes.map((q) => ({
-      id: q._id,
-      quizType: 'regular',
-      quizTitle: 'Math Practice Quiz',
-      profile: q.profile_level,
-      profile_level: q.profile_level,
-      date: q.completed_at ? q.completed_at.toLocaleDateString() : 'N/A',
-      time: q.completed_at ? q.completed_at.toLocaleTimeString() : 'N/A',
-      score: q.score,
-      maxScore: q.total_questions,
-      totalQuestions: q.total_questions,
-      percentage: q.percentage,
-      points_earned: q.points_earned,
-      completedAt: q.completed_at
-    }));
-
-    // Format adaptive quizzes
-    const adaptiveHistory = adaptiveAttempts.map((a) => ({
-      id: a._id,
-      quizType: 'adaptive',
-      quizTitle: a.quizId?.title || 'Adaptive Quiz',
-      profile: a.current_difficulty || 1,
-      profile_level: a.current_difficulty || 1,
-      date: a.completedAt ? new Date(a.completedAt).toLocaleDateString() : 'N/A',
-      time: a.completedAt ? new Date(a.completedAt).toLocaleTimeString() : 'N/A',
-      score: a.correct_count || 0,
-      maxScore: a.total_answered || 0,
-      totalQuestions: a.total_answered || 0,
-      percentage: a.total_answered > 0 ? Math.round((a.correct_count / a.total_answered) * 100) : 0,
-      // Calculate approximate points: 10 points per correct answer (adaptive quizzes don't store points_earned)
-      points_earned: (a.correct_count || 0) * 10,
-      completedAt: a.completedAt
-    }));
-
-    // Combine and sort by completion date
-    const allHistory = [...regularHistory, ...adaptiveHistory].sort((a, b) => {
-      const dateA = a.completedAt ? new Date(a.completedAt) : new Date(0);
-      const dateB = b.completedAt ? new Date(b.completedAt) : new Date(0);
-      return dateB - dateA;
+    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
+    const completedQuizzes = allQuizzes.filter(q => {
+      // Include quiz if it has student answers in questions
+      if (q.questions && q.questions.length > 0) {
+        return q.questions.some(question => 
+          question.student_answer !== null && question.student_answer !== undefined
+        );
+      }
+      // Also include if score > 0 or percentage > 0 (submitted)
+      return q.score > 0 || q.percentage > 0;
     });
 
     res.json({
       success: true,
-      history: allHistory.map(({ completedAt, ...rest }) => rest), // Remove completedAt from response
+      history: completedQuizzes.map((q) => ({
+        id: q._id,
+        profile: q.profile_level,
+        profile_level: q.profile_level,
+        date: q.completed_at.toLocaleDateString(),
+        time: q.completed_at.toLocaleTimeString(),
+        score: q.score,
+        maxScore: q.total_questions,
+        totalQuestions: q.total_questions,
+        percentage: q.percentage,
+        points_earned: q.points_earned,
+      })),
     });
   } catch (error) {
     console.error("❌ Quiz history error:", error);
@@ -1066,75 +980,23 @@ router.get("/quiz-history", async (req, res) => {
 router.get("/leaderboard", async (req, res) => {
   try {
     const currentUserId = req.user.userId;
-    const { schoolId, class: classId } = req.query;
-
-    // Get current user's school and class
-    const currentUser = await User.findById(currentUserId).lean();
     
-    if (!currentUser) {
-      return res.status(404).json({ success: false, error: "User not found" });
-    }
-
-    // Use provided parameters or fall back to current user's school/class
-    const filterSchoolId = schoolId || currentUser.schoolId;
-    const filterClass = classId || currentUser.class;
-
-    // Build filter query - must match school AND class
-    const filterQuery = {
-      ...(filterSchoolId && { schoolId: filterSchoolId }),
-      ...(filterClass && { class: filterClass }),
-      role: 'Student' // Only show students
-    };
-
-    console.log(`🎯 Leaderboard filter:`, filterQuery);
-
-    // Find students matching school and class
-    const matchingStudents = await User.find(filterQuery)
-      .select('_id name email schoolId class')
-      .lean();
-
-    if (matchingStudents.length === 0) {
-      return res.json({
-        success: true,
-        leaderboard: [],
-        filterInfo: {
-          schoolId: filterSchoolId,
-          class: filterClass,
-          totalMatches: 0
-        }
-      });
-    }
-
-    const studentIds = matchingStudents.map(s => s._id);
-
-    // Get math profiles for these students, sorted by points
-    const students = await MathProfile.find({ student_id: { $in: studentIds } })
+    const students = await MathProfile.find()
+      .populate("student_id", "name email")
       .sort({ total_points: -1 })
-      .limit(50)
-      .lean();
-
-    // Enrich with student details
-    const studentMap = new Map(matchingStudents.map(s => [s._id.toString(), s]));
+      .limit(20);
 
     res.json({
       success: true,
-      leaderboard: students.map((p, idx) => {
-        const student = studentMap.get(p.student_id.toString());
-        return {
-          rank: idx + 1,
-          name: student ? student.name : "Unknown",
-          points: p.total_points,
-          level: p.current_profile,
-          profile: p.current_profile,
-          achievements: 0,
-          isCurrentUser: p.student_id.toString() === currentUserId,
-        };
-      }),
-      filterInfo: {
-        schoolId: filterSchoolId,
-        class: filterClass,
-        totalMatches: matchingStudents.length
-      }
+      leaderboard: students.map((p, idx) => ({
+        rank: idx + 1,
+        name: p.student_id ? p.student_id.name : "Unknown",
+        points: p.total_points,
+        level: p.current_profile,
+        profile: p.current_profile,
+        achievements: 0,
+        isCurrentUser: p.student_id && p.student_id._id.toString() === currentUserId,
+      })),
     });
   } catch (error) {
     console.error("❌ Leaderboard error:", error);
@@ -1191,10 +1053,8 @@ router.get("/support-tickets", async (req, res) => {
   try {
     const studentId = req.user.userId;
 
-    // Use lean() for read-only query to improve performance
     const tickets = await SupportTicket.find({ student_id: studentId })
-      .sort({ created_at: -1 })
-      .lean();
+      .sort({ created_at: -1 });
 
     res.json({
       success: true,
@@ -1290,11 +1150,9 @@ router.post("/testimonials", async (req, res) => {
 
 router.get("/testimonials", async (req, res) => {
   try {
-    // Use lean() for read-only query to improve performance
     const testimonials = await Testimonial.find({ approved: true })
       .sort({ created_at: -1 })
-      .limit(20)
-      .lean();
+      .limit(20);
 
     res.json({
       success: true,
@@ -1576,4 +1434,3 @@ router.get("/badges/progress", async (req, res) => {
 });
 
 module.exports = router;
-

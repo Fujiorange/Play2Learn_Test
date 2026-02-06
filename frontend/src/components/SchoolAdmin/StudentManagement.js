@@ -19,10 +19,6 @@ export default function StudentManagement() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
   
-  // Parent deletion confirmation state
-  const [parentDeletePrompt, setParentDeletePrompt] = useState(null);
-  const [selectedParentsToDelete, setSelectedParentsToDelete] = useState([]);
-  
   // Link Parent Modal State
   const [linkParentStudent, setLinkParentStudent] = useState(null);
   const [linkedParent, setLinkedParent] = useState(null);
@@ -30,11 +26,6 @@ export default function StudentManagement() {
   const [selectedParentId, setSelectedParentId] = useState(null);
   const [savingParent, setSavingParent] = useState(false);
   const [loadingParentData, setLoadingParentData] = useState(false);
-  const [parentSearchTerm, setParentSearchTerm] = useState('');
-  
-  // Sorting State
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -71,66 +62,6 @@ export default function StudentManagement() {
   const filteredStudents = students.filter(s =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Sort students
-  const sortedStudents = [...filteredStudents].sort((a, b) => {
-    let aValue, bValue;
-    switch (sortField) {
-      case 'name':
-        aValue = a.name?.toLowerCase() || '';
-        bValue = b.name?.toLowerCase() || '';
-        break;
-      case 'email':
-        aValue = a.email?.toLowerCase() || '';
-        bValue = b.email?.toLowerCase() || '';
-        break;
-      case 'className':
-        aValue = a.className?.toLowerCase() || '';
-        bValue = b.className?.toLowerCase() || '';
-        break;
-      case 'gradeLevel':
-        // Parse grade levels numerically if possible, otherwise compare as strings
-        const aGrade = a.gradeLevel || '';
-        const bGrade = b.gradeLevel || '';
-        const aNum = parseInt(aGrade, 10);
-        const bNum = parseInt(bGrade, 10);
-        // If both are valid numbers, sort numerically
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          aValue = aNum;
-          bValue = bNum;
-        } else {
-          // Otherwise sort alphabetically
-          aValue = aGrade.toLowerCase();
-          bValue = bGrade.toLowerCase();
-        }
-        break;
-      default:
-        return 0;
-    }
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortIndicator = (field) => {
-    if (sortField !== field) return ' ↕';
-    return sortDirection === 'asc' ? ' ↑' : ' ↓';
-  };
-
-  // Filter available parents by search term
-  const filteredAvailableParents = availableParents.filter(p =>
-    p.name.toLowerCase().includes(parentSearchTerm.toLowerCase()) ||
-    p.email.toLowerCase().includes(parentSearchTerm.toLowerCase())
   );
 
   const formatDate = (dateString) => {
@@ -191,39 +122,16 @@ export default function StudentManagement() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleDeleteUser = async (deleteParentIds = null) => {
+  const handleDeleteUser = async () => {
     if (!deleteConfirm) return;
     setDeleting(true);
     try {
-      // Build URL with optional parent deletion
-      let url = deleteConfirm.id;
-      if (deleteParentIds && deleteParentIds.length > 0) {
-        url += `?deleteParents=${deleteParentIds.join(',')}`;
-      }
-      
-      const result = await schoolAdminService.deleteUser(url);
+      const result = await schoolAdminService.deleteUser(deleteConfirm.id);
       if (result.success) {
-        // Check if there are parents with only this student linked
-        const parentsWithOnlyThisStudent = (result.affectedParents || []).filter(p => p.hasOnlyThisStudent);
-        
-        if (parentsWithOnlyThisStudent.length > 0 && !deleteParentIds) {
-          // Show prompt to delete parents
-          setParentDeletePrompt({
-            studentName: deleteConfirm.name,
-            parents: parentsWithOnlyThisStudent
-          });
-          // Note: Don't close deleteConfirm yet - user needs to decide about parents
-          // But student is already deleted, so update the list
-          setStudents(students.filter(s => s.id !== deleteConfirm.id));
-          setDeleteConfirm(null);
-        } else {
-          setStudents(students.filter(s => s.id !== deleteConfirm.id));
-          setMessage({ type: 'success', text: `Student "${deleteConfirm.name}" deleted successfully` });
-          setDeleteConfirm(null);
-          setParentDeletePrompt(null);
-          setSelectedParentsToDelete([]);
-          setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-        }
+        setStudents(students.filter(s => s.id !== deleteConfirm.id));
+        setMessage({ type: 'success', text: `Student "${deleteConfirm.name}" deleted successfully` });
+        setDeleteConfirm(null);
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to delete student' });
       }
@@ -234,42 +142,10 @@ export default function StudentManagement() {
     }
   };
 
-  // Handle parent deletion after student deletion
-  const handleConfirmParentDeletion = async (deleteSelected) => {
-    if (deleteSelected && selectedParentsToDelete.length > 0) {
-      // Delete selected parents concurrently for better performance
-      setDeleting(true);
-      try {
-        await Promise.all(
-          selectedParentsToDelete.map(parentId => schoolAdminService.deleteUser(parentId))
-        );
-        setMessage({ type: 'success', text: `Student deleted and ${selectedParentsToDelete.length} parent(s) removed successfully` });
-      } catch (err) {
-        setMessage({ type: 'error', text: 'Student deleted but failed to remove some parents' });
-      } finally {
-        setDeleting(false);
-      }
-    } else {
-      setMessage({ type: 'success', text: `Student deleted successfully` });
-    }
-    setParentDeletePrompt(null);
-    setSelectedParentsToDelete([]);
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-  };
-
-  const handleToggleParentForDeletion = (parentId) => {
-    setSelectedParentsToDelete(prev => 
-      prev.includes(parentId)
-        ? prev.filter(id => id !== parentId)
-        : [...prev, parentId]
-    );
-  };
-
   // Link Parent Modal Functions
   const handleOpenLinkParent = async (student) => {
     setLinkParentStudent(student);
     setLoadingParentData(true);
-    setParentSearchTerm(''); // Reset search term when opening modal
     try {
       const result = await schoolAdminService.getStudentParent(student.id);
       if (result.success) {
@@ -329,7 +205,6 @@ export default function StudentManagement() {
     searchInput: { width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: '#f9fafb', fontFamily: 'inherit', marginBottom: '24px', boxSizing: 'border-box' },
     table: { width: '100%', borderCollapse: 'collapse' },
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
-    thSortable: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', userSelect: 'none' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
     viewButton: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
     linkParentButton: { padding: '6px 12px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
@@ -365,11 +240,9 @@ export default function StudentManagement() {
     infoText: { fontSize: '13px', color: '#6b7280', marginBottom: '16px' },
     // Link Parent Modal Styles
     sectionTitle: { fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px', marginTop: '16px' },
-    parentSearchInput: { width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: '#f9fafb', fontFamily: 'inherit', marginBottom: '12px', boxSizing: 'border-box' },
     parentList: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' },
     parentItem: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '6px', cursor: 'pointer' },
     parentItemSelected: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', cursor: 'pointer', border: '2px solid #3b82f6' },
-    parentItemDisabled: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f3f4f6', borderRadius: '6px', cursor: 'not-allowed', opacity: 0.6 },
     radio: { width: '18px', height: '18px', cursor: 'pointer' },
     parentInfo: { flex: 1 },
     parentName: { fontWeight: '600', fontSize: '14px', color: '#1f2937' },
@@ -379,8 +252,6 @@ export default function StudentManagement() {
     unlinkOption: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#fef2f2', borderRadius: '6px', cursor: 'pointer', marginBottom: '8px' },
     unlinkOptionSelected: { border: '2px solid #ef4444' },
     unlinkOptionUnselected: { border: '1px solid #fecaca' },
-    linkedInfoBox: { padding: '16px', background: '#fef3c7', borderRadius: '8px', border: '2px solid #fcd34d', marginBottom: '16px' },
-    linkedInfoText: { fontSize: '14px', color: '#92400e', fontWeight: '500' },
   };
 
   return (
@@ -423,15 +294,15 @@ export default function StudentManagement() {
               <table style={styles.table}>
                 <thead>
                   <tr>
-                    <th style={styles.thSortable} onClick={() => handleSort('name')}>Name{getSortIndicator('name')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('email')}>Email{getSortIndicator('email')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('className')}>Class{getSortIndicator('className')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('gradeLevel')}>Grade Level{getSortIndicator('gradeLevel')}</th>
+                    <th style={styles.th}>Name</th>
+                    <th style={styles.th}>Email</th>
+                    <th style={styles.th}>Class</th>
+                    <th style={styles.th}>Grade Level</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedStudents.map((student) => (
+                  {filteredStudents.map((student) => (
                     <tr key={student.id}>
                       <td style={styles.td}><strong>{student.name}</strong></td>
                       <td style={styles.td}>{student.email}</td>
@@ -456,7 +327,7 @@ export default function StudentManagement() {
                 </tbody>
               </table>
 
-              {sortedStudents.length === 0 && (
+              {filteredStudents.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
                   No students found
                 </div>
@@ -648,75 +519,10 @@ export default function StudentManagement() {
               <button style={styles.cancelButton} onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button 
                 style={{ ...styles.deleteConfirmButton, opacity: deleting ? 0.7 : 1 }} 
-                onClick={() => handleDeleteUser()}
+                onClick={handleDeleteUser}
                 disabled={deleting}
               >
                 {deleting ? 'Deleting...' : 'Delete Student'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Parent Deletion Prompt Modal */}
-      {parentDeletePrompt && (
-        <div style={styles.modal}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>👨‍👩‍👧 Parent Account Notice</h2>
-            <p style={styles.infoText}>
-              The student <strong>{parentDeletePrompt.studentName}</strong> has been deleted.
-            </p>
-            <p style={{ ...styles.infoText, marginBottom: '16px' }}>
-              The following parent(s) only had this student linked. Would you like to delete their accounts too?
-            </p>
-            
-            <div style={{ marginBottom: '16px' }}>
-              {parentDeletePrompt.parents.map(parent => (
-                <div 
-                  key={parent.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '12px',
-                    background: selectedParentsToDelete.includes(parent.id) ? '#fef2f2' : '#f9fafb',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
-                    border: selectedParentsToDelete.includes(parent.id) ? '2px solid #ef4444' : '1px solid #e5e7eb',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => handleToggleParentForDeletion(parent.id)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedParentsToDelete.includes(parent.id)}
-                    onChange={() => {}}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1f2937' }}>{parent.name}</div>
-                    <div style={{ fontSize: '13px', color: '#6b7280' }}>{parent.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={styles.modalButtons}>
-              <button 
-                style={styles.cancelButton} 
-                onClick={() => handleConfirmParentDeletion(false)}
-              >
-                Keep Parent(s)
-              </button>
-              <button 
-                style={{ 
-                  ...styles.deleteConfirmButton, 
-                  opacity: (deleting || selectedParentsToDelete.length === 0) ? 0.7 : 1 
-                }} 
-                onClick={() => handleConfirmParentDeletion(true)}
-                disabled={deleting || selectedParentsToDelete.length === 0}
-              >
-                {deleting ? 'Deleting...' : `Delete Selected (${selectedParentsToDelete.length})`}
               </button>
             </div>
           </div>
@@ -733,88 +539,72 @@ export default function StudentManagement() {
               <div style={styles.loadingText}>Loading parent data...</div>
             ) : (
               <>
-                {linkedParent ? (
-                  <>
-                    {/* Student already has a linked parent - show info and only allow unlinking */}
-                    <div style={styles.linkedInfoBox}>
-                      <div style={styles.linkedInfoText}>
-                        ⚠️ This student is already linked to a parent. Each student can only be linked to one parent. You can unlink the current parent if needed.
-                      </div>
-                    </div>
+                <p style={styles.infoText}>
+                  Select a parent to link to this student. Each student can only be linked to one parent.
+                </p>
 
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={styles.sectionTitle}>📋 Currently Linked Parent</div>
-                      <div style={{ padding: '12px', background: '#d1fae5', borderRadius: '8px', border: '2px solid #10b981' }}>
-                        <div style={styles.parentName}>{linkedParent.name}</div>
-                        <div style={styles.parentDetails}>{linkedParent.email}</div>
-                      </div>
+                {linkedParent && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={styles.sectionTitle}>📋 Currently Linked Parent</div>
+                    <div style={{ padding: '12px', background: '#d1fae5', borderRadius: '8px', border: '2px solid #10b981' }}>
+                      <div style={styles.parentName}>{linkedParent.name}</div>
+                      <div style={styles.parentDetails}>{linkedParent.email}</div>
                     </div>
-
-                    {/* Option to unlink */}
-                    <div style={styles.sectionTitle}>🔗 Actions</div>
-                    <div 
-                      style={{ ...styles.unlinkOption, ...(selectedParentId === null ? styles.unlinkOptionSelected : styles.unlinkOptionUnselected) }}
-                      onClick={() => setSelectedParentId(null)}
-                    >
-                      <input 
-                        type="radio"
-                        checked={selectedParentId === null}
-                        onChange={() => {}}
-                        style={styles.radio}
-                      />
-                      <div style={styles.parentInfo}>
-                        <div style={{ ...styles.parentName, color: '#dc2626' }}>❌ Unlink Parent</div>
-                        <div style={styles.parentDetails}>Remove parent link from this student</div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* No linked parent - allow searching and selecting a parent */}
-                    <p style={styles.infoText}>
-                      Select a parent to link to this student. Each student can only be linked to one parent.
-                    </p>
-
-                    <div style={styles.sectionTitle}>🔍 Search Parents</div>
-                    <input
-                      type="text"
-                      placeholder="Search by name or email..."
-                      value={parentSearchTerm}
-                      onChange={(e) => setParentSearchTerm(e.target.value)}
-                      style={styles.parentSearchInput}
-                    />
-
-                    <div style={styles.sectionTitle}>👨‍👩‍👧 Available Parents ({filteredAvailableParents.length})</div>
-                    <div style={styles.parentList}>
-                      {filteredAvailableParents.length === 0 ? (
-                        <div style={styles.emptyList}>
-                          {parentSearchTerm ? 'No parents match your search' : 'No parents available in the school'}
-                        </div>
-                      ) : (
-                        filteredAvailableParents.map(parent => (
-                          <div 
-                            key={parent.id}
-                            style={selectedParentId === parent.id ? styles.parentItemSelected : styles.parentItem}
-                            onClick={() => handleSelectParent(parent.id)}
-                          >
-                            <input 
-                              type="radio"
-                              checked={selectedParentId === parent.id}
-                              onChange={() => {}}
-                              style={styles.radio}
-                            />
-                            <div style={styles.parentInfo}>
-                              <div style={styles.parentName}>{parent.name}</div>
-                              <div style={styles.parentDetails}>
-                                {parent.email} {parent.contact && parent.contact !== 'N/A' ? `• ${parent.contact}` : ''}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </>
+                  </div>
                 )}
+
+                <div style={styles.sectionTitle}>👨‍👩‍👧 Available Parents</div>
+                
+                {/* Option to unlink */}
+                {linkedParent && (
+                  <div 
+                    style={{ ...styles.unlinkOption, ...(selectedParentId === null ? styles.unlinkOptionSelected : styles.unlinkOptionUnselected) }}
+                    onClick={() => setSelectedParentId(null)}
+                  >
+                    <input 
+                      type="radio"
+                      checked={selectedParentId === null}
+                      onChange={() => {}}
+                      style={styles.radio}
+                    />
+                    <div style={styles.parentInfo}>
+                      <div style={{ ...styles.parentName, color: '#dc2626' }}>❌ Unlink Parent</div>
+                      <div style={styles.parentDetails}>Remove parent link from this student</div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.parentList}>
+                  {availableParents.length === 0 ? (
+                    <div style={styles.emptyList}>No parents available in the school</div>
+                  ) : (
+                    availableParents.map(parent => (
+                      <div 
+                        key={parent.id}
+                        style={selectedParentId === parent.id ? styles.parentItemSelected : styles.parentItem}
+                        onClick={() => handleSelectParent(parent.id)}
+                      >
+                        <input 
+                          type="radio"
+                          checked={selectedParentId === parent.id}
+                          onChange={() => {}}
+                          style={styles.radio}
+                        />
+                        <div style={styles.parentInfo}>
+                          <div style={styles.parentName}>
+                            {parent.name}
+                            {linkedParent && linkedParent.id === parent.id && (
+                              <span style={styles.currentParentBadge}>Current</span>
+                            )}
+                          </div>
+                          <div style={styles.parentDetails}>
+                            {parent.email} {parent.contact && parent.contact !== 'N/A' ? `• ${parent.contact}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
 
                 <div style={styles.modalButtons}>
                   <button style={styles.cancelButton} onClick={() => setLinkParentStudent(null)}>

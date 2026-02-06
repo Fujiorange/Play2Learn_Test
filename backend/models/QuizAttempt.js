@@ -1,29 +1,46 @@
+
 const mongoose = require('mongoose');
 
-const quizAttemptSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
-  score: { type: Number, default: 0 },
-  answers: [{
-    questionId: { type: mongoose.Schema.Types.ObjectId },
-    question_text: { type: String },
-    difficulty: { type: Number },
-    answer: { type: String },
-    correct_answer: { type: String },
-    isCorrect: { type: Boolean },
-    answeredAt: { type: Date, default: Date.now }
-  }],
-  current_difficulty: { type: Number, default: 1 },
-  correct_count: { type: Number, default: 0 },
-  total_answered: { type: Number, default: 0 },
-  is_completed: { type: Boolean, default: false },
-  startedAt: { type: Date, default: Date.now },
-  completedAt: { type: Date },
-  timeSpent: { type: Number } // in seconds
+const QuestionSnapSchema = new mongoose.Schema(
+  {
+    question_id: { type: mongoose.Schema.Types.ObjectId, required: false },
+    prompt: { type: String },
+    text: { type: String },
+    operation: { type: String },
+    choices: { type: [String], default: [] },
+    correctIndex: { type: Number, default: 0 },
+    selectedIndex: { type: Number, default: null },
+    isCorrect: { type: Boolean, default: false },
+    difficulty: { type: Number, default: null },
+    topic: { type: String, default: null },
+    subject: { type: String, default: null },
+  },
+  { _id: false }
+);
+
+const QuizAttemptSchema = new mongoose.Schema(
+  {
+    trial_user_id: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+    student_id: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+
+    type: { type: String, default: 'placement' },
+
+    total_questions: { type: Number, default: 15 },
+    correct_count: { type: Number, default: 0 },
+    score: { type: Number, default: 0 },
+    result_band: { type: String, default: '' },
+    new_profile: { type: Number, default: 1 },
+
+    questions: { type: [QuestionSnapSchema], default: [] },
+
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now },
+  },
+  { collection: 'quizattempts' }
+);
+
+QuizAttemptSchema.pre('save', function () {
+  this.updated_at = new Date();
 });
 
-// Add compound index for efficient querying of user's attempts
-quizAttemptSchema.index({ userId: 1, is_completed: 1 });
-quizAttemptSchema.index({ userId: 1, startedAt: -1 });
-
-module.exports = mongoose.model('QuizAttempt', quizAttemptSchema);
+module.exports = mongoose.model('QuizAttempt', QuizAttemptSchema);

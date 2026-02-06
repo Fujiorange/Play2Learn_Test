@@ -90,7 +90,7 @@ export default function ViewResultHistory() {
             </button>
           </div>
           <p style={styles.subtitle}>
-            Complete history of all your math quiz attempts (Practice & Adaptive)
+            Complete history of all your Primary 1 math quiz attempts
           </p>
           
           {error && (
@@ -106,8 +106,7 @@ export default function ViewResultHistory() {
               <thead>
                 <tr>
                   <th style={styles.th}>Date & Time</th>
-                  <th style={styles.th}>Quiz Type</th>
-                  <th style={styles.th}>Level</th>
+                  <th style={styles.th}>Profile</th>
                   <th style={styles.th}>Questions</th>
                   <th style={styles.th}>Score</th>
                   <th style={styles.th}>Percentage</th>
@@ -116,8 +115,8 @@ export default function ViewResultHistory() {
               </thead>
               <tbody>
                 {history.map(item => {
-                  const percentage = item.maxScore > 0 ? Math.round((item.score / item.maxScore) * 100) : 0;
-                  const scoreColor = getScoreColor(item.score, item.maxScore || 1);
+                  const percentage = Math.round((item.score / item.maxScore) * 100);
+                  const scoreColor = getScoreColor(item.score, item.maxScore);
                   
                   return (
                     <tr key={item.id}>
@@ -127,33 +126,16 @@ export default function ViewResultHistory() {
                       </td>
                       <td style={styles.td}>
                         <span style={{
-                          padding: '4px 8px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          background: item.quizType === 'adaptive' ? '#dbeafe' : '#f3e8ff',
-                          color: item.quizType === 'adaptive' ? '#1e40af' : '#6b21a8'
-                        }}>
-                          {item.quizType === 'adaptive' ? '🎯 Adaptive' : '📝 Practice'}
-                        </span>
-                        {item.quizTitle && (
-                          <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                            {item.quizTitle}
-                          </div>
-                        )}
-                      </td>
-                      <td style={styles.td}>
-                        <span style={{
                           ...styles.profileBadge,
                           background: `linear-gradient(135deg, ${getProfileColor(item.profile)} 0%, ${getProfileColor(item.profile)}dd 100%)`
                         }}>
-                          Level {item.profile}
+                          Profile {item.profile}
                         </span>
                       </td>
-                      <td style={styles.td}>{item.totalQuestions || 0} questions</td>
+                      <td style={styles.td}>{item.totalQuestions || 15} questions</td>
                       <td style={styles.td}>
                         <span style={{...styles.scoreText, color: scoreColor}}>
-                          {item.score}/{item.maxScore || 0}
+                          {item.score}/{item.maxScore}
                         </span>
                       </td>
                       <td style={styles.td}>

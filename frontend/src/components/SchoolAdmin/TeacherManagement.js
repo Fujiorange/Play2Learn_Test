@@ -17,10 +17,6 @@ export default function TeacherManagement() {
   const [resetting, setResetting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  
-  // Sorting State
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -58,44 +54,6 @@ export default function TeacherManagement() {
     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     t.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Sort teachers
-  const sortedTeachers = [...filteredTeachers].sort((a, b) => {
-    let aValue, bValue;
-    switch (sortField) {
-      case 'name':
-        aValue = a.name?.toLowerCase() || '';
-        bValue = b.name?.toLowerCase() || '';
-        break;
-      case 'email':
-        aValue = a.email?.toLowerCase() || '';
-        bValue = b.email?.toLowerCase() || '';
-        break;
-      case 'className':
-        aValue = a.className?.toLowerCase() || '';
-        bValue = b.className?.toLowerCase() || '';
-        break;
-      default:
-        return 0;
-    }
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortIndicator = (field) => {
-    if (sortField !== field) return ' ↕';
-    return sortDirection === 'asc' ? ' ↑' : ' ↓';
-  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -174,7 +132,6 @@ export default function TeacherManagement() {
     searchInput: { width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: '#f9fafb', fontFamily: 'inherit', marginBottom: '24px', boxSizing: 'border-box' },
     table: { width: '100%', borderCollapse: 'collapse' },
     th: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb' },
-    thSortable: { padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '700', color: '#374151', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', userSelect: 'none' },
     td: { padding: '12px', fontSize: '14px', color: '#374151', borderBottom: '1px solid #e5e7eb' },
     viewButton: { padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginRight: '8px' },
     resetButton: { padding: '6px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
@@ -246,14 +203,14 @@ export default function TeacherManagement() {
               <table style={styles.table}>
                 <thead>
                   <tr>
-                    <th style={styles.thSortable} onClick={() => handleSort('name')}>Name{getSortIndicator('name')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('email')}>Email{getSortIndicator('email')}</th>
-                    <th style={styles.thSortable} onClick={() => handleSort('className')}>Class{getSortIndicator('className')}</th>
+                    <th style={styles.th}>Name</th>
+                    <th style={styles.th}>Email</th>
+                    <th style={styles.th}>Class</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedTeachers.map((teacher) => (
+                  {filteredTeachers.map((teacher) => (
                     <tr key={teacher.id}>
                       <td style={styles.td}><strong>{teacher.name}</strong></td>
                       <td style={styles.td}>{teacher.email}</td>
@@ -274,7 +231,7 @@ export default function TeacherManagement() {
                 </tbody>
               </table>
 
-              {sortedTeachers.length === 0 && (
+              {filteredTeachers.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
                   No teachers found
                 </div>
