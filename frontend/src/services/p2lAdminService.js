@@ -358,6 +358,18 @@ export const deleteMaintenanceBroadcast = async (id) => {
   });
 };
 
+// ==================== SKILL MATRIX / XP REWARDS ====================
+export const getXPRewards = async () => {
+  return apiCall('/api/p2ladmin/xp-rewards');
+};
+
+export const updateXPReward = async (level, rewardData) => {
+  return apiCall(`/api/p2ladmin/xp-rewards/${level}`, {
+    method: 'PUT',
+    body: JSON.stringify(rewardData),
+  });
+};
+
 const p2lAdminService = {
   seedP2LAdmin,
   registerP2LAdmin,
@@ -400,6 +412,8 @@ const p2lAdminService = {
   getAllUsers,
   getUserSchools,
   bulkDeleteUsers,
+  getXPRewards,
+  updateXPReward,
 };
 
 export default p2lAdminService;

@@ -118,6 +118,11 @@ function P2LAdminDashboard() {
             <p>Create system-wide announcements and alerts</p>
           </Link>
 
+          <Link to="/p2ladmin/skill-matrix" className="management-card">
+            <h3>⚡ Skill Matrix XP</h3>
+            <p>Configure XP rewards and penalties by difficulty</p>
+          </Link>
+
           <Link to="/p2ladmin/health" className="management-card">
             <h3>🔍 Health Check</h3>
             <p>Monitor system health and connectivity</p>

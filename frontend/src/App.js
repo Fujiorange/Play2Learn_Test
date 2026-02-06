@@ -111,6 +111,7 @@ import LandingPageManager from './components/P2LAdmin/LandingPageManager';
 import HealthCheck from './components/P2LAdmin/HealthCheck';
 import MaintenanceBroadcastManager from './components/P2LAdmin/MaintenanceBroadcastManager';
 import UserManagement from './components/P2LAdmin/UserManagement';
+import SkillMatrixConfig from './components/P2LAdmin/SkillMatrixConfig';
 
 // Maintenance Banner
 import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner';
@@ -262,6 +263,7 @@ function App() {
           <Route path="/p2ladmin/maintenance" element={<MaintenanceBroadcastManager />} />
           <Route path="/p2ladmin/health" element={<HealthCheck />} />
           <Route path="/p2ladmin/users" element={<UserManagement />} />
+          <Route path="/p2ladmin/skill-matrix" element={<SkillMatrixConfig />} />
 
         </Routes>
       </div>
