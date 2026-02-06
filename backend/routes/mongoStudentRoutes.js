@@ -1315,8 +1315,14 @@ router.get("/testimonials", async (req, res) => {
 router.get("/shop", async (req, res) => {
   try {
     const db = mongoose.connection.db;
+    const userId = req.user.userId;
+    
+    // Get user's schoolId
+    const user = await User.findById(userId);
+    const schoolId = user?.schoolId?.toString() || '';
+    
     const shopItems = await db.collection('shop_items')
-      .find({ isActive: true })
+      .find({ isActive: true, schoolId: schoolId })
       .sort({ category: 1, cost: 1 })
       .toArray();
 
@@ -1453,10 +1459,15 @@ router.get("/badges", async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const userEmail = req.user.email;
+    const userId = req.user.userId;
+    
+    // Get user's schoolId
+    const user = await User.findById(userId);
+    const schoolId = user?.schoolId?.toString() || '';
 
-    // Get all active badges
+    // Get all active badges for this school
     const badges = await db.collection('badges')
-      .find({ isActive: true })
+      .find({ isActive: true, schoolId: schoolId })
       .sort({ rarity: 1, criteriaValue: 1 })
       .toArray();
 
@@ -1492,11 +1503,18 @@ router.get("/badges/progress", async (req, res) => {
       student_id: studentId,
       quiz_type: "regular" 
     });
+    
+    // Get assignments separately
+    const allAssignments = await StudentQuiz.find({ 
+      student_id: studentId,
+      quiz_type: "assignment" 
+    });
 
     // Filter: Only count quizzes that have been submitted (have student answers)
     const completedQuizzes = allQuizzes.filter(isQuizCompleted);
+    const completedAssignments = allAssignments.filter(isQuizCompleted);
 
-    console.log(`📝 Found ${completedQuizzes.length} completed quizzes for ${userEmail}`);
+    console.log(`📝 Found ${completedQuizzes.length} completed quizzes and ${completedAssignments.length} assignments for ${userEmail}`);
     
     // Log quiz scores for debugging
     if (completedQuizzes.length > 0) {
@@ -1510,6 +1528,7 @@ router.get("/badges/progress", async (req, res) => {
     // Calculate progress for different criteria
     const progress = {
       quizzes_completed: completedQuizzes.length,
+      assignments_completed: completedAssignments.length,
       login_streak: mathProfile?.streak || 0,
       perfect_scores: completedQuizzes.filter(q => q.score === 15).length, // 15/15 = 100%
       high_scores: completedQuizzes.filter(q => q.percentage >= 90).length,
@@ -1520,7 +1539,12 @@ router.get("/badges/progress", async (req, res) => {
 
     // Check and auto-award badges
     const db = mongoose.connection.db;
-    const badges = await db.collection('badges').find({ isActive: true }).toArray();
+    
+    // Get user's schoolId for filtering badges
+    const user = await User.findById(studentId);
+    const schoolId = user?.schoolId?.toString() || '';
+    
+    const badges = await db.collection('badges').find({ isActive: true, schoolId: schoolId }).toArray();
     const earnedBadges = await db.collection('student_badges')
       .find({ student_email: userEmail })
       .toArray();

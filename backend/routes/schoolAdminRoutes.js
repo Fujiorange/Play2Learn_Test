@@ -3212,4 +3212,338 @@ router.put('/students/:studentId/parent', authenticateSchoolAdmin, async (req, r
   }
 });
 
+// ==================== BADGE MANAGEMENT ====================
+
+// Get all badges for the school
+router.get('/badges', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolId = req.schoolAdmin.schoolId;
+    
+    const badges = await db.collection('badges')
+      .find({ schoolId: schoolId.toString() })
+      .sort({ createdAt: -1 })
+      .toArray();
+    
+    res.json({
+      success: true,
+      badges
+    });
+  } catch (error) {
+    console.error('Get badges error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load badges' });
+  }
+});
+
+// Create a new badge
+router.post('/badges', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolId = req.schoolAdmin.schoolId;
+    const { name, description, icon, conditionType, activityType, conditionValue, rarity, isActive } = req.body;
+    
+    if (!name || !description) {
+      return res.status(400).json({ success: false, error: 'Name and description are required' });
+    }
+    
+    // Build criteria type based on condition and activity
+    let criteriaType = '';
+    if (conditionType === 'attempt') {
+      criteriaType = activityType === 'quiz' ? 'quizzes_completed' : 'assignments_completed';
+    } else if (conditionType === 'score') {
+      criteriaType = activityType === 'perfect' ? 'perfect_scores' : 'high_scores';
+    } else if (conditionType === 'streak') {
+      criteriaType = 'login_streak';
+    } else if (conditionType === 'points') {
+      criteriaType = 'points_earned';
+    }
+    
+    const newBadge = {
+      name,
+      description,
+      icon: icon || '🏆',
+      conditionType,
+      activityType,
+      criteriaType,
+      criteriaValue: parseInt(conditionValue) || 1,
+      rarity: rarity || 'common',
+      isActive: isActive !== false,
+      schoolId: schoolId.toString(),
+      earnedCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    const result = await db.collection('badges').insertOne(newBadge);
+    newBadge._id = result.insertedId;
+    
+    res.json({
+      success: true,
+      message: 'Badge created successfully',
+      badge: newBadge
+    });
+  } catch (error) {
+    console.error('Create badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create badge' });
+  }
+});
+
+// Update a badge
+router.put('/badges/:badgeId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolId = req.schoolAdmin.schoolId;
+    const { name, description, icon, conditionType, activityType, conditionValue, rarity, isActive } = req.body;
+    
+    const badge = await db.collection('badges').findOne({ 
+      _id: new mongoose.Types.ObjectId(badgeId),
+      schoolId: schoolId.toString()
+    });
+    
+    if (!badge) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+    
+    // Build criteria type
+    let criteriaType = badge.criteriaType;
+    if (conditionType) {
+      if (conditionType === 'attempt') {
+        criteriaType = activityType === 'quiz' ? 'quizzes_completed' : 'assignments_completed';
+      } else if (conditionType === 'score') {
+        criteriaType = activityType === 'perfect' ? 'perfect_scores' : 'high_scores';
+      } else if (conditionType === 'streak') {
+        criteriaType = 'login_streak';
+      } else if (conditionType === 'points') {
+        criteriaType = 'points_earned';
+      }
+    }
+    
+    const updateData = {
+      name: name || badge.name,
+      description: description || badge.description,
+      icon: icon || badge.icon,
+      conditionType: conditionType || badge.conditionType,
+      activityType: activityType || badge.activityType,
+      criteriaType,
+      criteriaValue: conditionValue ? parseInt(conditionValue) : badge.criteriaValue,
+      rarity: rarity || badge.rarity,
+      isActive: isActive !== undefined ? isActive : badge.isActive,
+      updatedAt: new Date()
+    };
+    
+    await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(badgeId) },
+      { $set: updateData }
+    );
+    
+    res.json({
+      success: true,
+      message: 'Badge updated successfully',
+      badge: { ...badge, ...updateData }
+    });
+  } catch (error) {
+    console.error('Update badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update badge' });
+  }
+});
+
+// Delete a badge
+router.delete('/badges/:badgeId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolId = req.schoolAdmin.schoolId;
+    
+    const badge = await db.collection('badges').findOne({
+      _id: new mongoose.Types.ObjectId(badgeId),
+      schoolId: schoolId.toString()
+    });
+    
+    if (!badge) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+    
+    await db.collection('badges').deleteOne({ _id: new mongoose.Types.ObjectId(badgeId) });
+    
+    // Also remove from student_badges
+    await db.collection('student_badges').deleteMany({ badge_id: new mongoose.Types.ObjectId(badgeId) });
+    
+    res.json({
+      success: true,
+      message: 'Badge deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete badge' });
+  }
+});
+
+// Toggle badge active status
+router.patch('/badges/:badgeId/toggle', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolId = req.schoolAdmin.schoolId;
+    
+    const badge = await db.collection('badges').findOne({
+      _id: new mongoose.Types.ObjectId(badgeId),
+      schoolId: schoolId.toString()
+    });
+    
+    if (!badge) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+    
+    const newStatus = !badge.isActive;
+    await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(badgeId) },
+      { $set: { isActive: newStatus, updatedAt: new Date() } }
+    );
+    
+    res.json({
+      success: true,
+      message: `Badge ${newStatus ? 'enabled' : 'disabled'} successfully`,
+      isActive: newStatus
+    });
+  } catch (error) {
+    console.error('Toggle badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to toggle badge' });
+  }
+});
+
+// ==================== SHOP MANAGEMENT ====================
+
+// Get all shop items for the school
+router.get('/shop', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolId = req.schoolAdmin.schoolId;
+    
+    const items = await db.collection('shop_items')
+      .find({ schoolId: schoolId.toString() })
+      .sort({ createdAt: -1 })
+      .toArray();
+    
+    res.json({
+      success: true,
+      items
+    });
+  } catch (error) {
+    console.error('Get shop items error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load shop items' });
+  }
+});
+
+// Create a new shop item
+router.post('/shop', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolId = req.schoolAdmin.schoolId;
+    const { name, description, icon, cost, category, stock } = req.body;
+    
+    if (!name || !description || !cost) {
+      return res.status(400).json({ success: false, error: 'Name, description and cost are required' });
+    }
+    
+    const newItem = {
+      name,
+      description,
+      icon: icon || '🎁',
+      cost: parseInt(cost) || 50,
+      category: category || 'cosmetic',
+      stock: stock !== undefined ? parseInt(stock) : -1, // -1 means unlimited
+      purchased: 0,
+      isActive: true,
+      schoolId: schoolId.toString(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    const result = await db.collection('shop_items').insertOne(newItem);
+    newItem._id = result.insertedId;
+    
+    res.json({
+      success: true,
+      message: 'Shop item created successfully',
+      item: newItem
+    });
+  } catch (error) {
+    console.error('Create shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create shop item' });
+  }
+});
+
+// Update a shop item
+router.put('/shop/:itemId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolId = req.schoolAdmin.schoolId;
+    const { name, description, icon, cost, category, stock, isActive } = req.body;
+    
+    const item = await db.collection('shop_items').findOne({
+      _id: new mongoose.Types.ObjectId(itemId),
+      schoolId: schoolId.toString()
+    });
+    
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+    
+    const updateData = {
+      name: name || item.name,
+      description: description || item.description,
+      icon: icon || item.icon,
+      cost: cost !== undefined ? parseInt(cost) : item.cost,
+      category: category || item.category,
+      stock: stock !== undefined ? parseInt(stock) : item.stock,
+      isActive: isActive !== undefined ? isActive : item.isActive,
+      updatedAt: new Date()
+    };
+    
+    await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId) },
+      { $set: updateData }
+    );
+    
+    res.json({
+      success: true,
+      message: 'Shop item updated successfully',
+      item: { ...item, ...updateData }
+    });
+  } catch (error) {
+    console.error('Update shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update shop item' });
+  }
+});
+
+// Delete a shop item
+router.delete('/shop/:itemId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolId = req.schoolAdmin.schoolId;
+    
+    const item = await db.collection('shop_items').findOne({
+      _id: new mongoose.Types.ObjectId(itemId),
+      schoolId: schoolId.toString()
+    });
+    
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+    
+    await db.collection('shop_items').deleteOne({ _id: new mongoose.Types.ObjectId(itemId) });
+    
+    res.json({
+      success: true,
+      message: 'Shop item deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete shop item' });
+  }
+});
+
 module.exports = router;
