@@ -46,7 +46,7 @@ const QuizAttempt = require('../models/QuizAttempt');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
-const { calculateAnswerPoints, computeStudentTier, computeSkillTier } = require('../utils/experienceCalculator');
+const { calculateAnswerPoints, computeStudentTier, computeSkillTier, fetchRewardConfiguration } = require('../utils/experienceCalculator');
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -329,13 +329,18 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
     const operationGroups = new Map();
     const profileDifficulty = Math.min(5, Math.ceil(currentProfile / 2));
 
+    // Fetch reward configuration once for all questions
+    const { fetchRewardConfiguration } = require('../utils/experienceCalculator');
+    const rewardConfig = await fetchRewardConfiguration();
+    const difficultyRewards = rewardConfig[profileDifficulty] || rewardConfig[3];
+
     // Accumulate XP rewards per operation type
     for (const question of questions) {
       const operationType = question.operation
         ? question.operation.charAt(0).toUpperCase() + question.operation.slice(1)
         : "Addition";
       
-      const rewardPoints = await calculateAnswerPoints(profileDifficulty, question.is_correct);
+      const rewardPoints = question.is_correct ? difficultyRewards.correct : difficultyRewards.incorrect;
       
       if (!operationGroups.has(operationType)) {
         operationGroups.set(operationType, []);
@@ -656,6 +661,11 @@ router.post("/placement-quiz/submit", async (req, res) => {
     }
 
     let correctAnswerCount = 0;
+    
+    // Fetch reward config once
+    const rewardConfig = await fetchRewardConfiguration();
+    const placementRewards = rewardConfig[3] || rewardConfig[1];
+    
     const rewardAccumulator = [];
     
     for (let idx = 0; idx < quiz.questions.length; idx++) {
@@ -677,8 +687,7 @@ router.post("/placement-quiz/submit", async (req, res) => {
       
       if (questionData.is_correct) correctAnswerCount++;
       
-      const placementDifficultyLevel = 3;
-      const pointsForAnswer = await calculateAnswerPoints(placementDifficultyLevel, questionData.is_correct);
+      const pointsForAnswer = questionData.is_correct ? placementRewards.correct : placementRewards.incorrect;
       rewardAccumulator.push(pointsForAnswer);
     }
 
@@ -821,9 +830,14 @@ router.post("/quiz/submit", async (req, res) => {
     }
 
     let correctCount = 0;
-    const rewardCollector = [];
     
     const quizDifficulty = Math.min(5, Math.ceil(quiz.profile_level / 2));
+    
+    // Fetch reward config once
+    const rewardConfig = await fetchRewardConfiguration();
+    const levelRewards = rewardConfig[quizDifficulty] || rewardConfig[3];
+    
+    const rewardCollector = [];
     
     for (let idx = 0; idx < quiz.questions.length; idx++) {
       const questionItem = quiz.questions[idx];
@@ -832,7 +846,7 @@ router.post("/quiz/submit", async (req, res) => {
       questionItem.is_correct = userResponse === questionItem.correct_answer;
       if (questionItem.is_correct) correctCount++;
       
-      const pointsAwarded = await calculateAnswerPoints(quizDifficulty, questionItem.is_correct);
+      const pointsAwarded = questionItem.is_correct ? levelRewards.correct : levelRewards.incorrect;
       rewardCollector.push(pointsAwarded);
     }
 

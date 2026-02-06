@@ -6,7 +6,7 @@ const QuizAttempt = require('../models/QuizAttempt');
 const User = require('../models/User');
 const MathProfile = require('../models/MathProfile');
 const MathSkill = require('../models/MathSkill');
-const { calculateAnswerPoints, computeStudentTier, computeSkillTier } = require('../utils/experienceCalculator');
+const { fetchRewardConfiguration, computeStudentTier, computeSkillTier } = require('../utils/experienceCalculator');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -481,7 +481,11 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
     const responseCorrect = normalizedResponse === normalizedCorrect;
 
     const questionDifficulty = matchedQuestion.difficulty || 3;
-    const rewardValue = await calculateAnswerPoints(questionDifficulty, responseCorrect);
+    
+    // Fetch reward config and calculate points
+    const rewardConfig = await fetchRewardConfiguration();
+    const difficultyRewards = rewardConfig[questionDifficulty] || rewardConfig[3];
+    const rewardValue = responseCorrect ? difficultyRewards.correct : difficultyRewards.incorrect;
 
     attemptDoc.answers.push({
       questionId: matchedQuestion.question_id || matchedQuestion._id,
