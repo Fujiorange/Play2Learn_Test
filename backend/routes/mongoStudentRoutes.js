@@ -831,39 +831,6 @@ router.post("/quiz/submit", async (req, res) => {
 // ==================== QUIZ RESULTS / HISTORY ====================
 // (First duplicate route removed - see below for the correct quiz-results endpoint)
 
-// Leaderboard
-router.get("/leaderboard", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-    
-    // ✅ FIX: Get all regular quizzes, then filter out unsubmitted ones
-    const allQuizzes = await Quiz.find({ 
-      student_id: studentId, 
-      quiz_type: "regular" 
-    }).sort({ completed_at: -1 });
-
-    // Filter: Only include quizzes that have been submitted (have student answers)
-    const quizzes = allQuizzes.filter(isQuizCompleted);
-
-    res.json({
-      success: true,
-      results: quizzes.map((q) => ({
-        id: q._id,
-        profile: q.profile_level,
-        date: q.completed_at.toLocaleDateString(),
-        time: q.completed_at.toLocaleTimeString(),
-        score: q.score,
-        total: q.total_questions,
-        percentage: q.percentage,
-        points_earned: q.points_earned,
-      })),
-    });
-  } catch (error) {
-    console.error("❌ Quiz results error:", error);
-    res.status(500).json({ success: false, error: "Failed to load quiz results" });
-  }
-});
-
 // ==================== MATH PROGRESS ====================
 router.get("/math-progress", async (req, res) => {
   try {
