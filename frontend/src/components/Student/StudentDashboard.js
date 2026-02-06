@@ -73,6 +73,7 @@ export default function StudentDashboard() {
           rank: userRank,
           completedQuizzes,
           grade_level: gradeLevel,
+          placementCompleted: dashboardInfo.placementCompleted || false,
         });
         console.log('✅ Dashboard data set successfully');
       } else {
@@ -358,7 +359,10 @@ export default function StudentDashboard() {
         </div>
 
         <div style={styles.menuGrid}>
-          {menuItems.map((item) => (
+          {menuItems
+            // ✅ Hide Placement Quiz if already completed
+            .filter(item => item.id !== 'quiz' || !dashboardData.placementCompleted)
+            .map((item) => (
             <div
               key={item.id}
               style={{

@@ -128,6 +128,7 @@ export default function QuizResult() {
     button: { padding: '12px 32px', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
     primaryButton: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white' },
     secondaryButton: { background: '#6b7280', color: 'white' },
+    outlineButton: { background: 'transparent', color: '#6b7280', border: '2px solid #6b7280' },
   };
 
   if (!result) {
@@ -240,27 +241,36 @@ export default function QuizResult() {
 
         {/* Action Buttons */}
         <div style={styles.buttonsContainer}>
+          {quizType === 'placement' && (
+            <button
+              style={{ ...styles.button, ...styles.primaryButton }}
+              onClick={() => navigate('/student/adaptive-quizzes')}
+              onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+            >
+              🎲 Start Adaptive Quizzes
+            </button>
+          )}
+
+          {quizType !== 'placement' && (
+            <button
+              style={{ ...styles.button, ...styles.secondaryButton }}
+              onClick={() => navigate('/student/quiz/attempt')}
+              onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+            >
+              📝 Take Another Quiz
+            </button>
+          )}
+          
           <button
-            style={{ ...styles.button, ...styles.primaryButton }}
+            style={{ ...styles.button, ...styles.outlineButton }}
             onClick={() => navigate('/student')}
             onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
             onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
           >
             🏠 Back to Dashboard
           </button>
-          
-          {quizType === 'placement' && (
-            <button
-              style={{ ...styles.button, ...styles.secondaryButton }}
-              onClick={() => navigate('/student/subjects')}
-              onMouseEnter={(e) => e.target.style.background = '#4b5563'}
-              onMouseLeave={(e) => e.target.style.background = '#6b7280'}
-            >
-              📊 View My Profile
-            </button>
-          )}
-
-
         </div>
       </div>
 
