@@ -6,11 +6,18 @@ const questionSchema = new mongoose.Schema({
   answer: { type: String, required: true },
   difficulty: { 
     type: Number, 
-    enum: [1, 2, 3, 4, 5], 
+    min: 1,
+    max: 10,
     default: 3,
     required: true 
   },
-  subject: { type: String, default: 'General' },
+  quiz_level: {
+    type: Number,
+    min: 0,
+    max: 20,
+    default: 0
+  },
+  subject: { type: String, default: 'Mathematics' },
   topic: { type: String, default: '' },
   grade: { type: String, default: 'Primary 1' },
   is_active: { type: Boolean, default: true },
@@ -27,5 +34,6 @@ questionSchema.pre('save', function() {
 questionSchema.index({ is_active: 1, difficulty: 1 });
 questionSchema.index({ subject: 1, topic: 1 });
 questionSchema.index({ grade: 1 });
+questionSchema.index({ quiz_level: 1, subject: 1, difficulty: 1 });
 
 module.exports = mongoose.model('Question', questionSchema);

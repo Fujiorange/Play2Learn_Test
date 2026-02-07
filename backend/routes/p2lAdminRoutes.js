@@ -16,6 +16,7 @@ const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const { calculateLandingPageStatistics } = require('../utils/landingPageStats');
+const { autoGenerateAllQuizzes, generateQuizForLevel, getQuizGenerationStats } = require('../utils/quizGenerator');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -1092,8 +1093,14 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
 
           // Parse difficulty (default to 3 if not provided or invalid)
           let difficulty = parseInt(normalizedRow.difficulty) || 3;
-          if (difficulty < 1 || difficulty > 5) {
+          if (difficulty < 1 || difficulty > 10) {
             difficulty = 3;
+          }
+
+          // Parse quiz_level (default to 0 if not provided or invalid)
+          let quizLevel = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level'] || normalizedRow.quizlevel) || 0;
+          if (quizLevel < 0 || quizLevel > 20) {
+            quizLevel = 0;
           }
 
           results.push({
@@ -1101,7 +1108,8 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
             choices: choices,
             answer: answer.trim(),
             difficulty: difficulty,
-            subject: normalizedRow.subject || 'General',
+            quiz_level: quizLevel,
+            subject: normalizedRow.subject || 'Mathematics',
             topic: normalizedRow.topic || '',
             grade: normalizedRow.grade || 'Primary 1',
             is_active: normalizedRow.is_active !== 'false' && normalizedRow.is_active !== '0'
@@ -1144,6 +1152,16 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
       }
     }
 
+    // Trigger automatic quiz generation after questions are uploaded
+    console.log('Triggering automatic quiz generation after CSV upload...');
+    let quizGenResults = null;
+    try {
+      quizGenResults = await autoGenerateAllQuizzes();
+    } catch (genError) {
+      console.error('Quiz generation failed:', genError);
+      // Don't fail the upload if quiz generation fails
+    }
+
     res.json({
       success: true,
       message: `Successfully uploaded ${savedQuestions.length} questions`,
@@ -1151,7 +1169,12 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
         total: results.length,
         successful: savedQuestions.length,
         failed: errors.length,
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors : undefined,
+        quizGeneration: quizGenResults ? {
+          generated: quizGenResults.success.length,
+          warnings: quizGenResults.warnings.length,
+          errors: quizGenResults.errors.length
+        } : null
       }
     });
   } catch (error) {
@@ -2426,6 +2449,145 @@ router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update skill points configuration' 
+    });
+  }
+});
+
+// ==================== AUTOMATED QUIZ GENERATION ROUTES ====================
+
+// Trigger manual quiz regeneration for all levels
+router.post('/quizzes/regenerate-all', authenticateP2LAdmin, async (req, res) => {
+  try {
+    console.log('Manual quiz regeneration triggered by admin:', req.user.email);
+    
+    const results = await autoGenerateAllQuizzes();
+    
+    res.json({
+      success: true,
+      message: 'Quiz regeneration completed',
+      data: {
+        generated: results.success.length,
+        warnings: results.warnings.length,
+        errors: results.errors.length,
+        details: results
+      }
+    });
+  } catch (error) {
+    console.error('Quiz regeneration error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to regenerate quizzes',
+      message: error.message
+    });
+  }
+});
+
+// Regenerate quiz for a specific level
+router.post('/quizzes/regenerate-level/:level', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const level = parseInt(req.params.level);
+    
+    if (isNaN(level) || level < 0 || level > 20) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid level. Must be between 0 and 20'
+      });
+    }
+    
+    console.log(`Manual quiz regeneration for level ${level} triggered by admin:`, req.user.email);
+    
+    const result = await generateQuizForLevel(level);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Quiz level ${level} regenerated successfully`,
+        data: result
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.message,
+        data: result
+      });
+    }
+  } catch (error) {
+    console.error('Quiz regeneration error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to regenerate quiz',
+      message: error.message
+    });
+  }
+});
+
+// Get quiz generation statistics and monitoring dashboard
+router.get('/quizzes/generation-stats', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const stats = await getQuizGenerationStats();
+    
+    // Get count of existing auto-generated quizzes
+    const autoGeneratedCount = await Quiz.countDocuments({
+      auto_generated: true,
+      is_active: true
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        ...stats,
+        autoGeneratedQuizzes: autoGeneratedCount,
+        lastGenerated: await Quiz.findOne({ auto_generated: true })
+          .sort({ generation_date: -1 })
+          .select('generation_date quiz_level')
+          .lean()
+      }
+    });
+  } catch (error) {
+    console.error('Get quiz generation stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get quiz generation statistics',
+      message: error.message
+    });
+  }
+});
+
+// Get auto-generated quizzes list
+router.get('/quizzes/auto-generated', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quizzes = await Quiz.find({ 
+      auto_generated: true,
+      is_active: true
+    })
+    .select('title quiz_level questions generation_date is_launched launched_at')
+    .sort({ quiz_level: 1 })
+    .lean();
+    
+    const quizzesWithStats = quizzes.map(quiz => ({
+      _id: quiz._id,
+      title: quiz.title,
+      quiz_level: quiz.quiz_level,
+      questionCount: quiz.questions.length,
+      generation_date: quiz.generation_date,
+      is_launched: quiz.is_launched,
+      launched_at: quiz.launched_at,
+      difficultyDistribution: quiz.questions.reduce((acc, q) => {
+        acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
+        return acc;
+      }, {})
+    }));
+    
+    res.json({
+      success: true,
+      data: quizzesWithStats
+    });
+  } catch (error) {
+    console.error('Get auto-generated quizzes error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get auto-generated quizzes',
+      message: error.message
     });
   }
 });

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const mathProfileSchema = new mongoose.Schema({
   student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   current_profile: { type: Number, default: 1, min: 1, max: 10 },
+  quiz_level: { type: Number, default: 0, min: 0, max: 20 },
   placement_completed: { type: Boolean, default: false },
   total_points: { type: Number, default: 0 },
   consecutive_fails: { type: Number, default: 0 },

@@ -57,6 +57,94 @@ function calculateLevelFromPoints(points) {
   return 0;
 }
 
+// Helper function to calculate promotion/demotion based on weighted scoring
+function calculatePromotion(attempt, currentQuizLevel, quizQuestions) {
+  const totalAnswered = attempt.total_answered;
+  const correctCount = attempt.correct_count;
+  
+  if (totalAnswered === 0) {
+    return {
+      newLevel: currentQuizLevel,
+      change: 0,
+      message: 'No answers submitted'
+    };
+  }
+  
+  // Calculate weighted score
+  let earnedPoints = 0;
+  let possiblePoints = 0;
+  
+  attempt.answers.forEach(answer => {
+    const difficulty = answer.difficulty || 1;
+    possiblePoints += difficulty;
+    if (answer.isCorrect) {
+      earnedPoints += difficulty;
+    }
+  });
+  
+  // Calculate percentage based on weighted score
+  const scorePercentage = possiblePoints > 0 ? (earnedPoints / possiblePoints) * 100 : 0;
+  
+  // Calculate average difficulty of correct answers
+  const correctAnswers = attempt.answers.filter(a => a.isCorrect);
+  const avgDifficulty = correctAnswers.length > 0
+    ? correctAnswers.reduce((sum, a) => sum + (a.difficulty || 1), 0) / correctAnswers.length
+    : 0;
+  
+  // Promotion logic based on score percentage and difficulty
+  let levelChange = 0;
+  let message = '';
+  
+  if (scorePercentage >= 100) {
+    // Perfect score
+    if (avgDifficulty >= 8) {
+      levelChange = 3; // Jump 3 levels for perfect score with high difficulty
+      message = 'Excellent! Perfect score with high difficulty questions. Promoted 3 levels!';
+    } else if (avgDifficulty >= 6) {
+      levelChange = 2;
+      message = 'Great job! Perfect score. Promoted 2 levels!';
+    } else {
+      levelChange = 1;
+      message = 'Well done! Perfect score. Promoted 1 level!';
+    }
+  } else if (scorePercentage >= 80) {
+    // 80-99%
+    if (avgDifficulty >= 7) {
+      levelChange = 2;
+      message = 'Excellent performance with challenging questions. Promoted 2 levels!';
+    } else {
+      levelChange = 1;
+      message = 'Good job! Promoted 1 level!';
+    }
+  } else if (scorePercentage >= 60) {
+    // 60-79%
+    if (avgDifficulty >= 6) {
+      levelChange = 1;
+      message = 'Good effort with moderate difficulty. Promoted 1 level!';
+    } else {
+      levelChange = 0;
+      message = 'Keep practicing! Stay at current level.';
+    }
+  } else {
+    // Below 60%
+    levelChange = -1;
+    message = 'Keep trying! Moved down 1 level for more practice.';
+  }
+  
+  // Calculate new level (bounded by 0-20)
+  const newLevel = Math.max(0, Math.min(20, currentQuizLevel + levelChange));
+  
+  return {
+    newLevel,
+    change: newLevel - currentQuizLevel,
+    message,
+    scorePercentage: Math.round(scorePercentage),
+    earnedPoints,
+    possiblePoints,
+    avgDifficulty: Math.round(avgDifficulty * 10) / 10
+  };
+}
+
 // Helper function to update skills from adaptive quiz answers
 async function updateSkillsFromAdaptiveQuiz(userId, answers) {
   try {
@@ -300,12 +388,17 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
     // Use lean() for read-only query to improve performance
     const user = await User.findById(userId).lean();
     
-    // Build query - show only launched quizzes for the student's class
+    // Get student's math profile to determine quiz level
+    const mathProfile = await MathProfile.findOne({ student_id: userId }).lean();
+    const studentQuizLevel = mathProfile?.quiz_level || 0;
+    
+    // Build query - show only launched quizzes for the student's class and level
     const now = new Date();
     let query = { 
       quiz_type: 'adaptive',
       is_active: true,
       is_launched: true,
+      quiz_level: studentQuizLevel, // Only show quizzes for student's current level
       $or: [
         { launch_start_date: null },
         { launch_start_date: { $lte: now } }
@@ -334,8 +427,8 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
     
     // Use lean() for read-only query to improve performance
     const quizzes = await Quiz.find(query)
-    .select('title description adaptive_config questions createdAt quiz_type is_launched launched_at launch_start_date launch_end_date launched_for_classes')
-    .sort({ launched_at: -1 })
+    .select('title description quiz_level adaptive_config questions createdAt quiz_type is_launched launched_at launch_start_date launch_end_date launched_for_classes auto_generated')
+    .sort({ quiz_level: 1, launched_at: -1 })
     .lean();
 
     // Count questions by difficulty for each quiz
@@ -350,21 +443,24 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
         _id: quiz._id,
         title: quiz.title,
         description: quiz.description,
+        quiz_level: quiz.quiz_level,
         total_questions: quiz.questions.length,
         difficulty_distribution: difficultyCount,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
-        difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'gradual',
+        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 20,
+        difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'immediate',
         createdAt: quiz.createdAt,
         is_launched: quiz.is_launched,
         launched_at: quiz.launched_at,
         launch_start_date: quiz.launch_start_date,
-        launch_end_date: quiz.launch_end_date
+        launch_end_date: quiz.launch_end_date,
+        auto_generated: quiz.auto_generated || false
       };
     });
 
     res.json({
       success: true,
-      data: quizzesWithStats
+      data: quizzesWithStats,
+      studentQuizLevel
     });
   } catch (error) {
     console.error('Get adaptive quizzes error:', error);
@@ -496,8 +592,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
     }
 
     // Check if target is reached
-    const targetCorrect = quiz.adaptive_config?.target_correct_answers || 10;
-    if (attempt.correct_count >= targetCorrect) {
+    const targetCorrect = quiz.adaptive_config?.target_correct_answers || 20;
+    if (attempt.total_answered >= targetCorrect) {
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
@@ -508,6 +604,26 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       
       // Update streak and award points when quiz is completed
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
+      
+      // Calculate promotion/demotion
+      const mathProfile = await MathProfile.findOne({ student_id: userId });
+      const currentQuizLevel = mathProfile?.quiz_level || 0;
+      const promotion = calculatePromotion(attempt, currentQuizLevel, quiz.questions);
+      
+      // Update student's quiz level
+      if (mathProfile && promotion.newLevel !== currentQuizLevel) {
+        mathProfile.quiz_level = promotion.newLevel;
+        await mathProfile.save();
+      } else if (!mathProfile) {
+        // Create profile if doesn't exist
+        await MathProfile.create({
+          student_id: userId,
+          quiz_level: promotion.newLevel,
+          total_points: 0,
+          streak: 1,
+          last_quiz_date: new Date()
+        });
+      }
 
       return res.json({
         success: true,
@@ -516,7 +632,16 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         data: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect
+          target_correct_answers: targetCorrect,
+          promotion: {
+            previousLevel: currentQuizLevel,
+            newLevel: promotion.newLevel,
+            change: promotion.change,
+            message: promotion.message,
+            scorePercentage: promotion.scorePercentage,
+            earnedPoints: promotion.earnedPoints,
+            possiblePoints: promotion.possiblePoints
+          }
         }
       });
     }
@@ -539,7 +664,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       const alternativeDifficulties = [
         attempt.current_difficulty + 1,
         attempt.current_difficulty - 1
-      ].filter(d => d >= 1 && d <= 5);
+      ].filter(d => d >= 1 && d <= 10);
 
       for (const altDiff of alternativeDifficulties) {
         const altQuestions = quiz.questions.filter(q => 
@@ -566,6 +691,26 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       
       // Update streak and award points when quiz is completed
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
+      
+      // Calculate promotion/demotion
+      const mathProfile = await MathProfile.findOne({ student_id: userId });
+      const currentQuizLevel = mathProfile?.quiz_level || 0;
+      const promotion = calculatePromotion(attempt, currentQuizLevel, quiz.questions);
+      
+      // Update student's quiz level
+      if (mathProfile && promotion.newLevel !== currentQuizLevel) {
+        mathProfile.quiz_level = promotion.newLevel;
+        await mathProfile.save();
+      } else if (!mathProfile) {
+        // Create profile if doesn't exist
+        await MathProfile.create({
+          student_id: userId,
+          quiz_level: promotion.newLevel,
+          total_points: 0,
+          streak: 1,
+          last_quiz_date: new Date()
+        });
+      }
 
       return res.json({
         success: true,
@@ -574,7 +719,16 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         data: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect
+          target_correct_answers: targetCorrect,
+          promotion: {
+            previousLevel: currentQuizLevel,
+            newLevel: promotion.newLevel,
+            change: promotion.change,
+            message: promotion.message,
+            scorePercentage: promotion.scorePercentage,
+            earnedPoints: promotion.earnedPoints,
+            possiblePoints: promotion.possiblePoints
+          }
         }
       });
     }
@@ -679,6 +833,7 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       questionId: question.question_id || question._id,
       question_text: question.text,
       difficulty: question.difficulty,
+      topic: question.topic || '',
       answer: answer,
       correct_answer: question.answer,
       isCorrect: isCorrect
@@ -690,11 +845,12 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
     }
 
     // Adjust difficulty based on performance and progression strategy
-    const progression = quiz.adaptive_config?.difficulty_progression || 'gradual';
+    const progression = quiz.adaptive_config?.difficulty_progression || 'immediate';
+    const maxDifficulty = quiz.adaptive_config?.max_difficulty || 10;
     
     if (progression === 'immediate') {
       // Immediate: increase on correct, decrease on incorrect
-      if (isCorrect && attempt.current_difficulty < 5) {
+      if (isCorrect && attempt.current_difficulty < maxDifficulty) {
         attempt.current_difficulty += 1;
       } else if (!isCorrect && attempt.current_difficulty > 1) {
         attempt.current_difficulty -= 1;
@@ -704,7 +860,7 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       const recentAnswers = attempt.answers.slice(-3);
       const recentCorrect = recentAnswers.filter(a => a.isCorrect).length;
       
-      if (recentCorrect >= 2 && attempt.current_difficulty < 5) {
+      if (recentCorrect >= 2 && attempt.current_difficulty < maxDifficulty) {
         attempt.current_difficulty += 1;
       } else if (recentCorrect <= 1 && attempt.current_difficulty > 1 && recentAnswers.length >= 3) {
         attempt.current_difficulty -= 1;
@@ -712,10 +868,10 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
     } else if (progression === 'ml-based') {
       // ML-based: Simple algorithm based on overall accuracy
       const accuracy = attempt.correct_count / attempt.total_answered;
-      const targetDifficulty = Math.min(5, Math.max(1, Math.ceil(accuracy * 5)));
+      const targetDifficulty = Math.min(maxDifficulty, Math.max(1, Math.ceil(accuracy * maxDifficulty)));
       
       // Gradually move towards target difficulty
-      if (targetDifficulty > attempt.current_difficulty && attempt.current_difficulty < 5) {
+      if (targetDifficulty > attempt.current_difficulty && attempt.current_difficulty < maxDifficulty) {
         attempt.current_difficulty += 1;
       } else if (targetDifficulty < attempt.current_difficulty && attempt.current_difficulty > 1) {
         attempt.current_difficulty -= 1;
