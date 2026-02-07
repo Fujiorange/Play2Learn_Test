@@ -1528,7 +1528,23 @@ router.get('/landing', authenticateP2LAdmin, async (req, res) => {
       image: t.image_url || null
     }));
 
-    // Clone blocks and inject testimonials into testimonial blocks
+    // Calculate automated statistics
+    const schoolCount = await School.countDocuments({ is_active: true });
+    const studentCount = await User.countDocuments({ 
+      role: { $in: ['Student', 'Trial Student'] }
+    });
+    const teacherCount = await User.countDocuments({ 
+      role: { $in: ['Teacher', 'Trial Teacher'] }
+    });
+
+    // Create automated statistics array
+    const automatedStats = [
+      { value: `${schoolCount}+`, label: 'Schools Partnered' },
+      { value: `${studentCount}+`, label: 'Students Using This' },
+      { value: `${teacherCount}+`, label: 'Teachers Using This' }
+    ];
+
+    // Clone blocks and inject testimonials and automated statistics
     const blocks = (landingPage.blocks || []).map(block => {
       if (block.type === 'testimonials') {
         // Inject display testimonials into the testimonial block for preview
@@ -1537,6 +1553,16 @@ router.get('/landing', authenticateP2LAdmin, async (req, res) => {
           custom_data: {
             ...(block.custom_data || {}),
             testimonials: testimonialData
+          }
+        };
+      }
+      if (block.type === 'about') {
+        // Inject automated statistics into the about block
+        return {
+          ...block.toObject ? block.toObject() : block,
+          custom_data: {
+            ...(block.custom_data || {}),
+            stats: automatedStats
           }
         };
       }

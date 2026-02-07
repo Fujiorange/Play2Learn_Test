@@ -15,6 +15,15 @@ const testimonialSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Add pre-save hook to automatically set display_on_landing based on criteria
+testimonialSchema.pre('save', function(next) {
+  // Auto-launch testimonials with >4 stars and positive sentiment
+  if (this.rating > 4 && this.sentiment_label === 'positive') {
+    this.display_on_landing = true;
+  }
+  next();
+});
+
 // Add indexes for performance on frequently queried fields
 testimonialSchema.index({ approved: 1, created_at: -1 });
 testimonialSchema.index({ display_on_landing: 1 });
