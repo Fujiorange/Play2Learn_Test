@@ -446,7 +446,7 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
         quiz_level: quiz.quiz_level,
         total_questions: quiz.questions.length,
         difficulty_distribution: difficultyCount,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 20,
+        target_questions: quiz.adaptive_config?.target_correct_answers || 20,
         difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'immediate',
         createdAt: quiz.createdAt,
         is_launched: quiz.is_launched,
@@ -544,7 +544,7 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
       data: {
         attemptId: attempt._id,
         quizTitle: quiz.title,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
+        target_questions: quiz.adaptive_config?.target_correct_answers || 20,
         current_difficulty: attempt.current_difficulty,
         correct_count: attempt.correct_count
       }
@@ -592,8 +592,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
     }
 
     // Check if target is reached
-    const targetCorrect = quiz.adaptive_config?.target_correct_answers || 20;
-    if (attempt.total_answered >= targetCorrect) {
+    const targetQuestions = quiz.adaptive_config?.target_correct_answers || 20;
+    if (attempt.total_answered >= targetQuestions) {
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
@@ -615,12 +615,11 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         mathProfile.quiz_level = promotion.newLevel;
         await mathProfile.save();
       } else if (!mathProfile) {
-        // Create profile if doesn't exist
+        // Create profile if doesn't exist - streak will be set by updateStreakAndPointsOnQuizCompletion
         await MathProfile.create({
           student_id: userId,
           quiz_level: promotion.newLevel,
           total_points: 0,
-          streak: 1,
           last_quiz_date: new Date()
         });
       }
@@ -632,7 +631,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         data: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect,
+          target_questions: targetQuestions,
           promotion: {
             previousLevel: currentQuizLevel,
             newLevel: promotion.newLevel,
@@ -702,12 +701,11 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         mathProfile.quiz_level = promotion.newLevel;
         await mathProfile.save();
       } else if (!mathProfile) {
-        // Create profile if doesn't exist
+        // Create profile if doesn't exist - streak will be set by updateStreakAndPointsOnQuizCompletion
         await MathProfile.create({
           student_id: userId,
           quiz_level: promotion.newLevel,
           total_points: 0,
-          streak: 1,
           last_quiz_date: new Date()
         });
       }
@@ -719,7 +717,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         data: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect,
+          target_questions: targetQuestions,
           promotion: {
             previousLevel: currentQuizLevel,
             newLevel: promotion.newLevel,
@@ -746,7 +744,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         progress: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect,
+          target_questions: targetQuestions,
           current_difficulty: attempt.current_difficulty
         }
       }
@@ -917,7 +915,7 @@ router.get('/attempts/:attemptId/results', authenticateToken, async (req, res) =
       });
     }
 
-    const targetCorrect = attempt.quizId.adaptive_config?.target_correct_answers || 10;
+    const targetQuestions = attempt.quizId.adaptive_config?.target_correct_answers || 20;
     const accuracy = attempt.total_answered > 0 
       ? Math.round((attempt.correct_count / attempt.total_answered) * 100) 
       : 0;
@@ -935,7 +933,7 @@ router.get('/attempts/:attemptId/results', authenticateToken, async (req, res) =
         quizTitle: attempt.quizId.title,
         correct_count: attempt.correct_count,
         total_answered: attempt.total_answered,
-        target_correct_answers: targetCorrect,
+        target_questions: targetQuestions,
         accuracy: accuracy,
         is_completed: attempt.is_completed,
         difficulty_progression: difficultyProgression,
@@ -979,7 +977,7 @@ router.get('/my-attempts', authenticateToken, async (req, res) => {
       quizTitle: attempt.quizId.title,
       correct_count: attempt.correct_count,
       total_answered: attempt.total_answered,
-      target_correct_answers: attempt.quizId.adaptive_config?.target_correct_answers || 10,
+      target_questions: attempt.quizId.adaptive_config?.target_correct_answers || 20,
       accuracy: attempt.total_answered > 0 
         ? Math.round((attempt.correct_count / attempt.total_answered) * 100) 
         : 0,

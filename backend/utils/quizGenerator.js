@@ -178,8 +178,10 @@ function selectQuestionsWithDifficultyDistribution(questions, count) {
   });
 
   // Calculate how many questions per difficulty level
+  // Note: This approximation holds when count=40 (4 per level)
+  // For smaller counts, distribution adjusts proportionally
   const selected = [];
-  const targetPerLevel = Math.floor(count / 10); // Aim for ~4 questions per difficulty level
+  const targetPerLevel = Math.floor(count / 10); // Questions per difficulty level
   const remainder = count % 10;
 
   // First pass: Take targetPerLevel from each difficulty

@@ -1155,10 +1155,12 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
     // Trigger automatic quiz generation after questions are uploaded
     console.log('Triggering automatic quiz generation after CSV upload...');
     let quizGenResults = null;
+    let quizGenError = null;
     try {
       quizGenResults = await autoGenerateAllQuizzes();
     } catch (genError) {
       console.error('Quiz generation failed:', genError);
+      quizGenError = genError.message;
       // Don't fail the upload if quiz generation fails
     }
 
@@ -1174,7 +1176,8 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
           generated: quizGenResults.success.length,
           warnings: quizGenResults.warnings.length,
           errors: quizGenResults.errors.length
-        } : null
+        } : null,
+        quizGenerationWarning: quizGenError ? `Quiz generation failed: ${quizGenError}. Please regenerate manually.` : null
       }
     });
   } catch (error) {
