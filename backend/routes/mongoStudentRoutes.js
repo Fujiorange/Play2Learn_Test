@@ -524,13 +524,22 @@ router.get("/dashboard", async (req, res) => {
     }
 
     // ✅ FIX: Get all regular quizzes, then filter out unsubmitted ones
-    const allQuizzes = await StudentQuiz.find({ 
+    const allRegularQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
       quiz_type: "regular" 
     });
 
     // Filter: Only count quizzes that have been submitted (have student answers)
-    const completedQuizzes = allQuizzes.filter(isQuizCompleted).length;
+    const completedRegularQuizzes = allRegularQuizzes.filter(isQuizCompleted).length;
+    
+    // Also get adaptive quiz attempts
+    const completedAdaptiveQuizzes = await QuizAttempt.countDocuments({
+      userId: studentId,
+      is_completed: true
+    });
+    
+    // Total completed quizzes (regular + adaptive)
+    const completedQuizzes = completedRegularQuizzes + completedAdaptiveQuizzes;
 
     const user = await User.findById(studentId);
     const { effective: effectiveStreak } = computeEffectiveStreak(mathProfile);
@@ -1698,25 +1707,66 @@ router.get("/badges/progress", async (req, res) => {
     });
 
     // Filter: Only count quizzes that have been submitted (have student answers)
-    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
+    const completedRegularQuizzes = allQuizzes.filter(isQuizCompleted);
+    
+    // Also count adaptive quiz attempts
+    const completedAdaptiveQuizzes = await QuizAttempt.countDocuments({
+      userId: studentId,
+      is_completed: true
+    });
+    
+    // Total completed quizzes (regular + adaptive)
+    const completedQuizzes = [...completedRegularQuizzes];
+    const totalCompletedCount = completedRegularQuizzes.length + completedAdaptiveQuizzes;
 
-    console.log(`📝 Found ${completedQuizzes.length} completed quizzes for ${userEmail}`);
+    console.log(`📝 Found ${completedRegularQuizzes.length} regular quizzes + ${completedAdaptiveQuizzes} adaptive quizzes for ${userEmail}`);
     
     // Log quiz scores for debugging
-    if (completedQuizzes.length > 0) {
-      console.log(`Quiz scores:`, completedQuizzes.map(q => ({
+    if (completedRegularQuizzes.length > 0) {
+      console.log(`Quiz scores:`, completedRegularQuizzes.map(q => ({
         score: q.score,
         percentage: q.percentage,
         date: q.completed_at
       })));
     }
 
+    // Count perfect scores from regular quizzes (score === totalQuestions)
+    let perfectScoresCount = 0;
+    for (const quiz of completedRegularQuizzes) {
+      if (quiz.score === quiz.totalQuestions) {
+        perfectScoresCount++;
+      }
+    }
+    
+    // Count high scores from regular quizzes (percentage >= 90)
+    const highScoresRegular = completedRegularQuizzes.filter(q => q.percentage >= 90).length;
+    
+    // Count perfect and high scores from adaptive quizzes
+    let perfectScoresAdaptive = 0;
+    let highScoresAdaptive = 0;
+    if (completedAdaptiveQuizzes > 0) {
+      const adaptiveQuizzes = await QuizAttempt.find({
+        userId: studentId,
+        is_completed: true
+      });
+      
+      for (const quiz of adaptiveQuizzes) {
+        const percentage = (quiz.correct_count / quiz.total_answered) * 100;
+        if (quiz.correct_count === quiz.total_answered) {
+          perfectScoresAdaptive++;
+        }
+        if (percentage >= 90) {
+          highScoresAdaptive++;
+        }
+      }
+    }
+
     // Calculate progress for different criteria
     const progress = {
-      quizzes_completed: completedQuizzes.length,
+      quizzes_completed: totalCompletedCount,
       login_streak: mathProfile?.streak || 0,
-      perfect_scores: completedQuizzes.filter(q => q.score === 15).length, // 15/15 = 100%
-      high_scores: completedQuizzes.filter(q => q.percentage >= 90).length,
+      perfect_scores: perfectScoresCount + perfectScoresAdaptive,
+      high_scores: highScoresRegular + highScoresAdaptive,
       points_earned: mathProfile?.total_points || 0
     };
 
