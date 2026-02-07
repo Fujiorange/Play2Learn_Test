@@ -268,6 +268,40 @@ try {
   console.error('❌ Error registering routes:', error.message);
 }
 
+// ==================== PUBLIC TESTIMONIALS ENDPOINT ====================
+const Testimonial = require('./models/Testimonial');
+
+// Public endpoint to get published testimonials for landing page
+app.get('/api/testimonials/published', async (req, res) => {
+  try {
+    const testimonials = await Testimonial.find({ 
+      published_to_landing: true 
+    })
+      .sort({ published_date: -1 })
+      .limit(10)
+      .select('student_name user_role rating message sentiment_label created_at published_date');
+
+    res.json({
+      success: true,
+      testimonials: testimonials.map(t => ({
+        id: t._id,
+        name: t.student_name,
+        role: t.user_role,
+        rating: t.rating,
+        message: t.message,
+        sentiment: t.sentiment_label,
+        date: t.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('Get published testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch testimonials' 
+    });
+  }
+});
+
 // ==================== STATIC FILE SERVING ====================
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../frontend/build')));

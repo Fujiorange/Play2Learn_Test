@@ -15,6 +15,7 @@ const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const { getTestimonialStats, rebalancePublishedTestimonials } = require('../services/testimonialAutoPublisher');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -1732,9 +1733,9 @@ router.get('/landing/pricing-plans', authenticateP2LAdmin, async (req, res) => {
 router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) => {
   try {
     const testimonials = await Testimonial.find({ 
-      display_on_landing: true 
+      published_to_landing: true 
     })
-      .sort({ created_at: -1 })
+      .sort({ published_date: -1 })
       .limit(10);
 
     res.json({
@@ -1746,7 +1747,10 @@ router.get('/testimonials/landing-page', authenticateP2LAdmin, async (req, res) 
         title: t.title,
         rating: t.rating,
         quote: t.message,
+        sentiment_label: t.sentiment_label,
         created_at: t.created_at,
+        published_date: t.published_date,
+        auto_published: t.auto_published
       }))
     });
   } catch (error) {
@@ -1765,7 +1769,8 @@ router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
       minRating, 
       sentiment, 
       approved, 
-      userRole, 
+      userRole,
+      publishedStatus,
       page = 1, 
       limit = 50 
     } = req.query;
@@ -1777,6 +1782,11 @@ router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
     if (sentiment) query.sentiment_label = sentiment;
     if (approved !== undefined) query.approved = approved === 'true';
     if (userRole) query.user_role = userRole;
+    if (publishedStatus === 'published') {
+      query.published_to_landing = true;
+    } else if (publishedStatus === 'unpublished') {
+      query.published_to_landing = false;
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -1798,10 +1808,15 @@ router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
         message: t.message,
         approved: t.approved,
         display_on_landing: t.display_on_landing,
+        published_to_landing: t.published_to_landing,
+        auto_published: t.auto_published,
+        published_date: t.published_date,
         user_role: t.user_role,
         sentiment_score: t.sentiment_score,
         sentiment_label: t.sentiment_label,
         created_at: t.created_at,
+        last_updated: t.last_updated,
+        featured_order: t.featured_order
       })),
       total,
       page: parseInt(page),
@@ -1820,7 +1835,7 @@ router.get('/testimonials', authenticateP2LAdmin, async (req, res) => {
 router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { display_on_landing } = req.body;
+    const { display_on_landing, published_to_landing, message, rating, approved } = req.body;
 
     const testimonial = await Testimonial.findById(id);
     if (!testimonial) {
@@ -1830,9 +1845,28 @@ router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    // Allow setting display_on_landing regardless of approval status
+    // Allow manual override of published_to_landing
+    if (published_to_landing !== undefined) {
+      testimonial.published_to_landing = published_to_landing;
+      testimonial.auto_published = false; // Manual override disables auto-publish flag
+      testimonial.published_date = published_to_landing ? new Date() : null;
+      testimonial.approved = published_to_landing ? true : testimonial.approved;
+    }
+
+    // Legacy support for display_on_landing
     if (display_on_landing !== undefined) {
       testimonial.display_on_landing = display_on_landing;
+    }
+
+    // Allow editing message and rating
+    if (message !== undefined) {
+      testimonial.message = message;
+    }
+    if (rating !== undefined) {
+      testimonial.rating = rating;
+    }
+    if (approved !== undefined) {
+      testimonial.approved = approved;
     }
 
     await testimonial.save();
@@ -1844,6 +1878,9 @@ router.put('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
         id: testimonial._id,
         approved: testimonial.approved,
         display_on_landing: testimonial.display_on_landing,
+        published_to_landing: testimonial.published_to_landing,
+        auto_published: testimonial.auto_published,
+        published_date: testimonial.published_date
       }
     });
   } catch (error) {
@@ -1877,6 +1914,37 @@ router.delete('/testimonials/:id', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete testimonial' 
+    });
+  }
+});
+
+// Get testimonial statistics
+router.get('/testimonials/stats/summary', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const stats = await getTestimonialStats();
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('Get testimonial stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch testimonial statistics' 
+    });
+  }
+});
+
+// Rebalance published testimonials (manual trigger)
+router.post('/testimonials/rebalance', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const result = await rebalancePublishedTestimonials();
+    res.json(result);
+  } catch (error) {
+    console.error('Rebalance testimonials error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to rebalance testimonials' 
     });
   }
 });

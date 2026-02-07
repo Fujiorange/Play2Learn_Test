@@ -47,6 +47,7 @@ const SkillPointsConfig = require('../models/SkillPointsConfig');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
+const { processAutoPublish } = require('../services/testimonialAutoPublisher');
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -1453,14 +1454,21 @@ router.post("/testimonials", async (req, res) => {
       sentiment_label: sentimentAnalysis.label,
     });
 
+    // Process auto-publishing
+    const autoPublishResult = await processAutoPublish(testimonialDoc);
+
     res.status(201).json({
       success: true,
-      message: "Testimonial submitted successfully (pending approval)",
+      message: autoPublishResult.auto_published 
+        ? "Testimonial submitted and auto-published to landing page!" 
+        : "Testimonial submitted successfully (pending approval)",
       testimonial: {
         id: testimonialDoc._id,
         rating: testimonialDoc.rating,
         message: testimonialDoc.message,
         created_at: testimonialDoc.created_at,
+        auto_published: autoPublishResult.auto_published,
+        published_to_landing: testimonialDoc.published_to_landing
       }
     });
   } catch (error) {
