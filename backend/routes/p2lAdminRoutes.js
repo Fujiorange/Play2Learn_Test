@@ -15,6 +15,7 @@ const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const { calculateLandingPageStatistics } = require('../utils/landingPageStats');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -1528,19 +1529,8 @@ router.get('/landing', authenticateP2LAdmin, async (req, res) => {
       image: t.image_url || null
     }));
 
-    // Calculate automated statistics in parallel for better performance
-    const [schoolCount, studentCount, teacherCount] = await Promise.all([
-      School.countDocuments({ is_active: true }),
-      User.countDocuments({ role: { $in: ['Student', 'Trial Student'] } }),
-      User.countDocuments({ role: { $in: ['Teacher', 'Trial Teacher'] } })
-    ]);
-
-    // Create automated statistics array
-    const automatedStats = [
-      { value: `${schoolCount}+`, label: 'Schools Partnered' },
-      { value: `${studentCount}+`, label: 'Students Using This' },
-      { value: `${teacherCount}+`, label: 'Teachers Using This' }
-    ];
+    // Calculate automated statistics using shared utility
+    const automatedStats = await calculateLandingPageStatistics();
 
     // Clone blocks and inject testimonials and automated statistics
     const blocks = (landingPage.blocks || []).map(block => {

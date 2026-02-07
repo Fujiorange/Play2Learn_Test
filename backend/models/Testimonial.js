@@ -18,17 +18,27 @@ const testimonialSchema = new mongoose.Schema({
 // Add pre-save hook to automatically set display_on_landing based on criteria
 testimonialSchema.pre('save', function(next) {
   // Auto-launch testimonials with >4 stars (rating of 5) and positive sentiment
-  // Manual overrides are preserved - if admin manually sets display_on_landing,
-  // it won't be changed unless the document is explicitly being updated
-  if (this.isNew || this.isModified('rating') || this.isModified('sentiment_label')) {
+  // This only applies to:
+  // 1. New testimonials
+  // 2. Existing testimonials where rating or sentiment changes TO meet criteria
+  // Manual admin overrides (setting display_on_landing = false) are preserved
+  
+  if (this.isNew) {
+    // For new testimonials, set display_on_landing based on criteria
     if (this.rating > 4 && this.sentiment_label === 'positive') {
       this.display_on_landing = true;
-    } else if (this.isNew) {
-      // Only set to false for new testimonials that don't meet criteria
-      // This preserves manual admin overrides for existing testimonials
+    } else {
       this.display_on_landing = false;
     }
+  } else if (this.isModified('rating') || this.isModified('sentiment_label')) {
+    // For existing testimonials, only auto-launch if criteria NOW met
+    // Don't auto-remove if criteria no longer met (manual removal only)
+    if (this.rating > 4 && this.sentiment_label === 'positive') {
+      this.display_on_landing = true;
+    }
   }
+  // If display_on_landing is explicitly set (e.g., by admin), it's preserved
+  
   next();
 });
 

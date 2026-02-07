@@ -84,8 +84,7 @@ function authenticateToken(req, res, next) {
 // Public endpoint to fetch landing page blocks (no authentication required)
 const LandingPage = require('./models/LandingPage');
 const Testimonial = require('./models/Testimonial');
-const User = require('./models/User');
-const School = require('./models/School');
+const { calculateLandingPageStatistics } = require('./utils/landingPageStats');
 
 app.get('/api/public/landing-page', async (req, res) => {
   try {
@@ -122,19 +121,8 @@ app.get('/api/public/landing-page', async (req, res) => {
       image: t.image_url || null
     }));
 
-    // Calculate automated statistics in parallel for better performance
-    const [schoolCount, studentCount, teacherCount] = await Promise.all([
-      School.countDocuments({ is_active: true }),
-      User.countDocuments({ role: { $in: ['Student', 'Trial Student'] } }),
-      User.countDocuments({ role: { $in: ['Teacher', 'Trial Teacher'] } })
-    ]);
-
-    // Create automated statistics array
-    const automatedStats = [
-      { value: `${schoolCount}+`, label: 'Schools Partnered' },
-      { value: `${studentCount}+`, label: 'Students Using This' },
-      { value: `${teacherCount}+`, label: 'Teachers Using This' }
-    ];
+    // Calculate automated statistics using shared utility
+    const automatedStats = await calculateLandingPageStatistics();
 
     // Clone blocks and inject testimonials and automated statistics
     // Use toObject() to properly serialize Mongoose subdocuments
