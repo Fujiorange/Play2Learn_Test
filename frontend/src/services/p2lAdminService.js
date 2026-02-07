@@ -320,6 +320,16 @@ export const getLandingPageTestimonials = async () => {
   return apiCall('/api/p2ladmin/testimonials/landing-page');
 };
 
+export const getTestimonialStats = async () => {
+  return apiCall('/api/p2ladmin/testimonials/stats/summary');
+};
+
+export const rebalanceTestimonials = async () => {
+  return apiCall('/api/p2ladmin/testimonials/rebalance', {
+    method: 'POST',
+  });
+};
+
 // ==================== USER MANAGEMENT ====================
 export const getAllUsers = async (filters = {}) => {
   const queryString = new URLSearchParams(filters).toString();
@@ -436,6 +446,8 @@ export default {
   updateTestimonial,
   deleteTestimonial,
   getLandingPageTestimonials,
+  getTestimonialStats,
+  rebalanceTestimonials,
   getMaintenanceBroadcasts,
   createMaintenanceBroadcast,
   updateMaintenanceBroadcast,
