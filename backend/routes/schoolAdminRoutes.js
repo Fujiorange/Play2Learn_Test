@@ -2424,8 +2424,8 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'School not found' });
     }
     
-    const currentClasses = school.current_classes || 0;
-    const classLimit = school.plan_info.class_limit || 1;
+    const currentClasses = school.current_classes ?? 0;
+    const classLimit = school.plan_info.class_limit ?? 1;
     
     if (currentClasses >= classLimit) {
       return res.status(403).json({ 

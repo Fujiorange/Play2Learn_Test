@@ -112,13 +112,6 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
       });
     }
     
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'A license with this type already exists' 
-      });
-    }
-    
     return res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to create license' 
