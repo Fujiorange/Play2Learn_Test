@@ -68,8 +68,7 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
       maxTeachers,
       maxStudents,
       maxClasses,
-      description,
-      isActive
+      description
     } = req.body;
 
     console.log('📝 Creating license:', { name, type, priceMonthly, priceYearly });
@@ -81,7 +80,7 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
     }
 
     // Validate enum type
-    const validTypes = ['trial', 'starter', 'professional', 'enterprise', 'custom'];
+    const validTypes = ['free', 'paid'];
     if (!validTypes.includes(type.toLowerCase())) {
       console.error('❌ Validation failed: Invalid type', type);
       return res.status(400).json({ 
@@ -111,8 +110,7 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
       maxTeachers: maxTeachers || 1,
       maxStudents: maxStudents || 5,
       maxClasses: maxClasses || 1,
-      description: description || '',
-      isActive: isActive !== undefined ? isActive : true
+      description: description || ''
     });
 
     await newLicense.save();
@@ -148,8 +146,7 @@ router.put('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, res)
       maxTeachers,
       maxStudents,
       maxClasses,
-      description,
-      isActive
+      description
     } = req.body;
 
     console.log('📝 Updating license:', req.params.id);
@@ -185,7 +182,6 @@ router.put('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, res)
     if (maxStudents !== undefined) license.maxStudents = maxStudents;
     if (maxClasses !== undefined) license.maxClasses = maxClasses;
     if (description !== undefined) license.description = description;
-    if (isActive !== undefined) license.isActive = isActive;
 
     await license.save();
     console.log('✅ License updated successfully:', license._id);
@@ -221,10 +217,10 @@ router.delete('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, r
       return res.status(404).json({ success: false, error: 'License not found' });
     }
 
-    // Prevent deletion of trial license
-    if (license.type === 'trial') {
-      console.error('❌ Cannot delete trial license');
-      return res.status(400).json({ success: false, error: 'Cannot delete the trial license' });
+    // Prevent deletion of free licenses (as they might be used for trials)
+    if (license.type === 'free') {
+      console.error('❌ Cannot delete free license');
+      return res.status(400).json({ success: false, error: 'Cannot delete free licenses. They should be kept available for trial purposes.' });
     }
 
     await License.findByIdAndDelete(req.params.id);

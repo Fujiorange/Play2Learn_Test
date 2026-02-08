@@ -6,6 +6,7 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const School = require('../models/School');
+const License = require('../models/License');
 const Class = require('../models/Class');
 const SupportTicket = require('../models/SupportTicket');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
@@ -3968,13 +3969,10 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'School not found' });
     }
 
-    // Get license details
-    let licenseDetails = null;
-    if (school.licenseId) {
-      licenseDetails = school.licenseId;
-    } else {
-      // Fallback to getting license by plan type
-      licenseDetails = await License.findOne({ type: school.plan });
+    // Get license details from the populated licenseId
+    const licenseDetails = school.licenseId;
+    if (!licenseDetails) {
+      return res.status(404).json({ success: false, error: 'No license assigned to school' });
     }
 
     // Calculate days remaining
@@ -3988,20 +3986,20 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
     return res.json({
       success: true,
       license: {
-        type: school.plan,
-        name: licenseDetails ? licenseDetails.name : school.plan,
-        description: licenseDetails ? licenseDetails.description : '',
+        type: licenseDetails.type,
+        name: licenseDetails.name,
+        description: licenseDetails.description || '',
         expiresAt: school.licenseExpiresAt,
         daysRemaining,
         limits: {
-          maxTeachers: school.plan_info.teacher_limit,
-          maxStudents: school.plan_info.student_limit,
-          maxClasses: school.plan_info.class_limit || 1
+          maxTeachers: licenseDetails.maxTeachers,
+          maxStudents: licenseDetails.maxStudents,
+          maxClasses: licenseDetails.maxClasses
         },
         usage: {
-          currentTeachers: school.current_teachers,
-          currentStudents: school.current_students,
-          currentClasses: school.current_classes
+          currentTeachers: school.current_teachers || 0,
+          currentStudents: school.current_students || 0,
+          currentClasses: school.current_classes || 0
         },
         isExpired: daysRemaining !== null && daysRemaining <= 0,
         isNearExpiry: daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 7

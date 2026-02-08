@@ -3,22 +3,22 @@ const mongoose = require('mongoose');
 const schoolSchema = new mongoose.Schema({
   organization_name: { type: String, required: true },
   organization_type: { type: String, default: 'school' },
+  // Legacy plan field - kept for backward compatibility but not required
   plan: { 
     type: String, 
-    enum: ['trial', 'starter', 'professional', 'enterprise'], 
-    required: true 
+    default: null
   },
   plan_info: {
-    teacher_limit: { type: Number, required: true },
-    student_limit: { type: Number, required: true },
+    teacher_limit: { type: Number },
+    student_limit: { type: Number },
     class_limit: { type: Number, default: 1 },
-    price: { type: Number, required: true }
+    price: { type: Number }
   },
-  // Reference to License model
+  // Reference to License model - this is now the primary way to manage licenses
   licenseId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'License',
-    default: null
+    required: true
   },
   licenseExpiresAt: { 
     type: Date, 

@@ -8,48 +8,44 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/play2l
 
 const licenses = [
   {
-    name: 'Trial',
-    type: 'trial',
+    name: 'Free Trial',
+    type: 'free',
     priceMonthly: 0,
     priceYearly: 0,
     maxTeachers: 1,
     maxStudents: 5,
     maxClasses: 1,
-    description: '30-day free trial with basic features - perfect for testing the platform',
-    isActive: true
+    description: '30-day free trial with basic features - perfect for testing the platform'
   },
   {
-    name: 'Starter',
-    type: 'starter',
+    name: 'Basic Plan',
+    type: 'paid',
     priceMonthly: 29.99,
     priceYearly: 299.99,
     maxTeachers: 5,
     maxStudents: 50,
     maxClasses: 10,
-    description: 'Perfect for small schools and learning centers',
-    isActive: true
+    description: 'Perfect for small schools and learning centers'
   },
   {
-    name: 'Professional',
-    type: 'professional',
+    name: 'Professional Plan',
+    type: 'paid',
     priceMonthly: 99.99,
     priceYearly: 999.99,
     maxTeachers: 20,
     maxStudents: 200,
     maxClasses: 50,
-    description: 'Ideal for medium-sized educational institutions',
-    isActive: true
+    description: 'Ideal for medium-sized educational institutions'
   },
   {
-    name: 'Enterprise',
-    type: 'enterprise',
+    name: 'Enterprise Plan',
+    type: 'paid',
     priceMonthly: 299.99,
     priceYearly: 2999.99,
     maxTeachers: -1, // -1 means unlimited
     maxStudents: -1,
     maxClasses: -1,
-    description: 'Unlimited access for large educational organizations',
-    isActive: true
+    description: 'Unlimited access for large educational organizations'
   }
 ];
 
