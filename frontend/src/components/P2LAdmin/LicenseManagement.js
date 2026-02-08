@@ -227,14 +227,14 @@ function LicenseManagement() {
           </button>
         </div>
         <button 
-          className="btn btn-primary"
+          className="btn btn-create-license"
           onClick={() => {
             setShowForm(true);
             setEditingLicense(null);
             resetForm();
           }}
         >
-          + Create New License
+          + Create License
         </button>
       </div>
 
@@ -475,6 +475,8 @@ function LicenseManagement() {
                   <button 
                     className="btn btn-sm btn-danger"
                     onClick={() => handleDelete(license._id)}
+                    disabled={license.isDeletable === false}
+                    title={license.isDeletable === false ? 'This license is protected and cannot be deleted' : ''}
                   >
                     Delete
                   </button>

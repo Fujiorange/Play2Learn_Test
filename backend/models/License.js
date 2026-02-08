@@ -44,6 +44,10 @@ const licenseSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isDeletable: {
+    type: Boolean,
+    default: true
+  },
   createdAt: {
     type: Date,
     default: Date.now

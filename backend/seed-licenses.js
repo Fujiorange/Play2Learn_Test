@@ -15,8 +15,9 @@ const licenses = [
     maxTeachers: 1,
     maxStudents: 5,
     maxClasses: 1,
-    description: 'Free trial with basic features - perfect for testing the platform',
-    isActive: true
+    description: 'Free trial institude',
+    isActive: true,
+    isDeletable: false
   },
   {
     name: 'Basic Plan',

@@ -221,6 +221,15 @@ router.delete('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, r
       return res.status(404).json({ success: false, error: 'License not found' });
     }
 
+    // Check if license is deletable
+    if (license.isDeletable === false) {
+      console.error('❌ Cannot delete protected license:', license.name);
+      return res.status(403).json({ 
+        success: false, 
+        error: 'This license is protected and cannot be deleted' 
+      });
+    }
+
     await License.findByIdAndDelete(req.params.id);
     console.log('✅ License deleted successfully:', req.params.id);
     return res.json({ success: true, message: 'License deleted successfully' });
