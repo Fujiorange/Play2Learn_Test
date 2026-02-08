@@ -45,10 +45,6 @@ function QuizManager() {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleQuestionToggle = (questionId) => {
-    // Not used in generation mode
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -99,8 +95,26 @@ function QuizManager() {
   };
 
   const handleDelete = async (id) => {
-    alert('Deleting auto-generated quizzes is not allowed. Quizzes are managed by the system.');
-    return;
+    // Fetch quiz to check if it's auto-generated
+    const quiz = quizzes.find(q => q._id === id);
+    
+    if (quiz && quiz.is_auto_generated) {
+      alert('Deleting auto-generated quizzes is not allowed. Quizzes are managed by the system.');
+      return;
+    }
+    
+    if (!window.confirm('Are you sure you want to delete this quiz?')) {
+      return;
+    }
+    
+    try {
+      await deleteQuiz(id);
+      alert('Quiz deleted successfully');
+      fetchData();
+    } catch (error) {
+      console.error('Failed to delete quiz:', error);
+      alert(error.message || 'Failed to delete quiz');
+    }
   };
 
   const cancelForm = () => {

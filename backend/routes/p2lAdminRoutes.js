@@ -1124,6 +1124,7 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
           // Parse quiz_level (default to 1 if not provided or invalid)
           let quiz_level = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level']) || 1;
           if (quiz_level < 1 || quiz_level > 10) {
+            console.warn(`⚠️ Invalid quiz_level ${quiz_level} on line ${lineNumber}, defaulting to 1`);
             quiz_level = 1;
           }
 

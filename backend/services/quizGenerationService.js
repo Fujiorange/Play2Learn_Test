@@ -190,7 +190,9 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
   // Step 5: Shuffle final sequence for additional randomness
   const shuffledQuestions = shuffleArray(selectedQuestions);
   
-  // Update positions after shuffle
+  // Update positions after shuffle to reflect final presentation order
+  // Note: 'position' represents the order questions will be shown to students
+  // 'starting_difficulty' (set at line 166) preserves the original generation difficulty
   shuffledQuestions.forEach((q, index) => {
     q.position = index + 1;
   });
