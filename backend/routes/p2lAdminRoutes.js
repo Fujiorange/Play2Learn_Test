@@ -207,7 +207,6 @@ router.get('/dashboard-stats', authenticateP2LAdmin, async (req, res) => {
 // ==================== SCHOOL MANAGEMENT ROUTES ====================
 
 // Get all schools
-// Get all schools
 router.get('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
     const schools = await School.find().populate('licenseId').sort({ createdAt: -1 });

@@ -139,6 +139,15 @@ function SchoolManagement() {
     });
   };
 
+  // Helper function to format license display text
+  const formatLicenseOption = (license) => {
+    const type = license.type === 'free' ? 'Free' : 'Paid';
+    const teachers = license.maxTeachers === -1 ? '∞' : license.maxTeachers;
+    const students = license.maxStudents === -1 ? '∞' : license.maxStudents;
+    const classes = license.maxClasses === -1 ? '∞' : license.maxClasses;
+    return `${license.name} (${type}) - ${teachers} Teachers, ${students} Students, ${classes} Classes - $${license.priceMonthly}/mo`;
+  };
+
   if (loading) {
     return <div className="loading">Loading...</div>;
   }
@@ -192,7 +201,7 @@ function SchoolManagement() {
                   >
                     {licenses.map(license => (
                       <option key={license._id} value={license._id}>
-                        {license.name} ({license.type === 'free' ? 'Free' : 'Paid'}) - {license.maxTeachers === -1 ? '∞' : license.maxTeachers} Teachers, {license.maxStudents === -1 ? '∞' : license.maxStudents} Students, {license.maxClasses === -1 ? '∞' : license.maxClasses} Classes - ${license.priceMonthly}/mo
+                        {formatLicenseOption(license)}
                       </option>
                     ))}
                   </select>
