@@ -87,7 +87,7 @@ function SchoolLicenseView() {
           </span>
         </div>
         
-        {licenseInfo.type === 'trial' && (
+        {licenseInfo.type === 'free' && (
           <button 
             className="btn-upgrade"
             onClick={() => setShowUpgradeModal(true)}
@@ -97,8 +97,8 @@ function SchoolLicenseView() {
         )}
       </div>
 
-      {/* Trial Expiry Warning */}
-      {licenseInfo.type === 'trial' && licenseInfo.expiresAt && (
+      {/* Free License Expiry Warning */}
+      {licenseInfo.type === 'free' && licenseInfo.expiresAt && (
         <div className={`expiry-notice ${licenseInfo.isExpired ? 'expired' : licenseInfo.isNearExpiry ? 'warning' : 'info'}`}>
           <div className="notice-icon">
             {licenseInfo.isExpired ? '🚫' : licenseInfo.isNearExpiry ? '⚠️' : '📅'}
@@ -106,15 +106,15 @@ function SchoolLicenseView() {
           <div className="notice-content">
             <strong>
               {licenseInfo.isExpired 
-                ? 'Trial Expired' 
+                ? 'License Expired' 
                 : licenseInfo.isNearExpiry 
-                  ? 'Trial Expiring Soon' 
-                  : 'Trial Active'}
+                  ? 'License Expiring Soon' 
+                  : 'Free License Active'}
             </strong>
             <p>
               {licenseInfo.isExpired 
-                ? 'Your trial has expired. Please upgrade to continue using all features.' 
-                : `Your trial expires in ${licenseInfo.daysRemaining} day${licenseInfo.daysRemaining !== 1 ? 's' : ''}.`}
+                ? 'Your license has expired. Please upgrade to continue using all features.' 
+                : `Your license expires in ${licenseInfo.daysRemaining} day${licenseInfo.daysRemaining !== 1 ? 's' : ''}.`}
             </p>
           </div>
           {!licenseInfo.isExpired && (
