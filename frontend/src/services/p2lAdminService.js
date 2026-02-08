@@ -285,6 +285,13 @@ export const deleteQuiz = async (id) => {
   });
 };
 
+export const generateQuiz = async (generationData) => {
+  return apiCall('/api/p2ladmin/quizzes/generate', {
+    method: 'POST',
+    body: JSON.stringify(generationData),
+  });
+};
+
 export const runAdaptiveQuiz = async (quizData) => {
   return apiCall('/api/p2ladmin/quizzes/run', {
     method: 'POST',

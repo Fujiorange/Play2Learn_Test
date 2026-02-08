@@ -1,7 +1,7 @@
 // Quiz Manager Component
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuizzes, createQuiz, updateQuiz, deleteQuiz, getQuestions } from '../../services/p2lAdminService';
+import { getQuizzes, generateQuiz, updateQuiz, deleteQuiz, getQuestions } from '../../services/p2lAdminService';
 import './QuizManager.css';
 
 function QuizManager() {
@@ -15,12 +15,9 @@ function QuizManager() {
     difficulty: ''
   });
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    question_ids: [],
-    quiz_type: 'placement',
-    is_adaptive: false,
-    target_correct_answers: 10
+    quiz_level: 1,
+    student_id: null,
+    trigger_reason: 'manual'
   });
 
   useEffect(() => {
@@ -44,119 +41,75 @@ function QuizManager() {
   };
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
-    
-    // Auto-sync quiz_type and is_adaptive for consistency
-    if (name === 'quiz_type') {
-      setFormData({ 
-        ...formData, 
-        quiz_type: value,
-        is_adaptive: value === 'adaptive' // Auto-enable adaptive mode for adaptive quizzes
-      });
-    } else if (name === 'is_adaptive') {
-      setFormData({ 
-        ...formData, 
-        is_adaptive: checked,
-        // If enabling adaptive mode, set quiz_type to adaptive
-        quiz_type: checked ? 'adaptive' : formData.quiz_type
-      });
-    } else {
-      setFormData({ 
-        ...formData, 
-        [name]: newValue
-      });
-    }
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleQuestionToggle = (questionId) => {
-    const isSelected = formData.question_ids.includes(questionId);
-    const newIds = isSelected
-      ? formData.question_ids.filter(id => id !== questionId)
-      : [...formData.question_ids, questionId];
-    setFormData({ ...formData, question_ids: newIds });
+    // Not used in generation mode
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      // Transform question_ids to questions array format expected by backend
-      const quizData = {
-        title: formData.title,
-        description: formData.description,
-        questions: formData.question_ids.map(id => ({ question_id: id })),
-        quiz_type: formData.quiz_type,
-        is_adaptive: formData.is_adaptive
-      };
-      
-      // Add adaptive config if adaptive mode is enabled
-      if (formData.is_adaptive) {
-        quizData.adaptive_config = {
-          target_correct_answers: formData.target_correct_answers
+    
+    if (editingQuiz) {
+      // For editing existing quiz (metadata only)
+      try {
+        const quizData = {
+          title: editingQuiz.title,
+          description: editingQuiz.description
         };
-      }
-      
-      if (editingQuiz) {
+        
         await updateQuiz(editingQuiz._id, quizData);
         alert('Quiz updated successfully');
-      } else {
-        await createQuiz(quizData);
-        alert('Quiz created successfully');
+        setShowForm(false);
+        setEditingQuiz(null);
+        fetchData();
+      } catch (error) {
+        console.error('Failed to update quiz:', error);
+        alert(error.message || 'Failed to update quiz');
       }
-      setShowForm(false);
-      setEditingQuiz(null);
-      setFormData({
-        title: '',
-        description: '',
-        question_ids: [],
-        quiz_type: 'placement',
-        is_adaptive: false,
-        target_correct_answers: 10
-      });
-      fetchData();
-    } catch (error) {
-      console.error('Failed to save quiz:', error);
-      alert(error.message || 'Failed to save quiz');
+    } else {
+      // For generating new quiz
+      try {
+        const result = await generateQuiz({
+          quiz_level: parseInt(formData.quiz_level),
+          student_id: formData.student_id || null,
+          trigger_reason: 'manual'
+        });
+        
+        alert(`Quiz generated successfully! Created quiz: ${result.data.title}`);
+        setShowForm(false);
+        setFormData({
+          quiz_level: 1,
+          student_id: null,
+          trigger_reason: 'manual'
+        });
+        fetchData();
+      } catch (error) {
+        console.error('Failed to generate quiz:', error);
+        alert(error.message || 'Failed to generate quiz');
+      }
     }
   };
 
   const handleEdit = (quiz) => {
     setEditingQuiz(quiz);
-    setFormData({
-      title: quiz.title,
-      description: quiz.description || '',
-      question_ids: quiz.questions?.map(q => q.question_id?._id || q.question_id) || [],
-      quiz_type: quiz.quiz_type || 'placement',
-      is_adaptive: quiz.is_adaptive !== undefined ? quiz.is_adaptive : false,
-      target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10
-    });
     setShowForm(true);
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this quiz?')) {
-      return;
-    }
-    try {
-      await deleteQuiz(id);
-      alert('Quiz deleted successfully');
-      fetchData();
-    } catch (error) {
-      console.error('Failed to delete quiz:', error);
-      alert(error.message || 'Failed to delete quiz');
-    }
+    alert('Deleting auto-generated quizzes is not allowed. Quizzes are managed by the system.');
+    return;
   };
 
   const cancelForm = () => {
     setShowForm(false);
     setEditingQuiz(null);
     setFormData({
-      title: '',
-      description: '',
-      question_ids: [],
-      quiz_type: 'placement',
-      is_adaptive: false,
-      target_correct_answers: 10
+      quiz_level: 1,
+      student_id: null,
+      trigger_reason: 'manual'
     });
     setQuestionFilters({ topic: '', difficulty: '' });
   };
@@ -190,185 +143,141 @@ function QuizManager() {
         <div>
           <h1>Quiz Manager</h1>
           <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
-            Create and manage placement quizzes and adaptive quizzes for students
+            View and manage auto-generated quizzes for students
           </p>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
         <button onClick={() => setShowForm(true)} className="btn-primary">
-          + Create Quiz
+          + Trigger Quiz Generation
         </button>
       </header>
 
       {showForm && (
         <div className="modal-overlay">
-          <div className="modal-content large">
-            <h2>{editingQuiz ? 'Edit Quiz' : 'Create New Quiz'}</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Quiz Title *</label>
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  rows="3"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Quiz Type *</label>
-                <select
-                  name="quiz_type"
-                  value={formData.quiz_type}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="placement">Placement Quiz (for student initial assessment)</option>
-                  <option value="adaptive">Adaptive Quiz (for ongoing practice)</option>
-                </select>
-                <p className="help-text">
-                  Placement quizzes are used for initial student assessment. Adaptive quizzes are used for ongoing practice with difficulty adjustment.
-                </p>
-              </div>
-
-              <div className="form-group">
-                <label>
-                  <input
-                    type="checkbox"
-                    name="is_adaptive"
-                    checked={formData.is_adaptive}
-                    onChange={handleInputChange}
-                    disabled={formData.quiz_type === 'placement'}
-                  />
-                  {' '}Enable Adaptive Mode
-                </label>
-                <p className="help-text">
-                  {formData.quiz_type === 'placement' 
-                    ? 'Placement quizzes do not use adaptive mode' 
-                    : 'Adaptive quizzes adjust difficulty based on student performance'}
-                </p>
-              </div>
-
-              {formData.is_adaptive && (
+          <div className="modal-content">
+            <h2>{editingQuiz ? 'Edit Quiz Metadata' : 'Trigger Quiz Generation'}</h2>
+            {editingQuiz ? (
+              <form onSubmit={handleSubmit}>
                 <div className="form-group">
-                  <label>How many questions correct to end the quiz? *</label>
+                  <label>Quiz Title *</label>
                   <input
-                    type="number"
-                    name="target_correct_answers"
-                    value={formData.target_correct_answers}
-                    onChange={handleInputChange}
-                    min="1"
-                    max="100"
+                    type="text"
+                    value={editingQuiz.title}
+                    onChange={(e) => setEditingQuiz({ ...editingQuiz, title: e.target.value })}
                     required
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    value={editingQuiz.description}
+                    onChange={(e) => setEditingQuiz({ ...editingQuiz, description: e.target.value })}
+                    rows="3"
+                  />
+                </div>
+
+                <div className="info-box">
+                  <p><strong>Note:</strong> You can only edit quiz metadata. Questions are auto-generated and cannot be modified.</p>
+                  <p><strong>Quiz Level:</strong> {editingQuiz.quiz_level || 'N/A'}</p>
+                  <p><strong>Questions:</strong> {editingQuiz.questions?.length || 0}</p>
+                  <p><strong>Auto-generated:</strong> {editingQuiz.is_auto_generated ? 'Yes' : 'No'}</p>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="btn-submit">
+                    Update Quiz
+                  </button>
+                  <button type="button" onClick={cancelForm} className="btn-cancel">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                  <label>Quiz Level *</label>
+                  <select
+                    name="quiz_level"
+                    value={formData.quiz_level}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value={1}>Quiz Level 1</option>
+                    <option value={2}>Quiz Level 2</option>
+                    <option value={3}>Quiz Level 3</option>
+                    <option value={4}>Quiz Level 4</option>
+                    <option value={5}>Quiz Level 5</option>
+                    <option value={6}>Quiz Level 6</option>
+                    <option value={7}>Quiz Level 7</option>
+                    <option value={8}>Quiz Level 8</option>
+                    <option value={9}>Quiz Level 9</option>
+                    <option value={10}>Quiz Level 10</option>
+                  </select>
                   <p className="help-text">
-                    Students need to get this many correct answers to complete the adaptive quiz
+                    Select the quiz level for which to generate a quiz. The system will automatically select 20 questions with adaptive difficulty progression.
                   </p>
                 </div>
-              )}
 
-              <div className="form-group">
-                <label>Select Questions ({formData.question_ids.length} selected)</label>
-                
-                {/* Filter controls */}
-                <div className="question-filters">
-                  <div className="filter-group">
-                    <label htmlFor="topic-filter">Filter by Topic:</label>
-                    <select
-                      id="topic-filter"
-                      value={questionFilters.topic}
-                      onChange={(e) => setQuestionFilters({ ...questionFilters, topic: e.target.value })}
-                    >
-                      <option value="">All Topics</option>
-                      {uniqueTopics.map(topic => (
-                        <option key={topic} value={topic}>{topic}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="filter-group">
-                    <label htmlFor="difficulty-filter">Filter by Difficulty:</label>
-                    <select
-                      id="difficulty-filter"
-                      value={questionFilters.difficulty}
-                      onChange={(e) => setQuestionFilters({ ...questionFilters, difficulty: e.target.value })}
-                    >
-                      <option value="">All Difficulties</option>
-                      {uniqueDifficulties.map(diff => (
-                        <option key={diff} value={diff}>Level {diff}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="info-box">
+                  <h4>✨ Auto-Generation Features</h4>
+                  <ul>
+                    <li>✅ 20 questions per quiz</li>
+                    <li>✅ Questions selected with freshness weighting</li>
+                    <li>✅ Adaptive difficulty progression</li>
+                    <li>✅ Unique sequence for each generation</li>
+                    <li>✅ Requires at least 40 questions in the quiz level</li>
+                  </ul>
                 </div>
-                
-                <div className="questions-selector">
-                  {filteredQuestions.length === 0 ? (
-                    <p className="no-questions">No questions match the selected filters.</p>
-                  ) : (
-                    filteredQuestions.map((q) => (
-                      <div key={q._id} className="question-option">
-                        <input
-                          type="checkbox"
-                          id={`question-${q._id}`}
-                          checked={formData.question_ids.includes(q._id)}
-                          onChange={() => handleQuestionToggle(q._id)}
-                        />
-                        <label htmlFor={`question-${q._id}`} className="question-preview">
-                          <span className="question-text">
-                            {q.text.length > 80 ? `${q.text.substring(0, 80)}...` : q.text}
-                          </span>
-                          <div className="question-meta">
-                            {q.topic && <span className="badge topic-badge">📚 {q.topic}</span>}
-                            <span className="badge difficulty-badge">Difficulty: {q.difficulty}</span>
-                          </div>
-                        </label>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
 
-              <div className="form-actions">
-                <button type="submit" className="btn-submit">
-                  {editingQuiz ? 'Update Quiz' : 'Create Quiz'}
-                </button>
-                <button type="button" onClick={cancelForm} className="btn-cancel">
-                  Cancel
-                </button>
-              </div>
-            </form>
+                <div className="form-actions">
+                  <button type="submit" className="btn-submit">
+                    Generate Quiz
+                  </button>
+                  <button type="button" onClick={cancelForm} className="btn-cancel">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
 
       <div className="quizzes-grid">
         {quizzes.length === 0 ? (
-          <p className="no-data">No quizzes found. Create your first quiz!</p>
+          <p className="no-data">No quizzes found. Generate your first quiz!</p>
         ) : (
           quizzes.map((quiz) => (
             <div key={quiz._id} className="quiz-card">
+              <div className="quiz-header-badges">
+                {quiz.is_auto_generated && (
+                  <span className="badge auto-generated-badge">✨ Auto-generated</span>
+                )}
+                {quiz.quiz_level && (
+                  <span className="badge level-badge">Level {quiz.quiz_level}</span>
+                )}
+              </div>
               <h3>{quiz.title}</h3>
               <p className="quiz-description">{quiz.description || 'No description'}</p>
               <div className="quiz-meta">
                 <p>Questions: {quiz.questions?.length || 0}</p>
+                {quiz.generation_criteria && (
+                  <p>Generated: {quiz.generation_criteria}</p>
+                )}
                 <p>Category: {quiz.quiz_type === 'placement' ? '📊 Placement Quiz' : '🎯 Adaptive Quiz'}</p>
                 <p>Mode: {quiz.is_adaptive ? '🔄 Adaptive' : '📝 Standard'}</p>
               </div>
               <div className="card-actions">
                 <button onClick={() => handleEdit(quiz)} className="btn-edit">
-                  Edit
+                  View/Edit
                 </button>
-                <button onClick={() => handleDelete(quiz._id)} className="btn-delete">
+                <button 
+                  onClick={() => handleDelete(quiz._id)} 
+                  className="btn-delete" 
+                  disabled={quiz.is_auto_generated}
+                  title={quiz.is_auto_generated ? 'Auto-generated quizzes cannot be deleted' : 'Delete quiz'}
+                >
                   Delete
                 </button>
               </div>

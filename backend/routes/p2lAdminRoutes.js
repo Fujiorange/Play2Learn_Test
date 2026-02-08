@@ -16,6 +16,7 @@ const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -1257,76 +1258,91 @@ router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Create quiz
+// Create quiz (BLOCKED - quizzes should be auto-generated)
 router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
-    
-    // Validate required fields
-    if (!title) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'title is required' 
-      });
-    }
-
-    // Populate questions with full details from Question references
-    const populatedQuestions = [];
-    if (questions && questions.length > 0) {
-      // Fetch all questions in parallel for better performance
-      const questionIds = questions.map(q => q.question_id).filter(id => id);
-      const questionDocs = await Question.find({ _id: { $in: questionIds } });
-      
-      // Create a map for quick lookup
-      const questionMap = new Map(questionDocs.map(doc => [doc._id.toString(), doc]));
-      
-      // Populate questions in order, log warnings for missing questions
-      for (const q of questions) {
-        if (q.question_id) {
-          const questionDoc = questionMap.get(q.question_id.toString());
-          if (questionDoc) {
-            populatedQuestions.push({
-              question_id: questionDoc._id,
-              text: questionDoc.text,
-              choices: questionDoc.choices,
-              answer: questionDoc.answer,
-              difficulty: questionDoc.difficulty
-            });
-          } else {
-            console.warn(`⚠️ Question not found: ${q.question_id}`);
-          }
-        }
-      }
-      
-      if (populatedQuestions.length !== questionIds.length) {
-        console.warn(`⚠️ Some questions were not found. Expected ${questionIds.length}, got ${populatedQuestions.length}`);
-      }
-    }
-
-    const finalQuizType = quiz_type || (is_adaptive ? 'adaptive' : 'placement');
-
-    const quiz = new Quiz({
-      title,
-      description: description || '',
-      quiz_type: finalQuizType,
-      questions: populatedQuestions,
-      is_adaptive: is_adaptive !== undefined ? is_adaptive : (finalQuizType === 'adaptive'),
-      is_active: is_active !== undefined ? is_active : true,
-      created_by: req.user._id
-    });
-
-    await quiz.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Quiz created successfully',
-      data: quiz
+    // Block manual quiz creation
+    return res.status(403).json({
+      success: false,
+      error: 'Manual quiz creation is disabled. Please use the quiz generation endpoint instead.',
+      hint: 'Use POST /api/p2ladmin/quizzes/generate to auto-generate quizzes'
     });
   } catch (error) {
     console.error('Create quiz error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create quiz' 
+    });
+  }
+});
+
+// Generate quiz automatically
+router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { quiz_level, student_id, trigger_reason } = req.body;
+    
+    // Validate quiz_level
+    if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid quiz_level. Must be between 1 and 10'
+      });
+    }
+    
+    // Check if generation is possible
+    const availability = await checkGenerationAvailability(quiz_level);
+    if (!availability.available) {
+      return res.status(400).json({
+        success: false,
+        error: availability.message,
+        data: availability
+      });
+    }
+    
+    // Generate the quiz
+    const quiz = await generateQuiz(
+      quiz_level,
+      student_id || null,
+      trigger_reason || 'manual'
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: `Quiz generated successfully for level ${quiz_level}`,
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Quiz generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate quiz'
+    });
+  }
+});
+
+// Check quiz generation availability for a level
+router.get('/quizzes/check-availability/:level', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const level = parseInt(req.params.level);
+    
+    if (!level || level < 1 || level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid quiz level. Must be between 1 and 10'
+      });
+    }
+    
+    const availability = await checkGenerationAvailability(level);
+    
+    res.json({
+      success: true,
+      data: availability
+    });
+  } catch (error) {
+    console.error('Check availability error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check availability'
     });
   }
 });
@@ -1371,13 +1387,23 @@ router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
 // Delete quiz
 router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const quiz = await Quiz.findByIdAndDelete(req.params.id);
+    const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz not found' 
       });
     }
+    
+    // Block deletion of auto-generated quizzes
+    if (quiz.is_auto_generated) {
+      return res.status(403).json({
+        success: false,
+        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
+      });
+    }
+    
+    await Quiz.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,
