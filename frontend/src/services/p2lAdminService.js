@@ -265,23 +265,10 @@ export const getQuiz = async (id) => {
   return apiCall(`/api/p2ladmin/quizzes/${id}`);
 };
 
-export const createQuiz = async (quizData) => {
-  return apiCall('/api/p2ladmin/quizzes', {
-    method: 'POST',
-    body: JSON.stringify(quizData),
-  });
-};
-
 export const updateQuiz = async (id, quizData) => {
   return apiCall(`/api/p2ladmin/quizzes/${id}`, {
     method: 'PUT',
     body: JSON.stringify(quizData),
-  });
-};
-
-export const deleteQuiz = async (id) => {
-  return apiCall(`/api/p2ladmin/quizzes/${id}`, {
-    method: 'DELETE',
   });
 };
 
@@ -290,6 +277,17 @@ export const runAdaptiveQuiz = async (quizData) => {
     method: 'POST',
     body: JSON.stringify(quizData),
   });
+};
+
+export const triggerQuizGeneration = async (quiz_level, student_id = null) => {
+  return apiCall('/api/p2ladmin/quizzes/trigger-generation', {
+    method: 'POST',
+    body: JSON.stringify({ quiz_level, student_id }),
+  });
+};
+
+export const getQuizGenerationStats = async () => {
+  return apiCall('/api/p2ladmin/quizzes/generation-stats');
 };
 
 // ==================== HEALTH CHECK ====================
@@ -434,10 +432,10 @@ export default {
   uploadQuestionsCSV,
   getQuizzes,
   getQuiz,
-  createQuiz,
   updateQuiz,
-  deleteQuiz,
   runAdaptiveQuiz,
+  triggerQuizGeneration,
+  getQuizGenerationStats,
   getHealthStatus,
   getTestimonials,
   updateTestimonial,

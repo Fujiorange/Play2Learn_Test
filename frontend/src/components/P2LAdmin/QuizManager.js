@@ -1,7 +1,7 @@
 // Quiz Manager Component
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuizzes, createQuiz, updateQuiz, deleteQuiz, getQuestions } from '../../services/p2lAdminService';
+import { getQuizzes, updateQuiz, getQuestions, triggerQuizGeneration, getQuizGenerationStats } from '../../services/p2lAdminService';
 import './QuizManager.css';
 
 function QuizManager() {
@@ -10,9 +10,15 @@ function QuizManager() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
+  const [showTriggerModal, setShowTriggerModal] = useState(false);
+  const [triggerLoading, setTriggerLoading] = useState(false);
+  const [generationStats, setGenerationStats] = useState(null);
   const [questionFilters, setQuestionFilters] = useState({
     topic: '',
     difficulty: ''
+  });
+  const [triggerFormData, setTriggerFormData] = useState({
+    quiz_level: 1
   });
   const [formData, setFormData] = useState({
     title: '',
@@ -25,6 +31,7 @@ function QuizManager() {
 
   useEffect(() => {
     fetchData();
+    fetchGenerationStats();
   }, []);
 
   const fetchData = async () => {
@@ -40,6 +47,35 @@ function QuizManager() {
       alert('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGenerationStats = async () => {
+    try {
+      const statsRes = await getQuizGenerationStats();
+      setGenerationStats(statsRes.data || null);
+    } catch (error) {
+      console.error('Failed to fetch generation stats:', error);
+    }
+  };
+
+  const handleTriggerQuizGeneration = async () => {
+    setTriggerLoading(true);
+    try {
+      const result = await triggerQuizGeneration(triggerFormData.quiz_level);
+      if (result.success) {
+        alert(`Quiz generated successfully! Quiz ID: ${result.data?._id || 'N/A'}`);
+        setShowTriggerModal(false);
+        fetchData();
+        fetchGenerationStats();
+      } else {
+        alert(`Failed to generate quiz: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to trigger quiz generation:', error);
+      alert(`Failed to generate quiz: ${error.message || 'Unknown error'}`);
+    } finally {
+      setTriggerLoading(false);
     }
   };
 
@@ -80,6 +116,12 @@ function QuizManager() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Only allow editing, not creating
+      if (!editingQuiz) {
+        alert('Manual quiz creation is disabled. Use "Trigger Quiz Generation" instead.');
+        return;
+      }
+      
       // Transform question_ids to questions array format expected by backend
       const quizData = {
         title: formData.title,
@@ -96,13 +138,8 @@ function QuizManager() {
         };
       }
       
-      if (editingQuiz) {
-        await updateQuiz(editingQuiz._id, quizData);
-        alert('Quiz updated successfully');
-      } else {
-        await createQuiz(quizData);
-        alert('Quiz created successfully');
-      }
+      await updateQuiz(editingQuiz._id, quizData);
+      alert('Quiz updated successfully');
       setShowForm(false);
       setEditingQuiz(null);
       setFormData({
@@ -131,20 +168,6 @@ function QuizManager() {
       target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10
     });
     setShowForm(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this quiz?')) {
-      return;
-    }
-    try {
-      await deleteQuiz(id);
-      alert('Quiz deleted successfully');
-      fetchData();
-    } catch (error) {
-      console.error('Failed to delete quiz:', error);
-      alert(error.message || 'Failed to delete quiz');
-    }
   };
 
   const cancelForm = () => {
@@ -190,19 +213,81 @@ function QuizManager() {
         <div>
           <h1>Quiz Manager</h1>
           <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
-            Create and manage placement quizzes and adaptive quizzes for students
+            View and manage auto-generated quizzes. Manual creation is disabled.
           </p>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          + Create Quiz
+        <button onClick={() => setShowTriggerModal(true)} className="btn-primary btn-generate">
+          ⚡ Trigger Quiz Generation
         </button>
       </header>
+
+      {/* Generation Stats Panel */}
+      {generationStats && (
+        <div className="generation-stats-panel">
+          <h3>📊 Question Pool Status</h3>
+          <div className="stats-grid">
+            {generationStats.quizLevelStats?.map((stat) => (
+              <div key={stat.quiz_level} className={`stat-item ${stat.count < 40 ? 'low-count' : ''}`}>
+                <span className="stat-label">Quiz Level {stat.quiz_level}</span>
+                <span className="stat-value">{stat.count} questions</span>
+                {stat.count < 40 && <span className="stat-warning">⚠️ Need {40 - stat.count} more</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Trigger Quiz Generation Modal */}
+      {showTriggerModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2>⚡ Trigger Quiz Generation</h2>
+            <p className="modal-description">
+              Generate a new adaptive quiz with 20 questions. The system will automatically 
+              select questions using freshness weighting and difficulty progression.
+            </p>
+            
+            <div className="form-group">
+              <label>Select Quiz Level *</label>
+              <select
+                value={triggerFormData.quiz_level}
+                onChange={(e) => setTriggerFormData({ ...triggerFormData, quiz_level: parseInt(e.target.value) })}
+                required
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(level => (
+                  <option key={level} value={level}>Quiz Level {level}</option>
+                ))}
+              </select>
+              <small>Requires at least 40 questions in the selected quiz level</small>
+            </div>
+
+            <div className="form-actions">
+              <button 
+                type="button" 
+                onClick={handleTriggerQuizGeneration} 
+                className="btn-submit"
+                disabled={triggerLoading}
+              >
+                {triggerLoading ? 'Generating...' : 'Generate Quiz'}
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setShowTriggerModal(false)} 
+                className="btn-cancel"
+                disabled={triggerLoading}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content large">
-            <h2>{editingQuiz ? 'Edit Quiz' : 'Create New Quiz'}</h2>
+            <h2>Edit Quiz</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>Quiz Title *</label>
@@ -340,7 +425,7 @@ function QuizManager() {
 
               <div className="form-actions">
                 <button type="submit" className="btn-submit">
-                  {editingQuiz ? 'Update Quiz' : 'Create Quiz'}
+                  Update Quiz
                 </button>
                 <button type="button" onClick={cancelForm} className="btn-cancel">
                   Cancel
@@ -353,23 +438,34 @@ function QuizManager() {
 
       <div className="quizzes-grid">
         {quizzes.length === 0 ? (
-          <p className="no-data">No quizzes found. Create your first quiz!</p>
+          <p className="no-data">No quizzes found. Use "Trigger Quiz Generation" to create a quiz.</p>
         ) : (
           quizzes.map((quiz) => (
             <div key={quiz._id} className="quiz-card">
-              <h3>{quiz.title}</h3>
+              <div className="quiz-header">
+                <h3>{quiz.title}</h3>
+                {quiz.is_auto_generated && (
+                  <span className="auto-generated-badge">🤖 Auto-generated</span>
+                )}
+              </div>
+              {quiz.generation_trigger && quiz.generation_trigger !== 'manual' && (
+                <div className="generation-info">
+                  <span className="trigger-badge">Trigger: {quiz.generation_trigger}</span>
+                  {quiz.freshness_score > 0 && (
+                    <span className="freshness-score">Freshness: {quiz.freshness_score.toFixed(1)}</span>
+                  )}
+                </div>
+              )}
               <p className="quiz-description">{quiz.description || 'No description'}</p>
               <div className="quiz-meta">
                 <p>Questions: {quiz.questions?.length || 0}</p>
+                <p>Quiz Level: {quiz.quiz_level || 1}</p>
                 <p>Category: {quiz.quiz_type === 'placement' ? '📊 Placement Quiz' : '🎯 Adaptive Quiz'}</p>
                 <p>Mode: {quiz.is_adaptive ? '🔄 Adaptive' : '📝 Standard'}</p>
               </div>
               <div className="card-actions">
                 <button onClick={() => handleEdit(quiz)} className="btn-edit">
                   Edit
-                </button>
-                <button onClick={() => handleDelete(quiz._id)} className="btn-delete">
-                  Delete
                 </button>
               </div>
             </div>

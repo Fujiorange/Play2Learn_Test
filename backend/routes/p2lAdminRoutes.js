@@ -6,11 +6,14 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
+const crypto = require('crypto');
 const User = require('../models/User');
 const School = require('../models/School');
 const License = require('../models/License');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
+const QuizGenerationLog = require('../models/QuizGenerationLog');
+const QuizAttempt = require('../models/QuizAttempt');
 const LandingPage = require('../models/LandingPage');
 const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
@@ -768,12 +771,13 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
 // Get all questions
 router.get('/questions', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { subject, topic, difficulty, grade, is_active } = req.query;
+    const { subject, topic, difficulty, quiz_level, grade, is_active } = req.query;
     
     const filter = {};
     if (subject) filter.subject = subject;
     if (topic) filter.topic = topic;
     if (difficulty) filter.difficulty = parseInt(difficulty);
+    if (quiz_level) filter.quiz_level = parseInt(quiz_level);
     if (grade) filter.grade = grade;
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
@@ -1120,11 +1124,18 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
             difficulty = 3;
           }
 
+          // Parse quiz_level (default to 1 if not provided or invalid)
+          let quiz_level = parseInt(normalizedRow.quiz_level) || 1;
+          if (quiz_level < 1 || quiz_level > 10) {
+            quiz_level = 1;
+          }
+
           results.push({
             text: text.trim(),
             choices: choices,
             answer: answer.trim(),
             difficulty: difficulty,
+            quiz_level: quiz_level,
             subject: normalizedRow.subject || 'General',
             topic: normalizedRow.topic || '',
             grade: normalizedRow.grade || 'Primary 1',
@@ -1250,78 +1261,13 @@ router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Create quiz
+// Create quiz - DISABLED for manual creation
+// Quizzes are now auto-generated. Use /quizzes/trigger-generation instead.
 router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
-    
-    // Validate required fields
-    if (!title) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'title is required' 
-      });
-    }
-
-    // Populate questions with full details from Question references
-    const populatedQuestions = [];
-    if (questions && questions.length > 0) {
-      // Fetch all questions in parallel for better performance
-      const questionIds = questions.map(q => q.question_id).filter(id => id);
-      const questionDocs = await Question.find({ _id: { $in: questionIds } });
-      
-      // Create a map for quick lookup
-      const questionMap = new Map(questionDocs.map(doc => [doc._id.toString(), doc]));
-      
-      // Populate questions in order, log warnings for missing questions
-      for (const q of questions) {
-        if (q.question_id) {
-          const questionDoc = questionMap.get(q.question_id.toString());
-          if (questionDoc) {
-            populatedQuestions.push({
-              question_id: questionDoc._id,
-              text: questionDoc.text,
-              choices: questionDoc.choices,
-              answer: questionDoc.answer,
-              difficulty: questionDoc.difficulty
-            });
-          } else {
-            console.warn(`⚠️ Question not found: ${q.question_id}`);
-          }
-        }
-      }
-      
-      if (populatedQuestions.length !== questionIds.length) {
-        console.warn(`⚠️ Some questions were not found. Expected ${questionIds.length}, got ${populatedQuestions.length}`);
-      }
-    }
-
-    const finalQuizType = quiz_type || (is_adaptive ? 'adaptive' : 'placement');
-
-    const quiz = new Quiz({
-      title,
-      description: description || '',
-      quiz_type: finalQuizType,
-      questions: populatedQuestions,
-      is_adaptive: is_adaptive !== undefined ? is_adaptive : (finalQuizType === 'adaptive'),
-      is_active: is_active !== undefined ? is_active : true,
-      created_by: req.user._id
-    });
-
-    await quiz.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Quiz created successfully',
-      data: quiz
-    });
-  } catch (error) {
-    console.error('Create quiz error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to create quiz' 
-    });
-  }
+  return res.status(403).json({ 
+    success: false, 
+    error: 'Manual quiz creation is disabled. Use /quizzes/trigger-generation for auto-generated quizzes.' 
+  });
 });
 
 // Update quiz
@@ -1361,26 +1307,252 @@ router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Delete quiz
+// Delete quiz - DISABLED
+// Quiz deletion is disabled to maintain data integrity
 router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
+  return res.status(403).json({ 
+    success: false, 
+    error: 'Quiz deletion is disabled. Quizzes are preserved for analytics and audit purposes.' 
+  });
+});
+
+// Get quiz generation statistics
+router.get('/quizzes/generation-stats', authenticateP2LAdmin, async (req, res) => {
   try {
-    const quiz = await Quiz.findByIdAndDelete(req.params.id);
-    if (!quiz) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Quiz not found' 
+    // Get question counts per quiz level
+    const quizLevelStats = await Question.aggregate([
+      { $match: { is_active: true } },
+      { $group: { _id: '$quiz_level', count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Format the stats
+    const formattedStats = [];
+    for (let level = 1; level <= 10; level++) {
+      const stat = quizLevelStats.find(s => s._id === level);
+      formattedStats.push({
+        quiz_level: level,
+        count: stat ? stat.count : 0
       });
     }
 
+    // Get recent generation logs
+    const recentLogs = await QuizGenerationLog.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('generated_by', 'name email');
+
     res.json({
       success: true,
-      message: 'Quiz deleted successfully'
+      data: {
+        quizLevelStats: formattedStats,
+        recentGenerations: recentLogs
+      }
     });
   } catch (error) {
-    console.error('Delete quiz error:', error);
+    console.error('Get generation stats error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to delete quiz' 
+      error: 'Failed to fetch generation stats' 
+    });
+  }
+});
+
+// Trigger quiz generation with freshness algorithm
+router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { quiz_level, student_id } = req.body;
+    
+    if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'quiz_level is required and must be between 1 and 10' 
+      });
+    }
+
+    // Step 1: Verify criteria (at least 40 questions in quiz_level)
+    const questionsPool = await Question.find({ 
+      quiz_level: parseInt(quiz_level), 
+      is_active: true 
+    });
+
+    if (questionsPool.length < 40) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient questions for quiz level ${quiz_level}. Found ${questionsPool.length}, need at least 40.`,
+        currentCount: questionsPool.length,
+        required: 40
+      });
+    }
+
+    // Step 2: Get questions used in student's last 3 attempts (if student_id provided)
+    let excludeQuestionIds = [];
+    if (student_id) {
+      const recentAttempts = await QuizAttempt.find({ 
+        userId: student_id,
+        quiz_level: parseInt(quiz_level)
+      })
+        .sort({ startedAt: -1 })
+        .limit(3)
+        .select('question_ids_used');
+      
+      excludeQuestionIds = recentAttempts.flatMap(a => a.question_ids_used || []);
+    }
+
+    // Step 3: Apply freshness weighting
+    const now = new Date();
+    const maxTimeGap = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+    
+    const weightedQuestions = questionsPool
+      .filter(q => !excludeQuestionIds.some(id => id.toString() === q._id.toString()))
+      .map(q => {
+        const baseWeight = 100;
+        const lastUsed = q.last_used_timestamp ? new Date(q.last_used_timestamp) : new Date(0);
+        const timeSinceUsed = now - lastUsed;
+        const freshnessBonus = Math.min(timeSinceUsed / maxTimeGap, 1) * 50;
+        const usagePenalty = (q.usage_count || 0) * 10;
+        const weight = Math.max(baseWeight + freshnessBonus - usagePenalty, 10);
+        return { question: q, weight };
+      });
+
+    if (weightedQuestions.length < 20) {
+      return res.status(400).json({
+        success: false,
+        error: `Not enough fresh questions available after exclusions. Found ${weightedQuestions.length}, need at least 20.`
+      });
+    }
+
+    // Step 4: Select 20 questions with adaptive difficulty progression
+    const selectedQuestions = [];
+    let currentDifficulty = 1;
+    const pool = [...weightedQuestions];
+    let totalFreshnessScore = 0;
+
+    for (let i = 0; i < 20 && pool.length > 0; i++) {
+      // Filter by current difficulty (with fallback to adjacent)
+      let difficultyPool = pool.filter(wq => wq.question.difficulty === currentDifficulty);
+      
+      if (difficultyPool.length === 0) {
+        // Try adjacent difficulties
+        difficultyPool = pool.filter(wq => 
+          Math.abs(wq.question.difficulty - currentDifficulty) <= 1
+        );
+      }
+      
+      if (difficultyPool.length === 0) {
+        difficultyPool = pool;
+      }
+
+      // Weighted random selection
+      const totalWeight = difficultyPool.reduce((sum, wq) => sum + wq.weight, 0);
+      let random = Math.random() * totalWeight;
+      let selected = difficultyPool[0];
+      
+      for (const wq of difficultyPool) {
+        random -= wq.weight;
+        if (random <= 0) {
+          selected = wq;
+          break;
+        }
+      }
+
+      totalFreshnessScore += selected.weight;
+
+      selectedQuestions.push({
+        question_id: selected.question._id,
+        text: selected.question.text,
+        choices: selected.question.choices,
+        answer: selected.question.answer,
+        difficulty: selected.question.difficulty,
+        position: i + 1,
+        starting_difficulty: currentDifficulty
+      });
+
+      // Update usage tracking
+      await Question.findByIdAndUpdate(selected.question._id, {
+        last_used_timestamp: now,
+        $inc: { usage_count: 1 }
+      });
+
+      // Remove from pool
+      const poolIndex = pool.findIndex(wq => wq.question._id.toString() === selected.question._id.toString());
+      if (poolIndex > -1) pool.splice(poolIndex, 1);
+
+      // Adaptive difficulty progression (50% chance to change)
+      if (i < 19 && Math.random() > 0.5) {
+        currentDifficulty = Math.min(5, Math.max(1, currentDifficulty + (Math.random() > 0.5 ? 1 : -1)));
+      }
+    }
+
+    // Step 5: Shuffle questions for additional randomness
+    for (let i = selectedQuestions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [selectedQuestions[i], selectedQuestions[j]] = [selectedQuestions[j], selectedQuestions[i]];
+      // Update positions after shuffle
+      selectedQuestions[i].position = i + 1;
+      selectedQuestions[j].position = j + 1;
+    }
+
+    // Step 6: Generate unique hash
+    const uniqueHash = crypto.createHash('sha256')
+      .update(`${student_id || 'global'}-${quiz_level}-${now.toISOString()}`)
+      .digest('hex')
+      .substring(0, 16);
+
+    // Step 7: Create quiz record
+    const quiz = new Quiz({
+      title: `Auto-generated Quiz - Level ${quiz_level}`,
+      description: `Automatically generated quiz for level ${quiz_level} with 20 adaptive questions`,
+      quiz_type: 'adaptive',
+      quiz_level: parseInt(quiz_level),
+      questions: selectedQuestions,
+      is_adaptive: true,
+      is_active: true,
+      is_auto_generated: true,
+      generation_trigger: 'admin_trigger',
+      generation_criteria: `Admin triggered for quiz level ${quiz_level}`,
+      unique_hash: uniqueHash,
+      student_id: student_id || null,
+      freshness_score: totalFreshnessScore / 20,
+      adaptive_config: {
+        target_correct_answers: 10,
+        difficulty_progression: 'gradual',
+        starting_difficulty: 1
+      },
+      created_by: req.user._id
+    });
+
+    await quiz.save();
+
+    // Step 8: Log generation
+    const log = new QuizGenerationLog({
+      quiz_id: quiz._id,
+      quiz_level: parseInt(quiz_level),
+      student_id: student_id || null,
+      trigger_type: 'admin_trigger',
+      trigger_details: `Manual trigger by admin ${req.user.email}`,
+      questions_selected: 20,
+      freshness_score: totalFreshnessScore / 20,
+      difficulty_distribution: selectedQuestions.reduce((acc, q) => {
+        acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
+        return acc;
+      }, {}),
+      success: true,
+      generated_by: req.user._id
+    });
+
+    await log.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Quiz generated successfully',
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Trigger quiz generation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to generate quiz' 
     });
   }
 });
