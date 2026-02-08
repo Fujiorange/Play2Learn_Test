@@ -298,7 +298,12 @@
   letter-spacing: 0.5px;
 }
 
-.badge-success {
+.badge-free {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-paid {
   background: #d1fae5;
   color: #065f46;
 }
