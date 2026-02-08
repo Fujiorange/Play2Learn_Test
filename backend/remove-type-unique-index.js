@@ -5,7 +5,14 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/play2learn';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('❌ Error: MONGODB_URI environment variable is not set');
+  console.error('Please set MONGODB_URI in your .env file or as an environment variable');
+  console.error('Example: MONGODB_URI=mongodb://localhost:27017/play2learn');
+  process.exit(1);
+}
 
 async function removeTypeUniqueIndex() {
   try {
