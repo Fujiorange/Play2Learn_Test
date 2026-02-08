@@ -812,7 +812,6 @@ function LandingPageManager() {
         );
 
       case 'pricing':
-        const plans = customData.plans || [];
         return (
           <>
             <div className="form-group">
@@ -836,128 +835,21 @@ function LandingPageManager() {
             <div className="form-section">
               <div className="section-header">
                 <h4>Pricing Plans</h4>
-                <button
-                  type="button"
-                  onClick={() => addArrayItem('plans', { 
-                    name: '', 
-                    description: '', 
-                    price: { yearly: 0, monthly: 0 },
-                    teachers: 0,
-                    students: 0,
-                    features: [],
-                    popular: false
-                  })}
-                  className="btn-add-item"
-                >
-                  + Add Plan
-                </button>
               </div>
-              {plans.map((plan, index) => (
-                <div key={index} className="array-item">
-                  <div className="item-header">
-                    <h5>Plan {index + 1}</h5>
-                    <button
-                      type="button"
-                      onClick={() => removeArrayItem('plans', index)}
-                      className="btn-remove-item"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="form-group">
-                    <label>Plan Name</label>
-                    <input
-                      type="text"
-                      value={plan.name || ''}
-                      onChange={(e) => handleArrayItemChange('plans', index, 'name', e.target.value)}
-                      placeholder="Starter"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Description</label>
-                    <input
-                      type="text"
-                      value={plan.description || ''}
-                      onChange={(e) => handleArrayItemChange('plans', index, 'description', e.target.value)}
-                      placeholder="Perfect for small schools and institutions"
-                    />
-                  </div>
-                  <div className="form-group-inline">
-                    <div className="form-group">
-                      <label>Monthly Price ($)</label>
-                      <input
-                        type="number"
-                        value={plan.price?.monthly || ''}
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value);
-                          const newPlan = { ...plan, price: { ...plan.price, monthly: isNaN(value) ? 0 : value } };
-                          const newPlans = [...plans];
-                          newPlans[index] = newPlan;
-                          handleCustomDataChange('plans', newPlans);
-                        }}
-                        placeholder="250"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Yearly Price ($)</label>
-                      <input
-                        type="number"
-                        value={plan.price?.yearly || ''}
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value);
-                          const newPlan = { ...plan, price: { ...plan.price, yearly: isNaN(value) ? 0 : value } };
-                          const newPlans = [...plans];
-                          newPlans[index] = newPlan;
-                          handleCustomDataChange('plans', newPlans);
-                        }}
-                        placeholder="2500"
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group-inline">
-                    <div className="form-group">
-                      <label>Max Teachers</label>
-                      <input
-                        type="number"
-                        value={plan.teachers || ''}
-                        onChange={(e) => handleArrayItemChange('plans', index, 'teachers', parseInt(e.target.value, 10) || 0)}
-                        placeholder="50"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Max Students</label>
-                      <input
-                        type="number"
-                        value={plan.students || ''}
-                        onChange={(e) => handleArrayItemChange('plans', index, 'students', parseInt(e.target.value, 10) || 0)}
-                        placeholder="500"
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={plan.popular || false}
-                        onChange={(e) => handleArrayItemChange('plans', index, 'popular', e.target.checked)}
-                      />
-                      {' '}Mark as Popular
-                    </label>
-                  </div>
-                  <div className="form-group">
-                    <label>Features (one per line)</label>
-                    <textarea
-                      value={(plan.features || []).join('\n')}
-                      onChange={(e) => {
-                        const features = e.target.value.split('\n').filter(f => f.trim());
-                        handleArrayItemChange('plans', index, 'features', features);
-                      }}
-                      rows="4"
-                      placeholder="Basic adaptive learning paths&#10;Standard analytics dashboard&#10;Email support"
-                    />
-                  </div>
-                </div>
-              ))}
+              <div style={{ 
+                padding: '20px', 
+                background: '#f0f9ff', 
+                border: '1px solid #0ea5e9', 
+                borderRadius: '8px',
+                marginTop: '12px'
+              }}>
+                <p style={{ margin: 0, color: '#0369a1', fontWeight: '500' }}>
+                  ℹ️ Pricing plans are automatically fetched from active licenses in the License Management section.
+                </p>
+                <p style={{ margin: '8px 0 0 0', color: '#075985', fontSize: '14px' }}>
+                  To modify pricing, please go to License Management and update the license plans there.
+                </p>
+              </div>
             </div>
           </>
         );
