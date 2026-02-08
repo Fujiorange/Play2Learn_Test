@@ -172,7 +172,6 @@ function SchoolManagement() {
                   onChange={handleInputChange}
                 >
                   <option value="school">School</option>
-                  <option value="university">University</option>
                   <option value="training_center">Training Center</option>
                 </select>
               </div>

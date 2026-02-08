@@ -1,11 +1,13 @@
 // License Management Component for P2L Admin
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './LicenseManagement.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 
   (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : `${window.location.origin}/api`);
 
 function LicenseManagement() {
+  const navigate = useNavigate();
   const [licenses, setLicenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -215,7 +217,15 @@ function LicenseManagement() {
   return (
     <div className="license-management">
       <div className="license-header">
-        <h2>License Management</h2>
+        <div>
+          <h2>License Management</h2>
+          <button 
+            className="btn-back"
+            onClick={() => navigate('/p2ladmin/dashboard')}
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
         <button 
           className="btn btn-primary"
           onClick={() => {
