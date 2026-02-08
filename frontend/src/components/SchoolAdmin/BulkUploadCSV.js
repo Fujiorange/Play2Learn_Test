@@ -39,7 +39,7 @@ Lim Mei Ling,parent.lim@email.com,Parent,Mrs,,,,john.tan@student.com,Mother,,+65
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `users_bulk_upload_template.csv`;
+    a.download = `bulk_users_upload_template.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

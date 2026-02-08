@@ -1404,7 +1404,7 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
         } else if (role === 'Teacher' && classId) {
           await Class.findByIdAndUpdate(classId, { $addToSet: { teachers: newUser._id } });
           // Track assigned classes on teacher profile
-          await User.findByIdAndUpdate(newUser._id, { assignedClasses: [classId] });
+          await User.findByIdAndUpdate(newUser._id, { $addToSet: { assignedClasses: classId } });
         }
 
         if (role === 'Teacher' || role === 'Student') {
@@ -1596,7 +1596,7 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
       } else if (role === 'Teacher') {
         await Class.findOneAndUpdate(classFilter, { $addToSet: { teachers: newUser._id } });
         // Track assigned classes on teacher profile
-        await User.findByIdAndUpdate(newUser._id, { assignedClasses: [className] });
+        await User.findByIdAndUpdate(newUser._id, { $addToSet: { assignedClasses: className } });
       }
     }
     
