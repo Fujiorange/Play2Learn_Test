@@ -91,44 +91,6 @@
   font-weight: 600;
 }
 
-/* Template Buttons */
-.template-buttons {
-  margin-bottom: 24px;
-  padding-bottom: 24px;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.template-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 12px;
-}
-
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.btn-template {
-  background: white;
-  color: #374151;
-  border: 2px solid #e5e7eb;
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s;
-}
-
-.btn-template:hover {
-  background: #f3f4f6;
-  border-color: #10b981;
-  color: #10b981;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.15);
-}
-
 .license-form {
   display: flex;
   flex-direction: column;
@@ -236,8 +198,9 @@
 .btn-create-license {
   background: #10b981;
   color: white;
-  padding: 8px 16px;
+  padding: 10px 20px;
   font-size: 14px;
+  font-weight: 600;
 }
 
 .btn-create-license:hover {

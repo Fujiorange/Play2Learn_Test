@@ -153,57 +153,6 @@ function LicenseManagement() {
     });
   };
 
-  const applyTemplate = (template) => {
-    const templates = {
-      free: {
-        name: 'Free Trial',
-        type: 'free',
-        priceMonthly: 0,
-        priceYearly: 0,
-        maxTeachers: 1,
-        maxStudents: 5,
-        maxClasses: 1,
-        description: 'Free trial with basic features - 1 teacher, 5 students, 1 class'
-      },
-      basic: {
-        name: 'Basic Plan',
-        type: 'paid',
-        priceMonthly: 250,
-        priceYearly: 2500,
-        maxTeachers: 50,
-        maxStudents: 500,
-        maxClasses: 100,
-        description: 'Perfect for small to medium schools'
-      },
-      standard: {
-        name: 'Standard Plan',
-        type: 'paid',
-        priceMonthly: 500,
-        priceYearly: 5000,
-        maxTeachers: 100,
-        maxStudents: 1000,
-        maxClasses: 200,
-        description: 'Ideal for growing educational institutions'
-      },
-      premium: {
-        name: 'Premium Plan',
-        type: 'paid',
-        priceMonthly: 1000,
-        priceYearly: 10000,
-        maxTeachers: 250,
-        maxStudents: 2500,
-        maxClasses: 500,
-        description: 'Unlimited features for large organizations'
-      }
-    };
-    
-    if (templates[template]) {
-      setFormData(templates[template]);
-      setSuccess(`${template.charAt(0).toUpperCase() + template.slice(1)} template applied`);
-      setTimeout(() => setSuccess(''), 2000);
-    }
-  };
-
   const handleCancel = () => {
     setShowForm(false);
     setEditingLicense(null);
@@ -244,42 +193,6 @@ function LicenseManagement() {
       {showForm && (
         <div className="license-form-container">
           <h3>{editingLicense ? 'Edit License' : 'Create New License'}</h3>
-          
-          {!editingLicense && (
-            <div className="template-buttons">
-              <p className="template-label">Quick Templates:</p>
-              <div className="template-grid">
-                <button 
-                  type="button" 
-                  className="btn btn-template"
-                  onClick={() => applyTemplate('free')}
-                >
-                  🆓 Free Trial
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-template"
-                  onClick={() => applyTemplate('basic')}
-                >
-                  🚀 Basic
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-template"
-                  onClick={() => applyTemplate('standard')}
-                >
-                  💼 Standard
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-template"
-                  onClick={() => applyTemplate('premium')}
-                >
-                  🏢 Premium
-                </button>
-              </div>
-            </div>
-          )}
           
           <form onSubmit={handleSubmit} className="license-form">
             <div className="form-row">
