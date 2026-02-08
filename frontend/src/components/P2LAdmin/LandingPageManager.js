@@ -6,7 +6,8 @@ import {
   saveLandingPage,
   getTestimonials,
   updateTestimonial,
-  deleteTestimonial 
+  deleteTestimonial,
+  getLandingPageStatistics
 } from '../../services/p2lAdminService';
 import './LandingPageManager.css';
 
@@ -24,6 +25,13 @@ function LandingPageManager() {
     minRating: '',
     sentiment: '',
     userRole: ''
+  });
+  const [statistics, setStatistics] = useState({
+    schools: 0,
+    students: 0,
+    teachers: 0,
+    updatedAt: null,
+    loading: true
   });
   const [formData, setFormData] = useState({
     type: 'hero',
@@ -110,6 +118,30 @@ function LandingPageManager() {
       fetchTestimonials();
     }
   }, [testimonialFilters, testimonialsLoaded, fetchTestimonials]);
+
+  const fetchStatistics = async () => {
+    try {
+      setStatistics(prev => ({ ...prev, loading: true }));
+      const response = await getLandingPageStatistics();
+      if (response.success) {
+        setStatistics({
+          schools: response.schools || 0,
+          students: response.students || 0,
+          teachers: response.teachers || 0,
+          updatedAt: response.updatedAt,
+          loading: false
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch statistics:', error);
+      setStatistics(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Fetch statistics on mount
+  useEffect(() => {
+    fetchStatistics();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -401,44 +433,106 @@ function LandingPageManager() {
             </div>
             <div className="form-section">
               <div className="section-header">
-                <h4>Statistics</h4>
+                <h4>Statistics (Automated) 📊</h4>
                 <button
                   type="button"
-                  onClick={() => addArrayItem('stats', { value: '', label: '' })}
+                  onClick={fetchStatistics}
                   className="btn-add-item"
+                  style={{ backgroundColor: '#3b82f6' }}
                 >
-                  + Add Stat
+                  🔄 Refresh Stats
                 </button>
               </div>
               <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
-                gap: '12px' 
+                padding: '20px', 
+                background: '#f0f9ff',
+                borderRadius: '8px',
+                border: '2px solid #3b82f6'
               }}>
-                {stats.map((stat, index) => (
-                  <div key={index} className="array-item-inline">
-                    <input
-                      type="text"
-                      value={stat.value || ''}
-                      onChange={(e) => handleArrayItemChange('stats', index, 'value', e.target.value)}
-                      placeholder="50+"
-                    />
-                    <input
-                      type="text"
-                      value={stat.label || ''}
-                      onChange={(e) => handleArrayItemChange('stats', index, 'label', e.target.value)}
-                      placeholder="Schools Partnered"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeArrayItem('stats', index)}
-                      className="btn-remove-item"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                {statistics.loading ? (
+                  <p style={{ textAlign: 'center', color: '#666' }}>Loading statistics...</p>
+                ) : (
+                  <>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(3, 1fr)', 
+                      gap: '16px',
+                      marginBottom: '12px'
+                    }}>
+                      <div style={{ 
+                        padding: '16px', 
+                        background: 'white', 
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                        border: '1px solid #bfdbfe'
+                      }}>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#3b82f6' }}>
+                          {statistics.schools}
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+                          Schools
+                        </div>
+                      </div>
+                      <div style={{ 
+                        padding: '16px', 
+                        background: 'white', 
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                        border: '1px solid #bfdbfe'
+                      }}>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#10b981' }}>
+                          {statistics.students}
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+                          Students
+                        </div>
+                      </div>
+                      <div style={{ 
+                        padding: '16px', 
+                        background: 'white', 
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                        border: '1px solid #bfdbfe'
+                      }}>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f59e0b' }}>
+                          {statistics.teachers}
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+                          Teachers
+                        </div>
+                      </div>
+                    </div>
+                    <p style={{ 
+                      textAlign: 'center', 
+                      fontSize: '16px', 
+                      margin: '12px 0',
+                      color: '#334155'
+                    }}>
+                      <strong>{statistics.schools} schools</strong>, <strong>{statistics.students} students</strong>, 
+                      and <strong>{statistics.teachers} teachers</strong> are using this website
+                    </p>
+                    {statistics.updatedAt && (
+                      <p style={{ 
+                        textAlign: 'center', 
+                        fontSize: '12px', 
+                        color: '#64748b',
+                        marginTop: '8px'
+                      }}>
+                        Last updated: {new Date(statistics.updatedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
+              <p style={{ 
+                fontSize: '13px', 
+                color: '#64748b', 
+                marginTop: '12px',
+                fontStyle: 'italic'
+              }}>
+                ℹ️ Statistics are automatically calculated from active schools, students, and teachers. 
+                They are cached for 1 hour and update automatically.
+              </p>
             </div>
           </>
         );
@@ -1110,16 +1204,44 @@ function LandingPageManager() {
                   </ul>
                 </div>
               )}
-              {aboutData.stats && aboutData.stats.length > 0 && (
-                <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
-                  {aboutData.stats.map((stat, index) => (
-                    <div key={index} style={{ textAlign: 'center', padding: '16px', background: '#e0e7ff', borderRadius: '8px' }}>
-                      <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#4338ca' }}>{stat.value}</div>
-                      <div style={{ fontSize: '14px', color: '#6b7280' }}>{stat.label}</div>
+              {/* Automated Statistics Display */}
+              <div style={{ marginTop: '24px' }}>
+                <h3 style={{ fontSize: '20px', marginBottom: '16px', textAlign: 'center' }}>Our Impact 📊</h3>
+                {statistics.loading ? (
+                  <p style={{ textAlign: 'center', color: '#666' }}>Loading statistics...</p>
+                ) : (
+                  <>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+                      gap: '16px',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ textAlign: 'center', padding: '16px', background: '#dbeafe', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#3b82f6' }}>{statistics.schools}</div>
+                        <div style={{ fontSize: '14px', color: '#6b7280' }}>Schools</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '16px', background: '#d1fae5', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#10b981' }}>{statistics.students}</div>
+                        <div style={{ fontSize: '14px', color: '#6b7280' }}>Students</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '16px', background: '#fef3c7', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f59e0b' }}>{statistics.teachers}</div>
+                        <div style={{ fontSize: '14px', color: '#6b7280' }}>Teachers</div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <p style={{ 
+                      textAlign: 'center', 
+                      fontSize: '18px', 
+                      color: '#334155',
+                      fontWeight: '500'
+                    }}>
+                      <strong>{statistics.schools} schools</strong>, <strong>{statistics.students} students</strong>, 
+                      and <strong>{statistics.teachers} teachers</strong> are using this website
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
           </section>
         );

@@ -1652,6 +1652,73 @@ router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// ==================== Landing Page Statistics ====================
+// In-memory cache for statistics (1-hour duration)
+let statisticsCache = {
+  data: null,
+  timestamp: null,
+  CACHE_DURATION: 3600000 // 1 hour in milliseconds
+};
+
+// Get landing page statistics (schools, students, teachers)
+router.get('/landing/statistics', async (req, res) => {
+  try {
+    // Check if cache is valid
+    const now = Date.now();
+    if (statisticsCache.data && statisticsCache.timestamp && 
+        (now - statisticsCache.timestamp) < statisticsCache.CACHE_DURATION) {
+      return res.json({
+        success: true,
+        ...statisticsCache.data,
+        fromCache: true
+      });
+    }
+
+    // Get active schools
+    const activeSchools = await School.find({ is_active: true });
+    const activeSchoolIds = activeSchools.map(school => school._id.toString());
+    
+    // Count statistics
+    const schoolCount = activeSchools.length;
+    
+    // Count students from active schools
+    const studentCount = await User.countDocuments({
+      role: 'Student',
+      schoolId: { $in: activeSchoolIds }
+    });
+    
+    // Count teachers from active schools
+    const teacherCount = await User.countDocuments({
+      role: 'Teacher',
+      schoolId: { $in: activeSchoolIds }
+    });
+    
+    // Prepare response
+    const stats = {
+      schools: schoolCount,
+      students: studentCount,
+      teachers: teacherCount,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Update cache
+    statisticsCache.data = stats;
+    statisticsCache.timestamp = now;
+    
+    res.json({
+      success: true,
+      ...stats,
+      fromCache: false
+    });
+  } catch (error) {
+    console.error('Get landing page statistics error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch statistics' 
+    });
+  }
+});
+
 // Get pricing plans from landing page
 router.get('/landing/pricing-plans', authenticateP2LAdmin, async (req, res) => {
   try {
