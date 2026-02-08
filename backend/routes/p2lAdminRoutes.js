@@ -1120,11 +1120,18 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
             difficulty = 3;
           }
 
+          // Parse quiz_level (default to 1 if not provided or invalid)
+          let quiz_level = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level']) || 1;
+          if (quiz_level < 1 || quiz_level > 10) {
+            quiz_level = 1;
+          }
+
           results.push({
             text: text.trim(),
             choices: choices,
             answer: answer.trim(),
             difficulty: difficulty,
+            quiz_level: quiz_level,
             subject: normalizedRow.subject || 'General',
             topic: normalizedRow.topic || '',
             grade: normalizedRow.grade || 'Primary 1',
