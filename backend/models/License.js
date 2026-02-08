@@ -4,12 +4,12 @@ const licenseSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    unique: true
+    unique: true  // Only name is unique - multiple licenses can have the same type
   },
   type: {
     type: String,
     required: true,
-    enum: ['free', 'paid']
+    enum: ['free', 'paid']  // Multiple licenses can share the same type (e.g., multiple "paid" licenses)
   },
   priceMonthly: {
     type: Number,

@@ -87,6 +87,7 @@ const LandingPage = require('./models/LandingPage');
 const Testimonial = require('./models/Testimonial');
 const User = require('./models/User');
 const School = require('./models/School');
+const License = require('./models/License');
 
 // Cache for landing page data to reduce database load and provide rate limiting
 let landingPageCache = {
@@ -159,6 +160,23 @@ app.get('/api/public/landing-page', async (req, res) => {
       { value: teacherCount, label: 'Teachers' }
     ];
 
+    // Fetch active licenses for pricing data
+    const activeLicenses = await License.find({ isActive: true }).sort({ priceMonthly: 1 });
+    
+    // Transform licenses to pricing plan format
+    const pricingPlans = activeLicenses.map(license => ({
+      name: license.name,
+      description: license.description || '',
+      price: {
+        monthly: license.priceMonthly || 0,
+        yearly: license.priceYearly || 0
+      },
+      teachers: license.maxTeachers,
+      students: license.maxStudents,
+      features: [], // Features can be added later if needed
+      popular: false // Can be determined by logic or set manually
+    }));
+
     // Clone blocks and inject testimonials and statistics into blocks
     // Use toObject() to properly serialize Mongoose subdocuments
     const blocks = (landingPage.blocks || []).map(block => {
@@ -183,6 +201,17 @@ app.get('/api/public/landing-page', async (req, res) => {
           custom_data: {
             ...(plainBlock.custom_data || {}),
             stats: statisticsData
+          }
+        };
+      }
+      
+      if (plainBlock.type === 'pricing') {
+        // Inject active licenses into the pricing block
+        return {
+          ...plainBlock,
+          custom_data: {
+            ...(plainBlock.custom_data || {}),
+            plans: pricingPlans
           }
         };
       }
