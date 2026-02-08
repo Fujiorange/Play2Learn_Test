@@ -1278,6 +1278,51 @@ router.get('/quizzes', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Get single quiz
+router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id)
+      .populate('created_by', 'name email')
+      .populate('questions.question_id', 'text choices answer difficulty subject topic');
+    
+    if (!quiz) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Quiz not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Get quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch quiz' 
+    });
+  }
+});
+
+// Create quiz (BLOCKED - quizzes should be auto-generated)
+router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
+  try {
+    // Block manual quiz creation
+    return res.status(403).json({
+      success: false,
+      error: 'Manual quiz creation is disabled. Please use the quiz generation endpoint instead.',
+      hint: 'Use POST /api/p2ladmin/quizzes/generate to auto-generate quizzes'
+    });
+  } catch (error) {
+    console.error('Create quiz error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create quiz' 
+    });
+  }
+});
+
 // Generate quiz automatically
 router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
   try {
@@ -1349,13 +1394,12 @@ router.get('/quizzes/check-availability/:level', authenticateP2LAdmin, async (re
   }
 });
 
-// Get single quiz
-router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
+// Update quiz
+router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const quiz = await Quiz.findById(req.params.id)
-      .populate('created_by', 'name email')
-      .populate('questions.question_id', 'text choices answer difficulty subject topic');
+    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
     
+    const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
       return res.status(404).json({ 
         success: false, 
@@ -1363,33 +1407,60 @@ router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Update fields if provided
+    if (title) quiz.title = title;
+    if (description !== undefined) quiz.description = description;
+    if (questions) quiz.questions = questions;
+    if (is_adaptive !== undefined) quiz.is_adaptive = is_adaptive;
+    if (is_active !== undefined) quiz.is_active = is_active;
+    if (quiz_type !== undefined) quiz.quiz_type = quiz_type;
+
+    await quiz.save();
+
     res.json({
       success: true,
+      message: 'Quiz updated successfully',
       data: quiz
     });
   } catch (error) {
-    console.error('Get quiz error:', error);
+    console.error('Update quiz error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch quiz' 
+      error: 'Failed to update quiz' 
     });
   }
 });
 
-// Create quiz (BLOCKED - quizzes should be auto-generated)
-router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
+// Delete quiz
+router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    // Block manual quiz creation
-    return res.status(403).json({
-      success: false,
-      error: 'Manual quiz creation is disabled. Please use the quiz generation endpoint instead.',
-      hint: 'Use POST /api/p2ladmin/quizzes/generate to auto-generate quizzes'
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Quiz not found' 
+      });
+    }
+    
+    // Block deletion of auto-generated quizzes
+    if (quiz.is_auto_generated) {
+      return res.status(403).json({
+        success: false,
+        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
+      });
+    }
+    
+    await Quiz.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Quiz deleted successfully'
     });
   } catch (error) {
-    console.error('Create quiz error:', error);
+    console.error('Delete quiz error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create quiz' 
+      error: 'Failed to delete quiz' 
     });
   }
 });
@@ -1520,77 +1591,6 @@ router.post('/quizzes/generate-adaptive', authenticateP2LAdmin, async (req, res)
     res.status(500).json({ 
       success: false, 
       error: 'Failed to generate adaptive quiz' 
-    });
-  }
-});
-
-// Update quiz
-router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
-    
-    const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Quiz not found' 
-      });
-    }
-
-    // Update fields if provided
-    if (title) quiz.title = title;
-    if (description !== undefined) quiz.description = description;
-    if (questions) quiz.questions = questions;
-    if (is_adaptive !== undefined) quiz.is_adaptive = is_adaptive;
-    if (is_active !== undefined) quiz.is_active = is_active;
-    if (quiz_type !== undefined) quiz.quiz_type = quiz_type;
-
-    await quiz.save();
-
-    res.json({
-      success: true,
-      message: 'Quiz updated successfully',
-      data: quiz
-    });
-  } catch (error) {
-    console.error('Update quiz error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to update quiz' 
-    });
-  }
-});
-
-// Delete quiz
-router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
-  try {
-    const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Quiz not found' 
-      });
-    }
-    
-    // Block deletion of auto-generated quizzes
-    if (quiz.is_auto_generated) {
-      return res.status(403).json({
-        success: false,
-        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
-      });
-    }
-    
-    await Quiz.findByIdAndDelete(req.params.id);
-
-    res.json({
-      success: true,
-      message: 'Quiz deleted successfully'
-    });
-  } catch (error) {
-    console.error('Delete quiz error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to delete quiz' 
     });
   }
 });
