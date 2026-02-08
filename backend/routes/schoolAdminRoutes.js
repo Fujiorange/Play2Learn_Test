@@ -1589,13 +1589,14 @@ router.post('/users/manual', authenticateSchoolAdmin, async (req, res) => {
     });
 
     // If class assignment provided, attach user to class document as well
+    // Note: Despite the variable name 'className', this is actually the class ID (ObjectId) from the frontend
     if (className) {
       const classFilter = { _id: className, school_id: schoolAdmin.schoolId };
       if (role === 'Student') {
         await Class.findOneAndUpdate(classFilter, { $addToSet: { students: newUser._id } });
       } else if (role === 'Teacher') {
         await Class.findOneAndUpdate(classFilter, { $addToSet: { teachers: newUser._id } });
-        // Track assigned classes on teacher profile
+        // Track assigned classes on teacher profile (className contains the class ID/ObjectId)
         await User.findByIdAndUpdate(newUser._id, { $addToSet: { assignedClasses: className } });
       }
     }
