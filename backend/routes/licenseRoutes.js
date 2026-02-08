@@ -81,7 +81,7 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
     }
 
     // Validate enum type
-    const validTypes = ['trial', 'starter', 'professional', 'enterprise', 'custom'];
+    const validTypes = ['free', 'paid'];
     if (!validTypes.includes(type.toLowerCase())) {
       console.error('❌ Validation failed: Invalid type', type);
       return res.status(400).json({ 
@@ -219,12 +219,6 @@ router.delete('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, r
     if (!license) {
       console.error('❌ License not found:', req.params.id);
       return res.status(404).json({ success: false, error: 'License not found' });
-    }
-
-    // Prevent deletion of trial license
-    if (license.type === 'trial') {
-      console.error('❌ Cannot delete trial license');
-      return res.status(400).json({ success: false, error: 'Cannot delete the trial license' });
     }
 
     await License.findByIdAndDelete(req.params.id);

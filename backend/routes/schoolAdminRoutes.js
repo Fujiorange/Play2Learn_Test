@@ -67,7 +67,7 @@ const upload = multer({ dest: 'uploads/' });
 
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {
-  const school = await School.findById(schoolId);
+  const school = await School.findById(schoolId).populate('licenseId');
   
   if (!school) {
     return { available: false, error: 'School not found' };
@@ -76,12 +76,19 @@ async function checkLicenseAvailability(schoolId, role) {
   if (!school.is_active) {
     return { available: false, error: 'School is not active' };
   }
+
+  if (!school.licenseId) {
+    return { available: false, error: 'School has no license assigned' };
+  }
+  
+  const license = school.licenseId;
   
   if (role === 'Teacher') {
     const currentTeachers = school.current_teachers || 0;
-    const teacherLimit = school.plan_info.teacher_limit;
+    const teacherLimit = license.maxTeachers;
     
-    if (currentTeachers >= teacherLimit) {
+    // -1 means unlimited
+    if (teacherLimit !== -1 && currentTeachers >= teacherLimit) {
       return { 
         available: false, 
         error: `Teacher limit reached (${currentTeachers}/${teacherLimit}). Please upgrade your plan.` 
@@ -92,9 +99,10 @@ async function checkLicenseAvailability(schoolId, role) {
   
   if (role === 'Student') {
     const currentStudents = school.current_students || 0;
-    const studentLimit = school.plan_info.student_limit;
+    const studentLimit = license.maxStudents;
     
-    if (currentStudents >= studentLimit) {
+    // -1 means unlimited
+    if (studentLimit !== -1 && currentStudents >= studentLimit) {
       return { 
         available: false, 
         error: `Student limit reached (${currentStudents}/${studentLimit}). Please upgrade your plan.` 
@@ -2417,6 +2425,27 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
         error: 'Invalid school ID format' 
       });
     }
+
+    // Check class limit
+    const school = await School.findById(schoolObjectId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    if (!school.licenseId) {
+      return res.status(400).json({ success: false, error: 'School has no license assigned' });
+    }
+
+    const license = school.licenseId;
+    const currentClasses = school.current_classes || 0;
+    
+    // -1 means unlimited
+    if (license.maxClasses !== -1 && currentClasses >= license.maxClasses) {
+      return res.status(403).json({ 
+        success: false, 
+        error: `Class limit reached (${currentClasses}/${license.maxClasses}). Please upgrade your plan.` 
+      });
+    }
     
     // Check if class name already exists for this school
     const existingClass = await Class.findOne({
@@ -2439,6 +2468,10 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
     });
     
     await newClass.save();
+
+    // Update school class count
+    school.current_classes = (school.current_classes || 0) + 1;
+    await school.save();
     
     // Update users with class assignment
     if (teachers && teachers.length > 0) {
@@ -3968,14 +4001,11 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'School not found' });
     }
 
-    // Get license details
-    let licenseDetails = null;
-    if (school.licenseId) {
-      licenseDetails = school.licenseId;
-    } else {
-      // Fallback to getting license by plan type
-      licenseDetails = await License.findOne({ type: school.plan });
+    if (!school.licenseId) {
+      return res.status(404).json({ success: false, error: 'No license assigned to school' });
     }
+
+    const license = school.licenseId;
 
     // Calculate days remaining
     let daysRemaining = null;
@@ -3988,15 +4018,15 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
     return res.json({
       success: true,
       license: {
-        type: school.plan,
-        name: licenseDetails ? licenseDetails.name : school.plan,
-        description: licenseDetails ? licenseDetails.description : '',
+        type: license.type,
+        name: license.name,
+        description: license.description,
         expiresAt: school.licenseExpiresAt,
         daysRemaining,
         limits: {
-          maxTeachers: school.plan_info.teacher_limit,
-          maxStudents: school.plan_info.student_limit,
-          maxClasses: school.plan_info.class_limit || 1
+          maxTeachers: license.maxTeachers,
+          maxStudents: license.maxStudents,
+          maxClasses: license.maxClasses
         },
         usage: {
           currentTeachers: school.current_teachers,
