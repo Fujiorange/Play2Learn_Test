@@ -125,7 +125,7 @@ app.get('/api/public/landing-page', async (req, res) => {
     // Fetch real-time statistics for About section
     // Get active schools
     const activeSchools = await School.find({ is_active: true });
-    const activeSchoolIds = activeSchools.map(school => school._id.toString());
+    const activeSchoolIds = activeSchools.map(school => school._id);
     
     // Count statistics
     const schoolCount = activeSchools.length;
