@@ -7,8 +7,8 @@ import * as p2lAdminService from '../../services/p2lAdminService';
 jest.mock('../../services/p2lAdminService', () => ({
   getQuestions: jest.fn(() => Promise.resolve({ 
     data: [
-      { _id: '1', text: 'Question 1', answer: 'A', difficulty: 1, subject: 'Math', topic: 'Addition', choices: [] },
-      { _id: '2', text: 'Question 2', answer: 'B', difficulty: 2, subject: 'Science', topic: 'Physics', choices: [] }
+      { _id: '1', text: 'Question 1', answer: 'A', difficulty: 1, quiz_level: 1, subject: 'Math', topic: 'Addition', choices: [] },
+      { _id: '2', text: 'Question 2', answer: 'B', difficulty: 2, quiz_level: 2, subject: 'Science', topic: 'Physics', choices: [] }
     ] 
   })),
   getQuestionSubjects: jest.fn(() => Promise.resolve({ 
@@ -16,6 +16,9 @@ jest.mock('../../services/p2lAdminService', () => ({
   })),
   getQuestionTopics: jest.fn(() => Promise.resolve({ 
     data: ['Addition', 'Physics', 'Grammar'] 
+  })),
+  getQuestionGrades: jest.fn(() => Promise.resolve({ 
+    data: ['Primary 1', 'Primary 2'] 
   })),
   createQuestion: jest.fn(),
   updateQuestion: jest.fn(),
@@ -200,7 +203,7 @@ describe('QuestionBank', () => {
     
     // Verify getQuestions was called with new filter
     await waitFor(() => {
-      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '1', subject: '', topic: '' });
+      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '1', quiz_level: '', subject: '', topic: '', grade: '' });
     });
   });
 
@@ -222,7 +225,7 @@ describe('QuestionBank', () => {
     
     // Verify getQuestions was called with topic filter
     await waitFor(() => {
-      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '', subject: '', topic: 'Addition' });
+      expect(p2lAdminService.getQuestions).toHaveBeenCalledWith({ difficulty: '', quiz_level: '', subject: '', topic: 'Addition', grade: '' });
     });
   });
 });

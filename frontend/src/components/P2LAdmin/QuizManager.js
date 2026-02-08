@@ -451,7 +451,7 @@ function QuizManager() {
               {quiz.generation_trigger && quiz.generation_trigger !== 'manual' && (
                 <div className="generation-info">
                   <span className="trigger-badge">Trigger: {quiz.generation_trigger}</span>
-                  {quiz.freshness_score > 0 && (
+                  {quiz.freshness_score != null && (
                     <span className="freshness-score">Freshness: {quiz.freshness_score.toFixed(1)}</span>
                   )}
                 </div>

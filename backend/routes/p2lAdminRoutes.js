@@ -24,6 +24,17 @@ const sentiment = new Sentiment();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
+// Quiz generation algorithm constants
+const QUIZ_GENERATION_CONFIG = {
+  MAX_FRESHNESS_DAYS: 30,           // Days used for freshness calculation
+  FRESHNESS_BONUS_WEIGHT: 50,       // Max bonus for question freshness
+  USAGE_PENALTY_WEIGHT: 10,         // Penalty per usage
+  DIFFICULTY_CHANGE_PROBABILITY: 0.5, // 50% chance to change difficulty
+  MIN_QUESTIONS_PER_LEVEL: 40,      // Minimum questions needed for quiz generation
+  QUESTIONS_PER_QUIZ: 20,           // Number of questions per quiz
+  RECENT_ATTEMPTS_TO_EXCLUDE: 3     // Number of recent attempts to exclude questions from
+};
+
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
@@ -1370,22 +1381,22 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
       });
     }
 
-    // Step 1: Verify criteria (at least 40 questions in quiz_level)
+    // Step 1: Verify criteria (at least MIN_QUESTIONS_PER_LEVEL questions in quiz_level)
     const questionsPool = await Question.find({ 
       quiz_level: parseInt(quiz_level), 
       is_active: true 
     });
 
-    if (questionsPool.length < 40) {
+    if (questionsPool.length < QUIZ_GENERATION_CONFIG.MIN_QUESTIONS_PER_LEVEL) {
       return res.status(400).json({
         success: false,
-        error: `Insufficient questions for quiz level ${quiz_level}. Found ${questionsPool.length}, need at least 40.`,
+        error: `Insufficient questions for quiz level ${quiz_level}. Found ${questionsPool.length}, need at least ${QUIZ_GENERATION_CONFIG.MIN_QUESTIONS_PER_LEVEL}.`,
         currentCount: questionsPool.length,
-        required: 40
+        required: QUIZ_GENERATION_CONFIG.MIN_QUESTIONS_PER_LEVEL
       });
     }
 
-    // Step 2: Get questions used in student's last 3 attempts (if student_id provided)
+    // Step 2: Get questions used in student's last N attempts (if student_id provided)
     let excludeQuestionIds = [];
     if (student_id) {
       const recentAttempts = await QuizAttempt.find({ 
@@ -1393,7 +1404,7 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
         quiz_level: parseInt(quiz_level)
       })
         .sort({ startedAt: -1 })
-        .limit(3)
+        .limit(QUIZ_GENERATION_CONFIG.RECENT_ATTEMPTS_TO_EXCLUDE)
         .select('question_ids_used');
       
       excludeQuestionIds = recentAttempts.flatMap(a => a.question_ids_used || []);
@@ -1401,7 +1412,7 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
 
     // Step 3: Apply freshness weighting
     const now = new Date();
-    const maxTimeGap = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+    const maxTimeGap = QUIZ_GENERATION_CONFIG.MAX_FRESHNESS_DAYS * 24 * 60 * 60 * 1000;
     
     const weightedQuestions = questionsPool
       .filter(q => !excludeQuestionIds.some(id => id.toString() === q._id.toString()))
@@ -1409,26 +1420,26 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
         const baseWeight = 100;
         const lastUsed = q.last_used_timestamp ? new Date(q.last_used_timestamp) : new Date(0);
         const timeSinceUsed = now - lastUsed;
-        const freshnessBonus = Math.min(timeSinceUsed / maxTimeGap, 1) * 50;
-        const usagePenalty = (q.usage_count || 0) * 10;
+        const freshnessBonus = Math.min(timeSinceUsed / maxTimeGap, 1) * QUIZ_GENERATION_CONFIG.FRESHNESS_BONUS_WEIGHT;
+        const usagePenalty = (q.usage_count || 0) * QUIZ_GENERATION_CONFIG.USAGE_PENALTY_WEIGHT;
         const weight = Math.max(baseWeight + freshnessBonus - usagePenalty, 10);
         return { question: q, weight };
       });
 
-    if (weightedQuestions.length < 20) {
+    if (weightedQuestions.length < QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ) {
       return res.status(400).json({
         success: false,
-        error: `Not enough fresh questions available after exclusions. Found ${weightedQuestions.length}, need at least 20.`
+        error: `Not enough fresh questions available after exclusions. Found ${weightedQuestions.length}, need at least ${QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ}.`
       });
     }
 
-    // Step 4: Select 20 questions with adaptive difficulty progression
+    // Step 4: Select QUESTIONS_PER_QUIZ questions with adaptive difficulty progression
     const selectedQuestions = [];
     let currentDifficulty = 1;
     const pool = [...weightedQuestions];
     let totalFreshnessScore = 0;
 
-    for (let i = 0; i < 20 && pool.length > 0; i++) {
+    for (let i = 0; i < QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ && pool.length > 0; i++) {
       // Filter by current difficulty (with fallback to adjacent)
       let difficultyPool = pool.filter(wq => wq.question.difficulty === currentDifficulty);
       
@@ -1478,8 +1489,9 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
       const poolIndex = pool.findIndex(wq => wq.question._id.toString() === selected.question._id.toString());
       if (poolIndex > -1) pool.splice(poolIndex, 1);
 
-      // Adaptive difficulty progression (50% chance to change)
-      if (i < 19 && Math.random() > 0.5) {
+      // Adaptive difficulty progression (configurable chance to change)
+      const isNotLastQuestion = i < QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ - 1;
+      if (isNotLastQuestion && Math.random() > QUIZ_GENERATION_CONFIG.DIFFICULTY_CHANGE_PROBABILITY) {
         currentDifficulty = Math.min(5, Math.max(1, currentDifficulty + (Math.random() > 0.5 ? 1 : -1)));
       }
     }
@@ -1502,7 +1514,7 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
     // Step 7: Create quiz record
     const quiz = new Quiz({
       title: `Auto-generated Quiz - Level ${quiz_level}`,
-      description: `Automatically generated quiz for level ${quiz_level} with 20 adaptive questions`,
+      description: `Automatically generated quiz for level ${quiz_level} with ${QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ} adaptive questions`,
       quiz_type: 'adaptive',
       quiz_level: parseInt(quiz_level),
       questions: selectedQuestions,
@@ -1513,7 +1525,7 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
       generation_criteria: `Admin triggered for quiz level ${quiz_level}`,
       unique_hash: uniqueHash,
       student_id: student_id || null,
-      freshness_score: totalFreshnessScore / 20,
+      freshness_score: totalFreshnessScore / QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ,
       adaptive_config: {
         target_correct_answers: 10,
         difficulty_progression: 'gradual',
@@ -1531,8 +1543,8 @@ router.post('/quizzes/trigger-generation', authenticateP2LAdmin, async (req, res
       student_id: student_id || null,
       trigger_type: 'admin_trigger',
       trigger_details: `Manual trigger by admin ${req.user.email}`,
-      questions_selected: 20,
-      freshness_score: totalFreshnessScore / 20,
+      questions_selected: QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ,
+      freshness_score: totalFreshnessScore / QUIZ_GENERATION_CONFIG.QUESTIONS_PER_QUIZ,
       difficulty_distribution: selectedQuestions.reduce((acc, q) => {
         acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
         return acc;
