@@ -32,14 +32,14 @@ export default function BulkUploadCSV() {
   const downloadTemplate = () => {
     const csvTemplate = `Name,Email,Role,Salutation,Class,GradeLevel,ParentEmail,StudentEmail,Relationship,Subject,ContactNumber,Gender,DateOfBirth
 John Tan,john.tan@student.com,Student,,1A,Primary 1,parent.tan@email.com,,,Mathematics,+6591234567,male,15/03/2019
-David Lee,david.lee@teacher.com,Teacher,Mr,,,,,,,+6591234567,male,15/03/1985
+David Lee,david.lee@teacher.com,Teacher,Mr,1A,,,,,,+6591234567,male,15/03/1985
 Lim Mei Ling,parent.lim@email.com,Parent,Mrs,,,,john.tan@student.com,Mother,,+6598765432,female,22/07/1980`;
 
     const blob = new Blob([csvTemplate], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${userType}_upload_template_p1_math.csv`;
+    a.download = `users_bulk_upload_template.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -152,8 +152,9 @@ Lim Mei Ling,parent.lim@email.com,Parent,Mrs,,,,john.tan@student.com,Mother,,+65
           <div style={styles.infoTitle}>📋 Student CSV Format Requirements:</div>
           <ul style={styles.infoList}>
             <li><strong>Required:</strong> Name, Email, Role (Student)</li>
-            <li><strong>Optional:</strong> Class, GradeLevel, ParentEmail, ContactNumber, Gender, DateOfBirth</li>
-            <li>GradeLevel: Only "Primary 1" is currently available (Primary 2-6 coming soon)</li>
+            <li><strong>Optional:</strong> Class (class name, e.g., "1A"), GradeLevel, ParentEmail, ContactNumber, Gender, DateOfBirth</li>
+            <li>GradeLevel: "Primary 1" is currently available (Primary 2-6 coming soon)</li>
+            <li>Class: Enter the class name (e.g., "1A", "2B"). Must match existing class in system.</li>
             <li>If ParentEmail provided, credentials will be sent to parent</li>
             <li>Date format: DD/MM/YYYY or YYYY-MM-DD</li>
             <li>Gender: male or female</li>
@@ -166,8 +167,9 @@ Lim Mei Ling,parent.lim@email.com,Parent,Mrs,,,,john.tan@student.com,Mother,,+65
           <div style={styles.infoTitle}>📋 Teacher CSV Format Requirements:</div>
           <ul style={styles.infoList}>
             <li><strong>Required:</strong> Name, Email, Role (Teacher)</li>
-            <li><strong>Optional:</strong> Salutation, Subject, ContactNumber, Gender, DateOfBirth</li>
+            <li><strong>Optional:</strong> Salutation, Class (class name), Subject, ContactNumber, Gender, DateOfBirth</li>
             <li>Salutation: Mr, Mrs, Ms, Miss, Dr, Prof, Mdm</li>
+            <li>Class: Enter the class name (e.g., "1A", "2B"). Must match existing class in system.</li>
             <li>Subject defaults to "Mathematics"</li>
             <li>Date format: DD/MM/YYYY or YYYY-MM-DD</li>
             <li>Gender: male or female</li>
@@ -180,9 +182,10 @@ Lim Mei Ling,parent.lim@email.com,Parent,Mrs,,,,john.tan@student.com,Mother,,+65
           <div style={styles.infoTitle}>📋 Mixed CSV Format Requirements:</div>
           <ul style={styles.infoList}>
             <li><strong>Required for all:</strong> Name, Email, Role (Student/Teacher/Parent)</li>
-            <li><strong>For Students:</strong> GradeLevel (only Primary 1 available), Class (optional), ParentEmail (optional)</li>
-            <li><strong>For Teachers:</strong> Salutation (Mr, Mrs, Ms, Miss, Dr, Prof, Mdm), Subject (optional)</li>
+            <li><strong>For Students:</strong> GradeLevel ("Primary 1"), Class (class name, optional - e.g., "1A"), ParentEmail (optional)</li>
+            <li><strong>For Teachers:</strong> Salutation (Mr, Mrs, Ms, Miss, Dr, Prof, Mdm), Class (class name, optional), Subject (optional)</li>
             <li><strong>For Parents:</strong> Salutation, StudentEmail (required - student must exist), Relationship (e.g., Father, Mother, Guardian)</li>
+            <li><strong>Class Assignment:</strong> Use class NAME (e.g., "1A"), not ID. Class must exist in system before upload.</li>
             <li><strong>Common optional:</strong> ContactNumber, Gender (male/female), DateOfBirth (DD/MM/YYYY or YYYY-MM-DD)</li>
           </ul>
         </>

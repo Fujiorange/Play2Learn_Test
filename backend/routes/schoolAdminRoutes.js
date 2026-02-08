@@ -78,6 +78,15 @@ const csvUploadLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
+// More lenient rate limiter for template downloads - 20 requests per 15 minutes
+const csvTemplateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Limit each IP to 20 requests per windowMs
+  message: { success: false, error: 'Too many template download requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {
   const school = await School.findById(schoolId);
@@ -1328,16 +1337,16 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
           }
         }
 
-        // Resolve class name to class ID for students
+        // Resolve class name to class ID for students and teachers
         let classId = null;
         const className = row.Class || row.class || null;
-        if (role === 'Student' && className) {
+        if ((role === 'Student' || role === 'Teacher') && className) {
           const classKey = className.toLowerCase().trim();
           if (classNameToId[classKey]) {
             classId = classNameToId[classKey];
           } else {
             // Class not found - still create user but without class assignment
-            console.log(`⚠️ Class "${className}" not found for student ${row.Email}. User will be created without class assignment.`);
+            console.log(`⚠️ Class "${className}" not found for ${role.toLowerCase()} ${row.Email}. User will be created without class assignment.`);
           }
         }
 
@@ -1377,7 +1386,7 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
           contact: row.ContactNumber || row.contactNumber || row['Contact Number'] || row.contact || null,
           gender: row.Gender || row.gender || null,
           date_of_birth: parsedDateOfBirth,
-          class: role === 'Student' ? classId : null,
+          class: (role === 'Student' || role === 'Teacher') ? classId : null,
           gradeLevel: role === 'Student' ? (row.GradeLevel || row.gradeLevel || row['Grade Level'] || row.grade_level || 'Primary 1') : null,
           subject: role === 'Teacher' ? (row.Subject || row.subject || 'Mathematics') : null,
           linkedStudents: role === 'Parent' ? linkedStudents : undefined,
@@ -1389,9 +1398,13 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
           createdBy: 'school-admin'
         });
 
-        // If student has a class, add them to the Class.students array
+        // Add user to class document
         if (role === 'Student' && classId) {
           await Class.findByIdAndUpdate(classId, { $addToSet: { students: newUser._id } });
+        } else if (role === 'Teacher' && classId) {
+          await Class.findByIdAndUpdate(classId, { $addToSet: { teachers: newUser._id } });
+          // Track assigned classes on teacher profile
+          await User.findByIdAndUpdate(newUser._id, { assignedClasses: [classId] });
         }
 
         if (role === 'Teacher' || role === 'Student') {
@@ -4072,7 +4085,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
 // ==================== CSV CLASS UPLOAD ENDPOINTS ====================
 
 // GET /api/mongo/school-admin/classes/csv-template - Download CSV template
-router.get('/classes/csv-template', csvUploadLimiter, authenticateSchoolAdmin, (req, res) => {
+router.get('/classes/csv-template', csvTemplateLimiter, authenticateSchoolAdmin, (req, res) => {
   try {
     const template = generateCSVTemplate();
     

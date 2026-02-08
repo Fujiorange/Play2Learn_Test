@@ -665,6 +665,30 @@ export default function ManualAddUser() {
               </div>
             )}
 
+            {/* Teacher class assignment */}
+            {formData.role === 'teacher' && (
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Assign to Class</label>
+                <select
+                  name="classId"
+                  value={formData.classId}
+                  onChange={handleChange}
+                  disabled={loading}
+                  style={styles.select}
+                >
+                  <option value="">Select class (optional)</option>
+                  {classes.map(cls => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name} - {cls.grade}
+                    </option>
+                  ))}
+                </select>
+                {classes.length === 0 && (
+                  <p style={styles.note}>No classes available. Create a class first in Class Management.</p>
+                )}
+              </div>
+            )}
+
             {/* Password Generation Section */}
             <div style={styles.formGroup}>
               <label style={styles.label}>
@@ -752,30 +776,6 @@ export default function ManualAddUser() {
               />
             </div>
 
-            {/* Class Assignment for Students and Teachers */}
-            {(formData.role === 'student' || formData.role === 'teacher') && (
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Assign to Class</label>
-                <select
-                  name="classId"
-                  value={formData.classId}
-                  onChange={handleChange}
-                  disabled={loading}
-                  style={styles.select}
-                >
-                  <option value="">Select class (optional)</option>
-                  {classes.map(cls => (
-                    <option key={cls.id} value={cls.id}>
-                      {cls.name} - {cls.grade}
-                    </option>
-                  ))}
-                </select>
-                {classes.length === 0 && (
-                  <p style={styles.note}>No classes available. Create a class first in Class Management.</p>
-                )}
-              </div>
-            )}
-
             {/* Student-specific fields */}
             {formData.role === 'student' && (
               <>
@@ -795,6 +795,27 @@ export default function ManualAddUser() {
                     <option value="Primary 5" disabled>Primary 5 (coming soon)</option>
                     <option value="Primary 6" disabled>Primary 6 (coming soon)</option>
                   </select>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Assign to Class</label>
+                  <select
+                    name="classId"
+                    value={formData.classId}
+                    onChange={handleChange}
+                    disabled={loading}
+                    style={styles.select}
+                  >
+                    <option value="">Select class (optional)</option>
+                    {classes.map(cls => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.name} - {cls.grade}
+                      </option>
+                    ))}
+                  </select>
+                  {classes.length === 0 && (
+                    <p style={styles.note}>No classes available. Create a class first in Class Management.</p>
+                  )}
                 </div>
 
                 <div style={styles.formGroup}>
