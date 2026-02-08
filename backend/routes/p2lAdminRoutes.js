@@ -36,7 +36,15 @@ const QUIZ_GENERATION_CONFIG = {
 };
 
 // Configure multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+const path = require('path');
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const upload = multer({ dest: uploadsDir });
 
 // Middleware to authenticate P2L Admins
 const authenticateP2LAdmin = async (req, res, next) => {

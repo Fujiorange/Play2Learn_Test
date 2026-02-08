@@ -63,7 +63,15 @@ const authenticateSchoolAdmin = async (req, res, next) => {
 };
 
 // ==================== FILE UPLOAD CONFIGURATION ====================
-const upload = multer({ dest: 'uploads/' });
+const path = require('path');
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const upload = multer({ dest: uploadsDir });
 
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {

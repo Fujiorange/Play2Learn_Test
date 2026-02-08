@@ -34,3 +34,6 @@ pnpm-debug.log*
 # Build files
 dist/
 build/
+
+# Uploaded files
+uploads/
