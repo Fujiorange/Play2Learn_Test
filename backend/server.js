@@ -87,8 +87,22 @@ const Testimonial = require('./models/Testimonial');
 const User = require('./models/User');
 const School = require('./models/School');
 
+// Cache for landing page data to reduce database load and provide rate limiting
+let landingPageCache = {
+  data: null,
+  timestamp: null,
+  CACHE_DURATION: 300000, // 5 minutes in milliseconds
+};
+
 app.get('/api/public/landing-page', async (req, res) => {
   try {
+    // Check if cache is valid
+    const now = Date.now();
+    if (landingPageCache.data && landingPageCache.timestamp && 
+        (now - landingPageCache.timestamp) < landingPageCache.CACHE_DURATION) {
+      return res.json(landingPageCache.data);
+    }
+
     // Get the active landing page or the most recent one
     let landingPage = await LandingPage.findOne({ is_active: true });
     
@@ -175,10 +189,16 @@ app.get('/api/public/landing-page', async (req, res) => {
       return plainBlock;
     });
 
-    res.json({
+    // Prepare response and update cache
+    const response = {
       success: true,
       blocks: blocks
-    });
+    };
+    
+    landingPageCache.data = response;
+    landingPageCache.timestamp = now;
+
+    res.json(response);
   } catch (error) {
     console.error('Get public landing page error:', error);
     res.status(500).json({ 
