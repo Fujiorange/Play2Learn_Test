@@ -85,7 +85,7 @@ router.post('/register-school-admin', async (req, res) => {
       referralSource,
       contact,
       gender,
-      date_of_birth,
+      dateOfBirth,
     } = req.body;
 
     // Validation
@@ -104,8 +104,13 @@ router.post('/register-school-admin', async (req, res) => {
 
     // Check if institution name already exists
     const School = require('../models/School');
+    
+    // Escape special regex characters to prevent regex injection
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedInstitutionName = escapeRegex(institutionName);
+    
     const existingSchool = await School.findOne({ 
-      organization_name: new RegExp(`^${institutionName}$`, 'i') 
+      organization_name: new RegExp(`^${escapedInstitutionName}$`, 'i') 
     });
     if (existingSchool) {
       return res.status(400).json({ 
@@ -158,7 +163,7 @@ router.post('/register-school-admin', async (req, res) => {
       schoolId: newSchool._id.toString(),
       contact: contact || null,
       gender: gender || null,
-      date_of_birth: date_of_birth ? new Date(date_of_birth) : null,
+      date_of_birth: dateOfBirth ? new Date(dateOfBirth) : null,
       emailVerified: true,
       isTrialUser: true
     });

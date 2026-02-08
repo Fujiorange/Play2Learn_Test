@@ -3,8 +3,7 @@ const mongoose = require('mongoose');
 const licenseSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
-    enum: ['Trial', 'Starter', 'Professional', 'Enterprise']
+    required: true
   },
   type: {
     type: String,

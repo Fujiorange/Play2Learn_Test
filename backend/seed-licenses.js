@@ -73,7 +73,10 @@ async function seedLicenses() {
     console.log('\nLicense Summary:');
     const allLicenses = await License.find({});
     allLicenses.forEach(l => {
-      console.log(`   - ${l.name}: $${l.priceMonthly}/month, ${l.maxTeachers === -1 ? 'Unlimited' : l.maxTeachers} teachers, ${l.maxStudents === -1 ? 'Unlimited' : l.maxStudents} students, ${l.maxClasses === -1 ? 'Unlimited' : l.maxClasses} classes`);
+      const teachersText = l.maxTeachers === -1 ? 'Unlimited' : l.maxTeachers;
+      const studentsText = l.maxStudents === -1 ? 'Unlimited' : l.maxStudents;
+      const classesText = l.maxClasses === -1 ? 'Unlimited' : l.maxClasses;
+      console.log(`   - ${l.name}: $${l.priceMonthly}/month, ${teachersText} teachers, ${studentsText} students, ${classesText} classes`);
     });
 
     process.exit(0);

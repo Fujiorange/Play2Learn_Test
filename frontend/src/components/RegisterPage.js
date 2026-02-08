@@ -100,7 +100,7 @@ export default function RegisterPage() {
           referralSource: formData.referralSource || null,
           contact: formData.contact || '',
           gender: formData.gender || null,
-          date_of_birth: formData.dateOfBirth || null
+          dateOfBirth: formData.dateOfBirth || null
         });
       } else {
         // Register as trial student (existing flow)
