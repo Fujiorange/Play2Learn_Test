@@ -22,6 +22,12 @@ const sentiment = new Sentiment();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
+// Question and Quiz constants
+const MIN_QUIZ_LEVEL = 1;
+const MAX_QUIZ_LEVEL = 10;
+const MIN_DIFFICULTY = 1;
+const MAX_DIFFICULTY = 5;
+
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
@@ -769,13 +775,14 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
 // Get all questions
 router.get('/questions', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { subject, topic, difficulty, grade, is_active } = req.query;
+    const { subject, topic, difficulty, grade, quiz_level, is_active } = req.query;
     
     const filter = {};
     if (subject) filter.subject = subject;
     if (topic) filter.topic = topic;
     if (difficulty) filter.difficulty = parseInt(difficulty);
     if (grade) filter.grade = grade;
+    if (quiz_level) filter.quiz_level = parseInt(quiz_level);
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
     const questions = await Question.find(filter)
@@ -875,7 +882,7 @@ router.get('/questions-quiz-levels', authenticateP2LAdmin, async (req, res) => {
     
     // Sort numerically and filter out invalid values
     const sortedLevels = quizLevels
-      .filter(level => level != null && Number.isInteger(level) && level >= 1 && level <= 10)
+      .filter(level => level != null && Number.isInteger(level) && level >= MIN_QUIZ_LEVEL && level <= MAX_QUIZ_LEVEL)
       .sort((a, b) => a - b);
     
     res.json({
@@ -898,7 +905,7 @@ router.get('/questions-difficulties', authenticateP2LAdmin, async (req, res) => 
     
     // Sort numerically and filter out invalid values
     const sortedDifficulties = difficulties
-      .filter(d => d != null && Number.isInteger(d) && d >= 1 && d <= 5)
+      .filter(d => d != null && Number.isInteger(d) && d >= MIN_DIFFICULTY && d <= MAX_DIFFICULTY)
       .sort((a, b) => a - b);
     
     res.json({
@@ -1168,10 +1175,10 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
           }
 
           // Parse quiz_level (default to 1 if not provided or invalid)
-          let quiz_level = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level']) || 1;
-          if (quiz_level < 1 || quiz_level > 10) {
-            console.warn(`⚠️ Invalid quiz_level ${quiz_level} on line ${lineNumber}, defaulting to 1`);
-            quiz_level = 1;
+          let quiz_level = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level']) || MIN_QUIZ_LEVEL;
+          if (quiz_level < MIN_QUIZ_LEVEL || quiz_level > MAX_QUIZ_LEVEL) {
+            console.warn(`⚠️ Invalid quiz_level ${quiz_level} on line ${lineNumber}, defaulting to ${MIN_QUIZ_LEVEL}`);
+            quiz_level = MIN_QUIZ_LEVEL;
           }
 
           results.push({
@@ -1284,10 +1291,10 @@ router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
     const { quiz_level, student_id, trigger_reason } = req.body;
     
     // Validate quiz_level
-    if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
+    if (!quiz_level || quiz_level < MIN_QUIZ_LEVEL || quiz_level > MAX_QUIZ_LEVEL) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid quiz_level. Must be between 1 and 10'
+        error: `Invalid quiz_level. Must be between ${MIN_QUIZ_LEVEL} and ${MAX_QUIZ_LEVEL}`
       });
     }
     
@@ -1327,10 +1334,10 @@ router.get('/quizzes/check-availability/:level', authenticateP2LAdmin, async (re
   try {
     const level = parseInt(req.params.level);
     
-    if (!level || level < 1 || level > 10) {
+    if (!level || level < MIN_QUIZ_LEVEL || level > MAX_QUIZ_LEVEL) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid quiz level. Must be between 1 and 10'
+        error: `Invalid quiz level. Must be between ${MIN_QUIZ_LEVEL} and ${MAX_QUIZ_LEVEL}`
       });
     }
     
