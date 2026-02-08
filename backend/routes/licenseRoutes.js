@@ -72,20 +72,40 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
       isActive
     } = req.body;
 
+    console.log('📝 Creating license:', { name, type, priceMonthly, priceYearly });
+
     // Validation
     if (!name || !type) {
+      console.error('❌ Validation failed: Missing name or type');
       return res.status(400).json({ success: false, error: 'Name and type are required' });
     }
 
-    // Check if license type already exists
-    const existing = await License.findOne({ type });
-    if (existing) {
-      return res.status(400).json({ success: false, error: 'License type already exists' });
+    // Validate enum type
+    const validTypes = ['trial', 'starter', 'professional', 'enterprise', 'custom'];
+    if (!validTypes.includes(type.toLowerCase())) {
+      console.error('❌ Validation failed: Invalid type', type);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Invalid license type. Must be one of: ${validTypes.join(', ')}` 
+      });
+    }
+
+    // Validate prices are non-negative
+    if (priceMonthly < 0 || priceYearly < 0) {
+      console.error('❌ Validation failed: Negative prices');
+      return res.status(400).json({ success: false, error: 'Prices cannot be negative' });
+    }
+
+    // Check if license name already exists
+    const existingByName = await License.findOne({ name });
+    if (existingByName) {
+      console.error('❌ License name already exists:', name);
+      return res.status(400).json({ success: false, error: 'License name already exists' });
     }
 
     const newLicense = new License({
       name,
-      type,
+      type: type.toLowerCase(),
       priceMonthly: priceMonthly || 0,
       priceYearly: priceYearly || 0,
       maxTeachers: maxTeachers || 1,
@@ -96,10 +116,25 @@ router.post('/licenses', authenticateToken, requireP2LAdmin, async (req, res) =>
     });
 
     await newLicense.save();
+    console.log('✅ License created successfully:', newLicense._id);
     return res.json({ success: true, license: newLicense });
   } catch (error) {
-    console.error('Error creating license:', error);
-    return res.status(500).json({ success: false, error: 'Failed to create license' });
+    console.error('❌ Error creating license:', error.message);
+    console.error('Error details:', error);
+    
+    // Check for MongoDB duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ 
+        success: false, 
+        error: `License ${field} already exists` 
+      });
+    }
+    
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to create license' 
+    });
   }
 });
 
@@ -117,9 +152,29 @@ router.put('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, res)
       isActive
     } = req.body;
 
+    console.log('📝 Updating license:', req.params.id);
+
     const license = await License.findById(req.params.id);
     if (!license) {
+      console.error('❌ License not found:', req.params.id);
       return res.status(404).json({ success: false, error: 'License not found' });
+    }
+
+    // Validate prices if provided
+    if (priceMonthly !== undefined && priceMonthly < 0) {
+      return res.status(400).json({ success: false, error: 'Monthly price cannot be negative' });
+    }
+    if (priceYearly !== undefined && priceYearly < 0) {
+      return res.status(400).json({ success: false, error: 'Yearly price cannot be negative' });
+    }
+
+    // Check for duplicate name if name is being changed
+    if (name !== undefined && name !== license.name) {
+      const existingByName = await License.findOne({ name });
+      if (existingByName) {
+        console.error('❌ License name already exists:', name);
+        return res.status(400).json({ success: false, error: 'License name already exists' });
+      }
     }
 
     // Update fields
@@ -133,31 +188,55 @@ router.put('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, res)
     if (isActive !== undefined) license.isActive = isActive;
 
     await license.save();
+    console.log('✅ License updated successfully:', license._id);
     return res.json({ success: true, license });
   } catch (error) {
-    console.error('Error updating license:', error);
-    return res.status(500).json({ success: false, error: 'Failed to update license' });
+    console.error('❌ Error updating license:', error.message);
+    console.error('Error details:', error);
+    
+    // Check for MongoDB duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ 
+        success: false, 
+        error: `License ${field} already exists` 
+      });
+    }
+    
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to update license' 
+    });
   }
 });
 
 // DELETE /api/licenses/:id - Delete a license (P2L Admin only)
 router.delete('/licenses/:id', authenticateToken, requireP2LAdmin, async (req, res) => {
   try {
+    console.log('🗑️ Deleting license:', req.params.id);
+    
     const license = await License.findById(req.params.id);
     if (!license) {
+      console.error('❌ License not found:', req.params.id);
       return res.status(404).json({ success: false, error: 'License not found' });
     }
 
     // Prevent deletion of trial license
     if (license.type === 'trial') {
+      console.error('❌ Cannot delete trial license');
       return res.status(400).json({ success: false, error: 'Cannot delete the trial license' });
     }
 
     await License.findByIdAndDelete(req.params.id);
+    console.log('✅ License deleted successfully:', req.params.id);
     return res.json({ success: true, message: 'License deleted successfully' });
   } catch (error) {
-    console.error('Error deleting license:', error);
-    return res.status(500).json({ success: false, error: 'Failed to delete license' });
+    console.error('❌ Error deleting license:', error.message);
+    console.error('Error details:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to delete license' 
+    });
   }
 });
 

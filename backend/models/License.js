@@ -3,13 +3,13 @@ const mongoose = require('mongoose');
 const licenseSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    unique: true
   },
   type: {
     type: String,
     required: true,
-    enum: ['trial', 'starter', 'professional', 'enterprise'],
-    unique: true
+    enum: ['trial', 'starter', 'professional', 'enterprise', 'custom']
   },
   priceMonthly: {
     type: Number,

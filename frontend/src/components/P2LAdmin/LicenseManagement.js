@@ -154,6 +154,61 @@ function LicenseManagement() {
     });
   };
 
+  const applyTemplate = (template) => {
+    const templates = {
+      trial: {
+        name: 'Trial',
+        type: 'trial',
+        priceMonthly: 0,
+        priceYearly: 0,
+        maxTeachers: 1,
+        maxStudents: 5,
+        maxClasses: 1,
+        description: '30-day free trial with basic features',
+        isActive: true
+      },
+      starter: {
+        name: 'Starter',
+        type: 'starter',
+        priceMonthly: 250,
+        priceYearly: 2500,
+        maxTeachers: 50,
+        maxStudents: 500,
+        maxClasses: 100,
+        description: 'Perfect for small to medium schools',
+        isActive: true
+      },
+      professional: {
+        name: 'Professional',
+        type: 'professional',
+        priceMonthly: 500,
+        priceYearly: 5000,
+        maxTeachers: 100,
+        maxStudents: 1000,
+        maxClasses: 200,
+        description: 'Ideal for growing educational institutions',
+        isActive: true
+      },
+      enterprise: {
+        name: 'Enterprise',
+        type: 'enterprise',
+        priceMonthly: 1000,
+        priceYearly: 10000,
+        maxTeachers: 250,
+        maxStudents: 2500,
+        maxClasses: 500,
+        description: 'Unlimited features for large organizations',
+        isActive: true
+      }
+    };
+    
+    if (templates[template]) {
+      setFormData(templates[template]);
+      setSuccess(`${template.charAt(0).toUpperCase() + template.slice(1)} template applied`);
+      setTimeout(() => setSuccess(''), 2000);
+    }
+  };
+
   const handleCancel = () => {
     setShowForm(false);
     setEditingLicense(null);
@@ -186,6 +241,43 @@ function LicenseManagement() {
       {showForm && (
         <div className="license-form-container">
           <h3>{editingLicense ? 'Edit License' : 'Create New License'}</h3>
+          
+          {!editingLicense && (
+            <div className="template-buttons">
+              <p className="template-label">Quick Templates:</p>
+              <div className="template-grid">
+                <button 
+                  type="button" 
+                  className="btn btn-template"
+                  onClick={() => applyTemplate('trial')}
+                >
+                  📋 Trial
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-template"
+                  onClick={() => applyTemplate('starter')}
+                >
+                  🚀 Starter
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-template"
+                  onClick={() => applyTemplate('professional')}
+                >
+                  💼 Professional
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-template"
+                  onClick={() => applyTemplate('enterprise')}
+                >
+                  🏢 Enterprise
+                </button>
+              </div>
+            </div>
+          )}
+          
           <form onSubmit={handleSubmit} className="license-form">
             <div className="form-row">
               <div className="form-group">
@@ -202,15 +294,21 @@ function LicenseManagement() {
 
               <div className="form-group">
                 <label>License Type *</label>
-                <input
-                  type="text"
+                <select
                   name="type"
                   value={formData.type}
                   onChange={handleInputChange}
                   required
                   disabled={editingLicense}
-                  placeholder="e.g., professional (lowercase)"
-                />
+                  className="form-select"
+                >
+                  <option value="">Select a type...</option>
+                  <option value="trial">Trial</option>
+                  <option value="starter">Starter</option>
+                  <option value="professional">Professional</option>
+                  <option value="enterprise">Enterprise</option>
+                  <option value="custom">Custom</option>
+                </select>
                 {editingLicense && (
                   <small className="help-text">Type cannot be changed after creation</small>
                 )}
