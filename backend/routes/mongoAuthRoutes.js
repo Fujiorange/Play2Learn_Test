@@ -127,8 +127,8 @@ router.post('/register-school-admin', async (req, res) => {
         class_limit: 1,
         price: 0
       },
-      licenseId: null, // No license for free trial
-      licenseExpiresAt: null, // Free trial doesn't expire
+      licenseId: null, // No paid license for free trial
+      licenseExpiresAt: null, // Free trial is perpetual (no expiration)
       contact: email, // Use email as contact
       is_active: true,
       current_teachers: 0,
