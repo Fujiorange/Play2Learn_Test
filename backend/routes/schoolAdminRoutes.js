@@ -10,6 +10,8 @@ const Class = require('../models/Class');
 const SupportTicket = require('../models/SupportTicket');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const { generateCSVTemplate } = require('../utils/csvClassParser');
+const { processCSVUpload } = require('../controllers/csvUploadController');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
@@ -4053,6 +4055,135 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error processing license upgrade:', error);
     return res.status(500).json({ success: false, error: 'Failed to process upgrade request' });
+  }
+});
+
+// ==================== CSV CLASS UPLOAD ENDPOINTS ====================
+
+// GET /api/mongo/school-admin/classes/csv-template - Download CSV template
+router.get('/classes/csv-template', authenticateSchoolAdmin, (req, res) => {
+  try {
+    const template = generateCSVTemplate();
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="class-upload-template.csv"');
+    res.send(template);
+  } catch (error) {
+    console.error('Error generating CSV template:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate CSV template' });
+  }
+});
+
+// POST /api/mongo/school-admin/classes/upload-csv - Upload and process CSV
+router.post('/classes/upload-csv', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
+  try {
+    console.log('📤 CSV Upload Request received');
+    
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No file uploaded' 
+      });
+    }
+
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+
+    if (!schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'School admin is not associated with a school'
+      });
+    }
+
+    // Read the uploaded file
+    const csvData = fs.readFileSync(req.file.path, 'utf8');
+
+    console.log('🔍 Processing CSV data...');
+
+    // Process the CSV
+    const result = await processCSVUpload(csvData, schoolId, schoolAdmin._id);
+
+    // Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+
+    if (result.success) {
+      console.log('✅ CSV processed successfully:', result.results);
+      res.json({
+        success: true,
+        message: result.message,
+        results: result.results
+      });
+    } else {
+      console.log('❌ CSV processing failed:', result.errors);
+      res.status(400).json({
+        success: false,
+        error: 'CSV processing failed',
+        errors: result.errors,
+        results: result.results
+      });
+    }
+  } catch (error) {
+    console.error('❌ CSV upload error:', error);
+    
+    // Clean up file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process CSV upload',
+      details: error.message
+    });
+  }
+});
+
+// POST /api/mongo/school-admin/classes/validate-csv - Validate CSV before upload
+router.post('/classes/validate-csv', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No file uploaded' 
+      });
+    }
+
+    // Read the uploaded file
+    const csvData = fs.readFileSync(req.file.path, 'utf8');
+
+    // Parse and validate
+    const { parseMultiSectionCSV, validateCSVData } = require('../utils/csvClassParser');
+    const parsedData = parseMultiSectionCSV(csvData);
+    const validation = validateCSVData(parsedData);
+
+    // Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: validation.valid,
+      valid: validation.valid,
+      errors: validation.errors,
+      preview: {
+        classesCount: parsedData.classes.length,
+        teachersCount: parsedData.teachers.length,
+        studentsCount: parsedData.students.length,
+        parentsCount: parsedData.parents.length
+      }
+    });
+  } catch (error) {
+    console.error('CSV validation error:', error);
+    
+    // Clean up file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to validate CSV',
+      details: error.message
+    });
   }
 });
 

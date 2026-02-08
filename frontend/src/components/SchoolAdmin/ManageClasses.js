@@ -522,9 +522,17 @@ export default function ManageClasses() {
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
               All Classes ({classes.length})
             </h3>
-            <button style={styles.addButton} onClick={() => { resetForm(); setShowAddModal(true); }}>
-              + Add New Class
-            </button>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button style={styles.addButton} onClick={() => { resetForm(); setShowAddModal(true); }}>
+                + Add New Class
+              </button>
+              <button 
+                style={{ ...styles.addButton, background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' }}
+                onClick={() => navigate('/school-admin/classes/upload-csv')}
+              >
+                📤 Upload CSV
+              </button>
+            </div>
           </div>
 
           {loading ? (

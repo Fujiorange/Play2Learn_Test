@@ -94,6 +94,7 @@ import ManualAddUser from './components/SchoolAdmin/ManualAddUser';
 import SchoolLicenseView from './components/SchoolAdmin/SchoolLicenseView';
 // RemoveUser removed - delete functionality moved to role management pages
 import BulkUploadCSV from './components/SchoolAdmin/BulkUploadCSV';
+import CSVClassUpload from './components/SchoolAdmin/CSVClassUpload';
 import ManageClasses from './components/SchoolAdmin/ManageClasses';
 import BadgeManagement from './components/SchoolAdmin/BadgeManagement';
 import PointsManagement from './components/SchoolAdmin/PointsManagement';
@@ -268,6 +269,7 @@ function App() {
           <Route path="/school-admin/users/bulk-upload" element={<BulkUploadCSV />} />
           <Route path="/school-admin/users/pending-credentials" element={<PendingCredentials />} />
           <Route path="/school-admin/classes/manage" element={<ManageClasses />} />
+          <Route path="/school-admin/classes/upload-csv" element={<CSVClassUpload />} />
           <Route path="/school-admin/badges" element={<BadgeManagement />} />
           <Route path="/school-admin/points" element={<PointsManagement />} />
           <Route path="/school-admin/teachers" element={<TeacherManagement />} />

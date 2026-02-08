@@ -1083,6 +1083,87 @@ const schoolAdminService = {
       console.error('toggleShopItem error:', error);
       return { success: false, error: error.message || 'Failed to toggle shop item' };
     }
+  },
+
+  // ==================== CSV CLASS UPLOAD ====================
+  async downloadCSVTemplate() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/csv-template`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download template');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'class-upload-template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error('downloadCSVTemplate error:', error);
+      return { success: false, error: 'Failed to download template' };
+    }
+  },
+
+  async validateCSV(file) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/validate-csv`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('validateCSV error:', error);
+      return { success: false, error: 'Failed to validate CSV' };
+    }
+  },
+
+  async uploadCSV(file) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/upload-csv`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('uploadCSV error:', error);
+      return { success: false, error: 'Failed to upload CSV' };
+    }
   }
 };
 
