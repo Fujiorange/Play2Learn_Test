@@ -276,7 +276,7 @@ db.licenses.createIndex({ name: 1 }, { unique: true })
 ## Security Considerations
 
 1. ✅ P2L Admin authentication required for all write operations
-2. ✅ Input validation prevents SQL injection (using MongoDB, not SQL)
+2. ✅ Input validation prevents NoSQL injection attacks
 3. ✅ JWT token validation
 4. ✅ Proper error messages without leaking sensitive info
 5. ✅ Trial license deletion protected
