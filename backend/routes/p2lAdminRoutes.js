@@ -2112,7 +2112,7 @@ router.post('/licenses', authenticateP2LAdmin, async (req, res) => {
       teacher_limit,
       student_limit,
       price,
-      start_date: start_date || Date.now(),
+      start_date: start_date || new Date(),
       end_date,
       is_active: is_active !== undefined ? is_active : true,
       notes: notes || ''
