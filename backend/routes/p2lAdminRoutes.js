@@ -8,6 +8,7 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const User = require('../models/User');
 const School = require('../models/School');
+const License = require('../models/License');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
@@ -208,7 +209,7 @@ router.get('/dashboard-stats', authenticateP2LAdmin, async (req, res) => {
 // Get all schools
 router.get('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
-    const schools = await School.find().sort({ createdAt: -1 });
+    const schools = await School.find().populate('licenseId').sort({ createdAt: -1 });
     res.json({
       success: true,
       data: schools
@@ -225,7 +226,7 @@ router.get('/schools', authenticateP2LAdmin, async (req, res) => {
 // Get single school
 router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const school = await School.findById(req.params.id);
+    const school = await School.findById(req.params.id).populate('licenseId');
     if (!school) {
       return res.status(404).json({ 
         success: false, 
@@ -248,25 +249,36 @@ router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
 // Create school
 router.post('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, plan, plan_info, contact } = req.body;
+    const { organization_name, organization_type, licenseId, contact } = req.body;
     
     // Validate required fields
-    if (!organization_name || !plan || !plan_info) {
+    if (!organization_name || !licenseId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'organization_name, plan, and plan_info are required' 
+        error: 'organization_name and licenseId are required' 
+      });
+    }
+
+    // Verify license exists
+    const license = await License.findById(licenseId);
+    if (!license) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'License not found' 
       });
     }
 
     const school = new School({
       organization_name,
       organization_type: organization_type || 'school',
-      plan,
-      plan_info,
+      licenseId,
       contact: contact || ''
     });
 
     await school.save();
+
+    // Populate license data before returning
+    await school.populate('licenseId');
 
     res.status(201).json({
       success: true,
@@ -285,7 +297,7 @@ router.post('/schools', authenticateP2LAdmin, async (req, res) => {
 // Update school
 router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, plan, plan_info, contact, is_active } = req.body;
+    const { organization_name, organization_type, licenseId, contact, is_active } = req.body;
     
     const school = await School.findById(req.params.id);
     if (!school) {
@@ -295,15 +307,28 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Verify license exists if being updated
+    if (licenseId && licenseId !== school.licenseId.toString()) {
+      const license = await License.findById(licenseId);
+      if (!license) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'License not found' 
+        });
+      }
+    }
+
     // Update fields if provided
     if (organization_name) school.organization_name = organization_name;
     if (organization_type) school.organization_type = organization_type;
-    if (plan) school.plan = plan;
-    if (plan_info) school.plan_info = plan_info;
+    if (licenseId) school.licenseId = licenseId;
     if (contact !== undefined) school.contact = contact;
     if (is_active !== undefined) school.is_active = is_active;
 
     await school.save();
+    
+    // Populate license data before returning
+    await school.populate('licenseId');
 
     res.json({
       success: true,

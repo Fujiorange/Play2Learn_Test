@@ -67,7 +67,7 @@ const upload = multer({ dest: 'uploads/' });
 
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {
-  const school = await School.findById(schoolId);
+  const school = await School.findById(schoolId).populate('licenseId');
   
   if (!school) {
     return { available: false, error: 'School not found' };
@@ -76,12 +76,19 @@ async function checkLicenseAvailability(schoolId, role) {
   if (!school.is_active) {
     return { available: false, error: 'School is not active' };
   }
+
+  if (!school.licenseId) {
+    return { available: false, error: 'School has no license assigned' };
+  }
+  
+  const license = school.licenseId;
   
   if (role === 'Teacher') {
     const currentTeachers = school.current_teachers || 0;
-    const teacherLimit = school.plan_info.teacher_limit;
+    const teacherLimit = license.maxTeachers;
     
-    if (currentTeachers >= teacherLimit) {
+    // -1 means unlimited
+    if (teacherLimit !== -1 && currentTeachers >= teacherLimit) {
       return { 
         available: false, 
         error: `Teacher limit reached (${currentTeachers}/${teacherLimit}). Please upgrade your plan.` 
@@ -92,9 +99,10 @@ async function checkLicenseAvailability(schoolId, role) {
   
   if (role === 'Student') {
     const currentStudents = school.current_students || 0;
-    const studentLimit = school.plan_info.student_limit;
+    const studentLimit = license.maxStudents;
     
-    if (currentStudents >= studentLimit) {
+    // -1 means unlimited
+    if (studentLimit !== -1 && currentStudents >= studentLimit) {
       return { 
         available: false, 
         error: `Student limit reached (${currentStudents}/${studentLimit}). Please upgrade your plan.` 
@@ -180,12 +188,19 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
       });
     }
     
-    const school = await School.findById(schoolAdmin.schoolId);
+    const school = await School.findById(schoolAdmin.schoolId).populate('licenseId');
     
     if (!school) {
       return res.status(404).json({
         success: false,
         error: 'School not found'
+      });
+    }
+    
+    if (!school.licenseId) {
+      return res.status(500).json({
+        success: false,
+        error: 'School does not have a license assigned'
       });
     }
     
@@ -202,35 +217,37 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
       await school.save();
     }
     
+    const license = school.licenseId;
+    
     res.json({
       success: true,
       school: {
         id: school._id,
         organization_name: school.organization_name,
         organization_type: school.organization_type,
-        plan: school.plan,
+        plan: license.name, // For backward compatibility
         plan_info: {
-          teacher_limit: school.plan_info.teacher_limit,
-          student_limit: school.plan_info.student_limit,
-          price: school.plan_info.price
+          teacher_limit: license.maxTeachers,
+          student_limit: license.maxStudents,
+          price: license.priceMonthly
         },
         current_teachers: currentTeachers,
         current_students: currentStudents,
         is_active: school.is_active
       },
       license: {
-        plan: school.plan,
+        plan: license.name,
         teachers: {
           current: currentTeachers,
-          limit: school.plan_info.teacher_limit,
-          available: Math.max(0, school.plan_info.teacher_limit - currentTeachers),
-          limitReached: currentTeachers >= school.plan_info.teacher_limit
+          limit: license.maxTeachers,
+          available: license.maxTeachers === -1 ? -1 : Math.max(0, license.maxTeachers - currentTeachers),
+          limitReached: license.maxTeachers !== -1 && currentTeachers >= license.maxTeachers
         },
         students: {
           current: currentStudents,
-          limit: school.plan_info.student_limit,
-          available: Math.max(0, school.plan_info.student_limit - currentStudents),
-          limitReached: currentStudents >= school.plan_info.student_limit
+          limit: license.maxStudents,
+          available: license.maxStudents === -1 ? -1 : Math.max(0, license.maxStudents - currentStudents),
+          limitReached: license.maxStudents !== -1 && currentStudents >= license.maxStudents
         }
       }
     });
@@ -579,9 +596,13 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     console.log('\n🔄 Processing students...\n');
 
     // Get school data once for all operations
-    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolData = await School.findById(schoolAdmin.schoolId).populate('licenseId');
     if (!schoolData) {
       throw new Error('School not found');
+    }
+    
+    if (!schoolData.licenseId) {
+      throw new Error('School does not have a license assigned');
     }
 
     // Build a class name to ID lookup for the school
@@ -601,9 +622,9 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         
         // Check license availability using cached school data
         const currentStudents = (schoolData.current_students || 0) + studentsCreatedCount;
-        const studentLimit = schoolData.plan_info.student_limit;
+        const studentLimit = schoolData.licenseId.maxStudents;
         
-        if (currentStudents >= studentLimit) {
+        if (studentLimit !== -1 && currentStudents >= studentLimit) {
           console.log(`⚠️  License limit reached - stopping bulk import`);
           results.limitReached = true;
           const processedCount = results.created + results.failed;
@@ -816,9 +837,13 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
     });
 
     // Get school data once for all operations
-    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolData = await School.findById(schoolAdmin.schoolId).populate('licenseId');
     if (!schoolData) {
       throw new Error('School not found');
+    }
+    
+    if (!schoolData.licenseId) {
+      throw new Error('School does not have a license assigned');
     }
     
     // Track teachers created in this batch for atomic update at the end
@@ -828,9 +853,9 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
       try {
         // Check license availability using cached school data
         const currentTeachers = (schoolData.current_teachers || 0) + teachersCreatedCount;
-        const teacherLimit = schoolData.plan_info.teacher_limit;
+        const teacherLimit = schoolData.licenseId.maxTeachers;
         
-        if (currentTeachers >= teacherLimit) {
+        if (teacherLimit !== -1 && currentTeachers >= teacherLimit) {
           console.log(`⚠️  License limit reached - stopping bulk import`);
           results.limitReached = true;
           const processedCount = results.created + results.failed;
@@ -2417,6 +2442,27 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
         error: 'Invalid school ID format' 
       });
     }
+
+    // Check class limit
+    const school = await School.findById(schoolObjectId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    if (!school.licenseId) {
+      return res.status(400).json({ success: false, error: 'School has no license assigned' });
+    }
+
+    const license = school.licenseId;
+    const currentClasses = school.current_classes || 0;
+    
+    // -1 means unlimited
+    if (license.maxClasses !== -1 && currentClasses >= license.maxClasses) {
+      return res.status(403).json({ 
+        success: false, 
+        error: `Class limit reached (${currentClasses}/${license.maxClasses}). Please upgrade your plan.` 
+      });
+    }
     
     // Check if class name already exists for this school
     const existingClass = await Class.findOne({
@@ -2439,6 +2485,10 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
     });
     
     await newClass.save();
+
+    // Update school class count
+    school.current_classes = (school.current_classes || 0) + 1;
+    await school.save();
     
     // Update users with class assignment
     if (teachers && teachers.length > 0) {
@@ -3968,14 +4018,11 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'School not found' });
     }
 
-    // Get license details
-    let licenseDetails = null;
-    if (school.licenseId) {
-      licenseDetails = school.licenseId;
-    } else {
-      // Fallback to getting license by plan type
-      licenseDetails = await License.findOne({ type: school.plan });
+    if (!school.licenseId) {
+      return res.status(404).json({ success: false, error: 'No license assigned to school' });
     }
+
+    const license = school.licenseId;
 
     // Calculate days remaining
     let daysRemaining = null;
@@ -3988,15 +4035,15 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
     return res.json({
       success: true,
       license: {
-        type: school.plan,
-        name: licenseDetails ? licenseDetails.name : school.plan,
-        description: licenseDetails ? licenseDetails.description : '',
+        type: license.type,
+        name: license.name,
+        description: license.description,
         expiresAt: school.licenseExpiresAt,
         daysRemaining,
         limits: {
-          maxTeachers: school.plan_info.teacher_limit,
-          maxStudents: school.plan_info.student_limit,
-          maxClasses: school.plan_info.class_limit || 1
+          maxTeachers: license.maxTeachers,
+          maxStudents: license.maxStudents,
+          maxClasses: license.maxClasses
         },
         usage: {
           currentTeachers: school.current_teachers,
@@ -4027,9 +4074,13 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'School not found' });
     }
 
-    const school = await School.findById(user.schoolId);
+    const school = await School.findById(user.schoolId).populate('licenseId');
     if (!school) {
       return res.status(404).json({ success: false, error: 'School not found' });
+    }
+    
+    if (!school.licenseId) {
+      return res.status(500).json({ success: false, error: 'School does not have a license assigned' });
     }
 
     // Get the new license
@@ -4044,7 +4095,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
       success: true,
       message: 'Upgrade request received. Please contact support to complete the upgrade.',
       upgradeDetails: {
-        currentPlan: school.plan,
+        currentPlan: school.licenseId.name,
         newPlan: licenseType,
         billingCycle,
         price: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly

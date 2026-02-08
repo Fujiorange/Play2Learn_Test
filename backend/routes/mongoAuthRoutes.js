@@ -100,6 +100,7 @@ router.post('/register-school-admin', async (req, res) => {
 
     // Check if institution name already exists
     const School = require('../models/School');
+    const License = require('../models/License');
     
     // Escape special regex characters to prevent regex injection
     const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -115,19 +116,26 @@ router.post('/register-school-admin', async (req, res) => {
       });
     }
 
-    // Create school with free trial plan
-    // Plan limits: teachers 1, students 5, classes 1, price Free
+    // Find the trial license
+    const trialLicense = await License.findOne({ 
+      name: 'Free Trial',
+      type: 'free',
+      isActive: true 
+    });
+    
+    if (!trialLicense) {
+      console.error('❌ Trial license not found in database');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Trial license not configured. Please contact support.' 
+      });
+    }
+
+    // Create school with free trial license
     const newSchool = new School({
       organization_name: institutionName,
       organization_type: 'school',
-      plan: 'trial',
-      plan_info: {
-        teacher_limit: 1,
-        student_limit: 5,
-        class_limit: 1,
-        price: 0
-      },
-      licenseId: null, // No paid license for free trial
+      licenseId: trialLicense._id,
       licenseExpiresAt: null, // Free trial is perpetual (no expiration)
       contact: email, // Use email as contact
       is_active: true,
@@ -171,7 +179,7 @@ router.post('/register-school-admin', async (req, res) => {
     }
 
     console.log(`✅ New institute registered: ${email} for ${institutionName}`);
-    console.log(`   Plan: Free trial (Teachers: 0/1, Students: 0/5, Classes: 0/1)`);
+    console.log(`   License: ${trialLicense.name} (Teachers: 0/${trialLicense.maxTeachers}, Students: 0/${trialLicense.maxStudents}, Classes: 0/${trialLicense.maxClasses})`);
 
     return res.json({ 
       success: true, 

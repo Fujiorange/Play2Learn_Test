@@ -1,11 +1,13 @@
 // License Management Component for P2L Admin
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './LicenseManagement.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 
   (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : `${window.location.origin}/api`);
 
 function LicenseManagement() {
+  const navigate = useNavigate();
   const [licenses, setLicenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -20,8 +22,7 @@ function LicenseManagement() {
     maxTeachers: 1,
     maxStudents: 5,
     maxClasses: 1,
-    description: '',
-    isActive: true
+    description: ''
   });
 
   useEffect(() => {
@@ -106,8 +107,7 @@ function LicenseManagement() {
       maxTeachers: license.maxTeachers,
       maxStudents: license.maxStudents,
       maxClasses: license.maxClasses,
-      description: license.description,
-      isActive: license.isActive
+      description: license.description
     });
     setShowForm(true);
   };
@@ -149,56 +149,51 @@ function LicenseManagement() {
       maxTeachers: 1,
       maxStudents: 5,
       maxClasses: 1,
-      description: '',
-      isActive: true
+      description: ''
     });
   };
 
   const applyTemplate = (template) => {
     const templates = {
-      trial: {
-        name: 'Trial',
-        type: 'trial',
+      free: {
+        name: 'Free Trial',
+        type: 'free',
         priceMonthly: 0,
         priceYearly: 0,
         maxTeachers: 1,
         maxStudents: 5,
         maxClasses: 1,
-        description: '30-day free trial with basic features',
-        isActive: true
+        description: 'Free trial with basic features - 1 teacher, 5 students, 1 class'
       },
-      starter: {
-        name: 'Starter',
-        type: 'starter',
+      basic: {
+        name: 'Basic Plan',
+        type: 'paid',
         priceMonthly: 250,
         priceYearly: 2500,
         maxTeachers: 50,
         maxStudents: 500,
         maxClasses: 100,
-        description: 'Perfect for small to medium schools',
-        isActive: true
+        description: 'Perfect for small to medium schools'
       },
-      professional: {
-        name: 'Professional',
-        type: 'professional',
+      standard: {
+        name: 'Standard Plan',
+        type: 'paid',
         priceMonthly: 500,
         priceYearly: 5000,
         maxTeachers: 100,
         maxStudents: 1000,
         maxClasses: 200,
-        description: 'Ideal for growing educational institutions',
-        isActive: true
+        description: 'Ideal for growing educational institutions'
       },
-      enterprise: {
-        name: 'Enterprise',
-        type: 'enterprise',
+      premium: {
+        name: 'Premium Plan',
+        type: 'paid',
         priceMonthly: 1000,
         priceYearly: 10000,
         maxTeachers: 250,
         maxStudents: 2500,
         maxClasses: 500,
-        description: 'Unlimited features for large organizations',
-        isActive: true
+        description: 'Unlimited features for large organizations'
       }
     };
     
@@ -222,16 +217,24 @@ function LicenseManagement() {
   return (
     <div className="license-management">
       <div className="license-header">
-        <h2>License Management</h2>
+        <div>
+          <h2>License Management</h2>
+          <button 
+            className="btn-back"
+            onClick={() => navigate('/p2ladmin/dashboard')}
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
         <button 
-          className="btn btn-primary"
+          className="btn btn-create-license"
           onClick={() => {
             setShowForm(true);
             setEditingLicense(null);
             resetForm();
           }}
         >
-          + Create New License
+          + Create License
         </button>
       </div>
 
@@ -249,30 +252,30 @@ function LicenseManagement() {
                 <button 
                   type="button" 
                   className="btn btn-template"
-                  onClick={() => applyTemplate('trial')}
+                  onClick={() => applyTemplate('free')}
                 >
-                  📋 Trial
+                  🆓 Free Trial
                 </button>
                 <button 
                   type="button" 
                   className="btn btn-template"
-                  onClick={() => applyTemplate('starter')}
+                  onClick={() => applyTemplate('basic')}
                 >
-                  🚀 Starter
+                  🚀 Basic
                 </button>
                 <button 
                   type="button" 
                   className="btn btn-template"
-                  onClick={() => applyTemplate('professional')}
+                  onClick={() => applyTemplate('standard')}
                 >
-                  💼 Professional
+                  💼 Standard
                 </button>
                 <button 
                   type="button" 
                   className="btn btn-template"
-                  onClick={() => applyTemplate('enterprise')}
+                  onClick={() => applyTemplate('premium')}
                 >
-                  🏢 Enterprise
+                  🏢 Premium
                 </button>
               </div>
             </div>
@@ -303,11 +306,8 @@ function LicenseManagement() {
                   className="form-select"
                 >
                   <option value="">Select a type...</option>
-                  <option value="trial">Trial</option>
-                  <option value="starter">Starter</option>
-                  <option value="professional">Professional</option>
-                  <option value="enterprise">Enterprise</option>
-                  <option value="custom">Custom</option>
+                  <option value="free">Free</option>
+                  <option value="paid">Paid</option>
                 </select>
                 {editingLicense && (
                   <small className="help-text">Type cannot be changed after creation</small>
@@ -393,18 +393,6 @@ function LicenseManagement() {
               />
             </div>
 
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  checked={formData.isActive}
-                  onChange={handleInputChange}
-                />
-                <span>Active</span>
-              </label>
-            </div>
-
             <div className="form-actions">
               <button type="button" className="btn btn-secondary" onClick={handleCancel}>
                 Cancel
@@ -484,14 +472,14 @@ function LicenseManagement() {
                   >
                     Edit
                   </button>
-                  {license.type !== 'trial' && (
-                    <button 
-                      className="btn btn-sm btn-danger"
-                      onClick={() => handleDelete(license._id)}
-                    >
-                      Delete
-                    </button>
-                  )}
+                  <button 
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleDelete(license._id)}
+                    disabled={license.isDeletable === false}
+                    title={license.isDeletable === false ? 'This license is protected and cannot be deleted' : ''}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
