@@ -242,7 +242,7 @@ function SchoolManagement() {
                       <p><strong>Teachers:</strong> {school.current_teachers || 0} / {license.maxTeachers === -1 ? 'Unlimited' : license.maxTeachers}</p>
                       <p><strong>Students:</strong> {school.current_students || 0} / {license.maxStudents === -1 ? 'Unlimited' : license.maxStudents}</p>
                       <p><strong>Classes:</strong> {school.current_classes || 0} / {license.maxClasses === -1 ? 'Unlimited' : license.maxClasses}</p>
-                      <p><strong>Price:</strong> ${license.priceMonthly}/month, ${license.priceYearly}/year</p>
+                      <p><strong>Price:</strong> ${license.priceMonthly.toLocaleString()}/month, ${license.priceYearly.toLocaleString()}/year</p>
                     </>
                   ) : (
                     <p style={{ color: 'red' }}>⚠️ No license assigned</p>
