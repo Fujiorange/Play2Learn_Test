@@ -358,6 +358,35 @@ export const deleteMaintenanceBroadcast = async (id) => {
   });
 };
 
+// ==================== LICENSE MANAGEMENT ====================
+export const getLicenses = async () => {
+  return apiCall('/api/p2ladmin/licenses');
+};
+
+export const getLicense = async (id) => {
+  return apiCall(`/api/p2ladmin/licenses/${id}`);
+};
+
+export const createLicense = async (licenseData) => {
+  return apiCall('/api/p2ladmin/licenses', {
+    method: 'POST',
+    body: JSON.stringify(licenseData),
+  });
+};
+
+export const updateLicense = async (id, licenseData) => {
+  return apiCall(`/api/p2ladmin/licenses/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(licenseData),
+  });
+};
+
+export const deleteLicense = async (id) => {
+  return apiCall(`/api/p2ladmin/licenses/${id}`, {
+    method: 'DELETE',
+  });
+};
+
 export default {
   seedP2LAdmin,
   registerP2LAdmin,
@@ -400,4 +429,9 @@ export default {
   getAllUsers,
   getUserSchools,
   bulkDeleteUsers,
+  getLicenses,
+  getLicense,
+  createLicense,
+  updateLicense,
+  deleteLicense,
 };

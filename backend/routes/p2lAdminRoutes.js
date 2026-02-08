@@ -13,6 +13,7 @@ const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
 const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
+const License = require('../models/License');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const Sentiment = require('sentiment');
@@ -2059,6 +2060,131 @@ router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
       success: false, 
       error: 'Failed to delete users' 
     });
+  }
+});
+
+// ==================== License Management ====================
+
+// Get all licenses
+router.get('/licenses', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const licenses = await License.find().sort({ createdAt: -1 });
+    res.json(licenses);
+  } catch (error) {
+    console.error('Error fetching licenses:', error);
+    res.status(500).json({ error: 'Failed to fetch licenses' });
+  }
+});
+
+// Get a single license by ID
+router.get('/licenses/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const license = await License.findById(req.params.id);
+    if (!license) {
+      return res.status(404).json({ error: 'License not found' });
+    }
+    res.json(license);
+  } catch (error) {
+    console.error('Error fetching license:', error);
+    res.status(500).json({ error: 'Failed to fetch license' });
+  }
+});
+
+// Create a new license
+router.post('/licenses', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { type, organization_name, teacher_limit, student_limit, price, start_date, end_date, is_active, notes } = req.body;
+
+    // Validate required fields
+    if (!type || !organization_name || teacher_limit === undefined || student_limit === undefined || price === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: type, organization_name, teacher_limit, student_limit, price' });
+    }
+
+    // Validate type is one of the allowed values
+    const validTypes = ['starter', 'professional', 'enterprise'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: `Invalid license type. Must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const license = new License({
+      type,
+      organization_name,
+      teacher_limit,
+      student_limit,
+      price,
+      start_date: start_date || Date.now(),
+      end_date,
+      is_active: is_active !== undefined ? is_active : true,
+      notes: notes || ''
+    });
+
+    await license.save();
+    res.status(201).json({ message: 'License created successfully', license });
+  } catch (error) {
+    console.error('Error creating license:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      // This should not happen with our schema, but just in case
+      return res.status(400).json({ error: 'Duplicate license entry' });
+    }
+    
+    res.status(500).json({ error: 'Failed to create license' });
+  }
+});
+
+// Update a license
+router.put('/licenses/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { type, organization_name, teacher_limit, student_limit, price, start_date, end_date, is_active, notes } = req.body;
+
+    // Validate type if provided
+    if (type) {
+      const validTypes = ['starter', 'professional', 'enterprise'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: `Invalid license type. Must be one of: ${validTypes.join(', ')}` });
+      }
+    }
+
+    const updateData = {};
+    if (type !== undefined) updateData.type = type;
+    if (organization_name !== undefined) updateData.organization_name = organization_name;
+    if (teacher_limit !== undefined) updateData.teacher_limit = teacher_limit;
+    if (student_limit !== undefined) updateData.student_limit = student_limit;
+    if (price !== undefined) updateData.price = price;
+    if (start_date !== undefined) updateData.start_date = start_date;
+    if (end_date !== undefined) updateData.end_date = end_date;
+    if (is_active !== undefined) updateData.is_active = is_active;
+    if (notes !== undefined) updateData.notes = notes;
+
+    const license = await License.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!license) {
+      return res.status(404).json({ error: 'License not found' });
+    }
+
+    res.json({ message: 'License updated successfully', license });
+  } catch (error) {
+    console.error('Error updating license:', error);
+    res.status(500).json({ error: 'Failed to update license' });
+  }
+});
+
+// Delete a license
+router.delete('/licenses/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const license = await License.findByIdAndDelete(req.params.id);
+    if (!license) {
+      return res.status(404).json({ error: 'License not found' });
+    }
+    res.json({ message: 'License deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting license:', error);
+    res.status(500).json({ error: 'Failed to delete license' });
   }
 });
 

@@ -103,6 +103,11 @@ function P2LAdminDashboard() {
             <p>Create admin accounts for schools</p>
           </Link>
 
+          <Link to="/p2ladmin/licenses" className="management-card">
+            <h3>📜 License Management</h3>
+            <p>Create and manage licenses for organizations</p>
+          </Link>
+
           <Link to="/p2ladmin/questions" className="management-card">
             <h3>📚 Question Bank</h3>
             <p>Manage questions with difficulty levels</p>
