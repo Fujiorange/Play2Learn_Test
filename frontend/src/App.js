@@ -129,6 +129,7 @@ import MaintenanceBroadcastManager from './components/P2LAdmin/MaintenanceBroadc
 import UserManagement from './components/P2LAdmin/UserManagement';
 import SupportTicketManagement from './components/P2LAdmin/SupportTicketManagement';
 import SkillPointsConfig from './components/P2LAdmin/SkillPointsConfig';
+import LicenseManagement from './components/P2LAdmin/LicenseManagement';
 
 // Maintenance Banner
 import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner';
@@ -289,6 +290,7 @@ function App() {
           <Route path="/p2ladmin/schools" element={<SchoolManagement />} />
           <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
           <Route path="/p2ladmin/school-admins/manual-add" element={<ManualAddSchoolAdmin />} />
+          <Route path="/p2ladmin/licenses" element={<LicenseManagement />} />
           <Route path="/p2ladmin/questions" element={<QuestionBank />} />
           <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
           <Route path="/p2ladmin/quizzes/create-adaptive" element={<AdaptiveQuizCreator />} />
