@@ -21,34 +21,34 @@ const licenses = [
   {
     name: 'Starter',
     type: 'starter',
-    priceMonthly: 29.99,
-    priceYearly: 299.99,
-    maxTeachers: 5,
-    maxStudents: 50,
+    priceMonthly: 250,
+    priceYearly: 2500,
+    maxTeachers: 50,
+    maxStudents: 500,
     maxClasses: 10,
-    description: 'Perfect for small schools and learning centers',
+    description: 'Perfect for small schools and institutions',
     isActive: true
   },
   {
     name: 'Professional',
     type: 'professional',
-    priceMonthly: 99.99,
-    priceYearly: 999.99,
-    maxTeachers: 20,
-    maxStudents: 200,
-    maxClasses: 50,
-    description: 'Ideal for medium-sized educational institutions',
+    priceMonthly: 500,
+    priceYearly: 5000,
+    maxTeachers: 100,
+    maxStudents: 1000,
+    maxClasses: 25,
+    description: 'Ideal for medium-sized schools and districts',
     isActive: true
   },
   {
     name: 'Enterprise',
     type: 'enterprise',
-    priceMonthly: 299.99,
-    priceYearly: 2999.99,
-    maxTeachers: -1, // -1 means unlimited
-    maxStudents: -1,
-    maxClasses: -1,
-    description: 'Unlimited access for large educational organizations',
+    priceMonthly: 1000,
+    priceYearly: 10000,
+    maxTeachers: 250,
+    maxStudents: 2500,
+    maxClasses: 50,
+    description: 'For large institutions and school networks',
     isActive: true
   }
 ];
