@@ -1,0 +1,62 @@
+const mongoose = require('mongoose');
+
+const licenseSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    enum: ['Trial', 'Starter', 'Professional', 'Enterprise']
+  },
+  type: {
+    type: String,
+    required: true,
+    enum: ['trial', 'starter', 'professional', 'enterprise'],
+    unique: true
+  },
+  priceMonthly: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  priceYearly: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  maxTeachers: {
+    type: Number,
+    required: true,
+    default: 1
+  },
+  maxStudents: {
+    type: Number,
+    required: true,
+    default: 5
+  },
+  maxClasses: {
+    type: Number,
+    required: true,
+    default: 1
+  },
+  description: {
+    type: String,
+    default: ''
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+licenseSchema.pre('save', function() {
+  this.updatedAt = Date.now();
+});
+
+module.exports = mongoose.model('License', licenseSchema);

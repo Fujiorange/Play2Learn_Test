@@ -74,6 +74,120 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// POST /register-school-admin - Register a school admin with trial license
+router.post('/register-school-admin', async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      institutionName,
+      referralSource,
+      contact,
+      gender,
+      date_of_birth,
+    } = req.body;
+
+    // Validation
+    if (!name || !email || !password || !institutionName) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Name, email, password, and institution name are required' 
+      });
+    }
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'Email already registered' });
+    }
+
+    // Check if institution name already exists
+    const School = require('../models/School');
+    const existingSchool = await School.findOne({ 
+      organization_name: new RegExp(`^${institutionName}$`, 'i') 
+    });
+    if (existingSchool) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'An organization with this name already exists. Please use a different name.' 
+      });
+    }
+
+    // Get trial license
+    const License = require('../models/License');
+    const trialLicense = await License.findOne({ type: 'trial' });
+    if (!trialLicense) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Trial license not configured. Please contact support.' 
+      });
+    }
+
+    // Create school with trial license
+    const newSchool = new School({
+      organization_name: institutionName,
+      organization_type: 'school',
+      plan: 'trial',
+      plan_info: {
+        teacher_limit: trialLicense.maxTeachers,
+        student_limit: trialLicense.maxStudents,
+        class_limit: trialLicense.maxClasses,
+        price: 0
+      },
+      licenseId: trialLicense._id,
+      licenseExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      contact: contact || '',
+      is_active: true,
+      current_teachers: 0,
+      current_students: 0,
+      current_classes: 0
+    });
+
+    await newSchool.save();
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create school admin user
+    const newUser = new User({
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: 'School Admin',
+      schoolId: newSchool._id.toString(),
+      contact: contact || null,
+      gender: gender || null,
+      date_of_birth: date_of_birth ? new Date(date_of_birth) : null,
+      emailVerified: true,
+      isTrialUser: true
+    });
+
+    await newUser.save();
+
+    // Log referral source if provided (for analytics)
+    if (referralSource) {
+      console.log(`📊 New school admin registration - Referral source: ${referralSource}`);
+    }
+
+    console.log(`✅ New school admin registered: ${email} for ${institutionName}`);
+    console.log(`   Trial expires: ${newSchool.licenseExpiresAt.toISOString()}`);
+
+    return res.json({ 
+      success: true, 
+      message: 'School admin account created successfully with 30-day trial license',
+      schoolId: newSchool._id,
+      trialExpiresAt: newSchool.licenseExpiresAt
+    });
+  } catch (error) {
+    console.error('School admin registration error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Registration failed. Please try again.' 
+    });
+  }
+});
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;

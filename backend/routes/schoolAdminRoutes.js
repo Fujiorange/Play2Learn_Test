@@ -3952,4 +3952,108 @@ router.patch('/shop-items/:itemId/toggle', authenticateSchoolAdmin, async (req, 
   }
 });
 
+// ==================== LICENSE MANAGEMENT ====================
+const License = require('../models/License');
+
+// GET /api/mongo/school-admin/license-info - Get current school's license information
+router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    // Get license details
+    let licenseDetails = null;
+    if (school.licenseId) {
+      licenseDetails = school.licenseId;
+    } else {
+      // Fallback to getting license by plan type
+      licenseDetails = await License.findOne({ type: school.plan });
+    }
+
+    // Calculate days remaining
+    let daysRemaining = null;
+    if (school.licenseExpiresAt) {
+      const now = new Date();
+      const expiresAt = new Date(school.licenseExpiresAt);
+      daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+    }
+
+    return res.json({
+      success: true,
+      license: {
+        type: school.plan,
+        name: licenseDetails ? licenseDetails.name : school.plan,
+        description: licenseDetails ? licenseDetails.description : '',
+        expiresAt: school.licenseExpiresAt,
+        daysRemaining,
+        limits: {
+          maxTeachers: school.plan_info.teacher_limit,
+          maxStudents: school.plan_info.student_limit,
+          maxClasses: school.plan_info.class_limit || 1
+        },
+        usage: {
+          currentTeachers: school.current_teachers,
+          currentStudents: school.current_students,
+          currentClasses: school.current_classes
+        },
+        isExpired: daysRemaining !== null && daysRemaining <= 0,
+        isNearExpiry: daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 7
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching license info:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch license information' });
+  }
+});
+
+// POST /api/mongo/school-admin/upgrade-license - Request license upgrade
+router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { licenseType, billingCycle } = req.body;
+
+    if (!licenseType || !billingCycle) {
+      return res.status(400).json({ success: false, error: 'License type and billing cycle are required' });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId);
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    // Get the new license
+    const newLicense = await License.findOne({ type: licenseType });
+    if (!newLicense) {
+      return res.status(404).json({ success: false, error: 'License type not found' });
+    }
+
+    // For now, we'll just prepare the upgrade request
+    // In a real scenario, this would integrate with a payment processor
+    return res.json({
+      success: true,
+      message: 'Upgrade request received. Please contact support to complete the upgrade.',
+      upgradeDetails: {
+        currentPlan: school.plan,
+        newPlan: licenseType,
+        billingCycle,
+        price: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly
+      }
+    });
+  } catch (error) {
+    console.error('Error processing license upgrade:', error);
+    return res.status(500).json({ success: false, error: 'Failed to process upgrade request' });
+  }
+});
+
 module.exports = router;
