@@ -108,6 +108,11 @@ export const getLandingPagePricingPlans = async () => {
   return apiCall('/api/p2ladmin/landing/pricing-plans');
 };
 
+// Get landing page statistics (schools, students, teachers)
+export const getLandingPageStatistics = async () => {
+  return apiCall('/api/p2ladmin/landing/statistics');
+};
+
 // ==================== SCHOOLS ====================
 export const getSchools = async () => {
   return apiCall('/api/p2ladmin/schools');
@@ -408,6 +413,8 @@ export default {
   saveLandingPage,
   updateLandingPage,
   deleteLandingPage,
+  getLandingPagePricingPlans,
+  getLandingPageStatistics,
   getSchools,
   getSchool,
   createSchool,
