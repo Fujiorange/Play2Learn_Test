@@ -4,6 +4,7 @@ const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
+const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const School = require('../models/School');
 const Class = require('../models/Class');
@@ -66,6 +67,16 @@ const authenticateSchoolAdmin = async (req, res, next) => {
 
 // ==================== FILE UPLOAD CONFIGURATION ====================
 const upload = multer({ dest: 'uploads/' });
+
+// ==================== RATE LIMITING FOR CSV UPLOADS ====================
+// Rate limiter for CSV upload endpoints - limit to 5 uploads per 15 minutes per IP
+const csvUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: { success: false, error: 'Too many CSV upload requests, please try again later.' },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {
@@ -4061,7 +4072,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
 // ==================== CSV CLASS UPLOAD ENDPOINTS ====================
 
 // GET /api/mongo/school-admin/classes/csv-template - Download CSV template
-router.get('/classes/csv-template', authenticateSchoolAdmin, (req, res) => {
+router.get('/classes/csv-template', csvUploadLimiter, authenticateSchoolAdmin, (req, res) => {
   try {
     const template = generateCSVTemplate();
     
@@ -4075,7 +4086,7 @@ router.get('/classes/csv-template', authenticateSchoolAdmin, (req, res) => {
 });
 
 // POST /api/mongo/school-admin/classes/upload-csv - Upload and process CSV
-router.post('/classes/upload-csv', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
+router.post('/classes/upload-csv', csvUploadLimiter, authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
   try {
     console.log('📤 CSV Upload Request received');
     
@@ -4140,7 +4151,7 @@ router.post('/classes/upload-csv', authenticateSchoolAdmin, upload.single('file'
 });
 
 // POST /api/mongo/school-admin/classes/validate-csv - Validate CSV before upload
-router.post('/classes/validate-csv', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
+router.post('/classes/validate-csv', csvUploadLimiter, authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ 
