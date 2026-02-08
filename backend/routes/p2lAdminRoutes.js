@@ -868,6 +868,52 @@ router.get('/questions-grades', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// Get unique quiz levels
+router.get('/questions-quiz-levels', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quizLevels = await Question.distinct('quiz_level');
+    
+    // Sort numerically and filter out invalid values
+    const sortedLevels = quizLevels
+      .filter(level => level != null && Number.isInteger(level) && level >= 1 && level <= 10)
+      .sort((a, b) => a - b);
+    
+    res.json({
+      success: true,
+      data: sortedLevels
+    });
+  } catch (error) {
+    console.error('Get quiz levels error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch quiz levels' 
+    });
+  }
+});
+
+// Get unique difficulty levels
+router.get('/questions-difficulties', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const difficulties = await Question.distinct('difficulty');
+    
+    // Sort numerically and filter out invalid values
+    const sortedDifficulties = difficulties
+      .filter(d => d != null && Number.isInteger(d) && d >= 1 && d <= 5)
+      .sort((a, b) => a - b);
+    
+    res.json({
+      success: true,
+      data: sortedDifficulties
+    });
+  } catch (error) {
+    console.error('Get difficulties error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch difficulties' 
+    });
+  }
+});
+
 // Get question statistics (counts by difficulty)
 router.get('/questions-stats', authenticateP2LAdmin, async (req, res) => {
   try {

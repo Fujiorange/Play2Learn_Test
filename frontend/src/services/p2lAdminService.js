@@ -249,6 +249,14 @@ export const getQuestionGrades = async () => {
   return apiCall('/api/p2ladmin/questions-grades');
 };
 
+export const getQuestionQuizLevels = async () => {
+  return apiCall('/api/p2ladmin/questions-quiz-levels');
+};
+
+export const getQuestionDifficulties = async () => {
+  return apiCall('/api/p2ladmin/questions-difficulties');
+};
+
 export const bulkDeleteQuestions = async (ids) => {
   return apiCall('/api/p2ladmin/questions/bulk-delete', {
     method: 'POST',

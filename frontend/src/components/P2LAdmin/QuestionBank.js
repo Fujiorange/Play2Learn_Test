@@ -1,7 +1,7 @@
 // Question Bank Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, bulkDeleteQuestions } from '../../services/p2lAdminService';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, getQuestionDifficulties, bulkDeleteQuestions } from '../../services/p2lAdminService';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -9,10 +9,11 @@ function QuestionBank() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '' });
+  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '', quiz_level: '' });
   const [subjects, setSubjects] = useState([]);
   const [topics, setTopics] = useState([]);
   const [grades, setGrades] = useState([]);
+  const [difficulties, setDifficulties] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
@@ -38,6 +39,7 @@ function QuestionBank() {
     fetchSubjects();
     fetchTopics();
     fetchGrades();
+    fetchDifficulties();
   }, []);
 
   const fetchQuestions = async () => {
@@ -78,6 +80,15 @@ function QuestionBank() {
       setGrades(response.data || []);
     } catch (error) {
       console.error('Failed to fetch grades:', error);
+    }
+  };
+
+  const fetchDifficulties = async () => {
+    try {
+      const response = await getQuestionDifficulties();
+      setDifficulties(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch difficulties:', error);
     }
   };
 
@@ -310,11 +321,20 @@ function QuestionBank() {
             onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
           >
             <option value="">All</option>
-            <option value="1">Level 1</option>
-            <option value="2">Level 2</option>
-            <option value="3">Level 3</option>
-            <option value="4">Level 4</option>
-            <option value="5">Level 5</option>
+            {difficulties.length > 0 ? (
+              difficulties.map((difficulty) => (
+                <option key={difficulty} value={difficulty}>
+                  Level {difficulty}
+                </option>
+              ))
+            ) : (
+              // Fallback to default levels if API hasn't loaded yet
+              [1, 2, 3, 4, 5].map((level) => (
+                <option key={level} value={level}>
+                  Level {level}
+                </option>
+              ))
+            )}
           </select>
         </div>
 
@@ -363,7 +383,22 @@ function QuestionBank() {
           </select>
         </div>
 
-        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '' })} className="btn-clear">
+        <div className="filter-group">
+          <label>Quiz Level:</label>
+          <select 
+            value={filters.quiz_level}
+            onChange={(e) => setFilters({ ...filters, quiz_level: e.target.value })}
+          >
+            <option value="">All</option>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((level) => (
+              <option key={level} value={level}>
+                Level {level}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '', quiz_level: '' })} className="btn-clear">
           Clear Filters
         </button>
         

@@ -1,12 +1,13 @@
 // Quiz Manager Component
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuizzes, generateQuiz, updateQuiz, deleteQuiz, getQuestions } from '../../services/p2lAdminService';
+import { getQuizzes, generateQuiz, updateQuiz, deleteQuiz, getQuestions, getQuestionQuizLevels } from '../../services/p2lAdminService';
 import './QuizManager.css';
 
 function QuizManager() {
   const [quizzes, setQuizzes] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [quizLevels, setQuizLevels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
@@ -22,6 +23,7 @@ function QuizManager() {
 
   useEffect(() => {
     fetchData();
+    fetchQuizLevels();
   }, []);
 
   const fetchData = async () => {
@@ -37,6 +39,15 @@ function QuizManager() {
       alert('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchQuizLevels = async () => {
+    try {
+      const response = await getQuestionQuizLevels();
+      setQuizLevels(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch quiz levels:', error);
     }
   };
 
@@ -217,16 +228,20 @@ function QuizManager() {
                     onChange={handleInputChange}
                     required
                   >
-                    <option value={1}>Quiz Level 1</option>
-                    <option value={2}>Quiz Level 2</option>
-                    <option value={3}>Quiz Level 3</option>
-                    <option value={4}>Quiz Level 4</option>
-                    <option value={5}>Quiz Level 5</option>
-                    <option value={6}>Quiz Level 6</option>
-                    <option value={7}>Quiz Level 7</option>
-                    <option value={8}>Quiz Level 8</option>
-                    <option value={9}>Quiz Level 9</option>
-                    <option value={10}>Quiz Level 10</option>
+                    {quizLevels.length > 0 ? (
+                      quizLevels.map((level) => (
+                        <option key={level} value={level}>
+                          Quiz Level {level}
+                        </option>
+                      ))
+                    ) : (
+                      // Fallback to default levels if API hasn't loaded yet
+                      Array.from({ length: 10 }, (_, i) => i + 1).map((level) => (
+                        <option key={level} value={level}>
+                          Quiz Level {level}
+                        </option>
+                      ))
+                    )}
                   </select>
                   <p className="help-text">
                     Select the quiz level for which to generate a quiz. The system will automatically select 20 questions with adaptive difficulty progression.
