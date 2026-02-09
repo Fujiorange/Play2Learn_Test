@@ -29,6 +29,7 @@ export default function ManageClasses() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
+  const csvFileInputRef = React.useRef(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -295,14 +296,19 @@ Primary 1A,Primary 1,Mathematics,,,,,
 
       if (response.success) {
         setUploadResult(response);
-        setMessage({ 
-          type: 'success', 
-          text: `Class "${response.className}" created successfully! ${response.usersCreated.teachers + response.usersCreated.students + response.usersCreated.parents} users created.` 
-        });
+        const totalCreated = response.usersCreated.teachers + response.usersCreated.students + response.usersCreated.parents;
+        const totalAssigned = response.usersAssigned.teachers + response.usersAssigned.parents;
+        let message = `Class "${response.className}" created successfully! ${totalCreated} new users created`;
+        if (totalAssigned > 0) {
+          message += ` and ${totalAssigned} existing users assigned`;
+        }
+        message += '.';
+        setMessage({ type: 'success', text: message });
         setCsvFile(null);
-        // Reset file input
-        const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) fileInput.value = '';
+        // Reset file input using ref
+        if (csvFileInputRef.current) {
+          csvFileInputRef.current.value = '';
+        }
         
         // Reload classes and users
         loadClasses();
@@ -623,6 +629,7 @@ Primary 1A,Primary 1,Mathematics,,,,,
 
         <label style={styles.label}>Select CSV File</label>
         <input
+          ref={csvFileInputRef}
           type="file"
           accept=".csv"
           onChange={handleCSVFileChange}

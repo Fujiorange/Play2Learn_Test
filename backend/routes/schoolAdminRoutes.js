@@ -4382,7 +4382,7 @@ router.post('/classes/bulk-upload-csv', authenticateSchoolAdmin, upload.single('
     const createdUsers = []; // Store temp passwords for pending credentials
 
     for (const [index, row] of userRows.entries()) {
-      const rowNumber = index + 2; // +2 because first row is class metadata, and CSV is 0-indexed
+      const rowNumber = index + 2; // +1 for header row, +1 for 0-indexed to 1-indexed conversion
       
       const name = (row.Name || row.name || '').trim();
       const email = (row.Email || row.email || '').trim();
