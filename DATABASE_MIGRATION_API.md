@@ -220,7 +220,7 @@ const DatabaseMigration = () => {
   };
 
   const runMigration = async () => {
-    if (!confirm('Are you sure you want to drop the license type index? This cannot be undone easily.')) {
+    if (!confirm('This will allow multiple licenses with the same type. Continue?')) {
       return;
     }
 

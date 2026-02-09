@@ -114,9 +114,9 @@ This method allows you to run the migration through the admin panel without comm
    }
    ```
 
-### Verify the Fix
+### Verification
 
-5. **Verify the fix**:
+After running the migration (using either method above):
    - Navigate to https://play2learn-test.onrender.com/p2ladmin/licenses
    - Try creating a second "paid" license type
    - It should succeed without the duplicate key error
