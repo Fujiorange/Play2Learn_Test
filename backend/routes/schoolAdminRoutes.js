@@ -4102,7 +4102,12 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
 
     const [month, year] = expiryDate.split('/');
     const monthNum = parseInt(month, 10);
-    const yearNum = parseInt('20' + year, 10);
+    // Handle year: assume 2000s for years 00-99
+    // For production, consider cards typically expire within 10-20 years from now
+    const yearNum = parseInt(year, 10);
+    const currentYear = new Date().getFullYear();
+    const currentCentury = Math.floor(currentYear / 100) * 100;
+    const fullYear = currentCentury + yearNum;
     
     if (monthNum < 1 || monthNum > 12) {
       return res.status(400).json({ 
@@ -4115,7 +4120,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     
-    if (yearNum < currentYear || (yearNum === currentYear && monthNum < currentMonth)) {
+    if (fullYear < currentYear || (fullYear === currentYear && monthNum < currentMonth)) {
       return res.status(400).json({ 
         success: false, 
         error: 'Card has expired' 
@@ -4168,6 +4173,9 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     // Simulate a small delay for payment processing
     await new Promise(resolve => setTimeout(resolve, 1000));
 
+    // Save previous plan name before updating
+    const previousPlanName = school.licenseId ? school.licenseId.name : 'Unknown';
+
     // Payment successful - Update school's license
     school.licenseId = newLicense._id;
     
@@ -4184,7 +4192,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
       success: true,
       message: 'Payment successful! Your license has been upgraded.',
       upgradeDetails: {
-        previousPlan: school.licenseId ? school.licenseId.name : 'Unknown',
+        previousPlan: previousPlanName,
         newPlan: newLicense.name,
         billingCycle,
         amountPaid: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly,

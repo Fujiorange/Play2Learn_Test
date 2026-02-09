@@ -151,16 +151,19 @@ function SchoolLicenseView() {
     } else {
       const [month, year] = paymentData.expiryDate.split('/');
       const monthNum = parseInt(month, 10);
-      const yearNum = parseInt('20' + year, 10);
+      // Handle year: assume current century for years 00-99
+      const yearNum = parseInt(year, 10);
+      const currentYear = new Date().getFullYear();
+      const currentCentury = Math.floor(currentYear / 100) * 100;
+      const fullYear = currentCentury + yearNum;
       
       if (monthNum < 1 || monthNum > 12) {
         errors.expiryDate = 'Invalid month (must be 01-12)';
       } else {
         const now = new Date();
-        const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
         
-        if (yearNum < currentYear || (yearNum === currentYear && monthNum < currentMonth)) {
+        if (fullYear < currentYear || (fullYear === currentYear && monthNum < currentMonth)) {
           errors.expiryDate = 'Card has expired';
         }
       }
