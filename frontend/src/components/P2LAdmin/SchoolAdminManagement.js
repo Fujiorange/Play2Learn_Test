@@ -199,7 +199,7 @@ function SchoolAdminManagement() {
             <option value="">-- Select a School --</option>
             {schools.map((school) => (
               <option key={school._id} value={school._id}>
-                {school.organization_name} ({school.plan.toUpperCase()})
+                {school.organization_name} ({school.licenseId?.name || 'Unknown License'})
               </option>
             ))}
           </select>

@@ -537,7 +537,8 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
           schoolId: schoolId,
           emailVerified: true,
           accountActive: true,
-          requirePasswordChange: true
+          requirePasswordChange: true,
+          tempPassword: tempPassword // Store for credential management
         });
 
         await admin.save();
@@ -734,6 +735,7 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
     // Update admin with new password and require password change
     admin.password = hashedPassword;
     admin.requirePasswordChange = true;
+    admin.tempPassword = tempPassword; // Store for one-time viewing
     await admin.save();
     
     // Send email with new credentials
