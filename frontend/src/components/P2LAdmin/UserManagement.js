@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getAllUsers, getUserSchools, bulkDeleteUsers } from '../../services/p2lAdminService';
+import PinModal from './PinModal';
 import './UserManagement.css';
 
 function UserManagement() {
@@ -14,6 +15,7 @@ function UserManagement() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [deleting, setDeleting] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [showPinModal, setShowPinModal] = useState(false);
 
   const roles = [
     'Platform Admin',
@@ -108,8 +110,12 @@ function UserManagement() {
       return;
     }
 
-    // Prompt for PIN
-    const pin = window.prompt('Enter PIN to confirm deletion:');
+    // Show PIN modal
+    setShowPinModal(true);
+  };
+
+  const handlePinConfirm = async (pin) => {
+    setShowPinModal(false);
     
     if (!pin) {
       return; // User cancelled
@@ -133,6 +139,10 @@ function UserManagement() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handlePinCancel = () => {
+    setShowPinModal(false);
   };
 
   const clearFilters = () => {
@@ -383,6 +393,13 @@ function UserManagement() {
           )}
         </div>
       </div>
+
+      <PinModal
+        isOpen={showPinModal}
+        onConfirm={handlePinConfirm}
+        onCancel={handlePinCancel}
+        message={`You are about to delete ${selectedUsers.length} user(s). Enter PIN to confirm:`}
+      />
     </div>
   );
 }

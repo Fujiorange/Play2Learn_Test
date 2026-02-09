@@ -21,6 +21,7 @@ const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
+const USER_DELETION_PIN = process.env.USER_DELETION_PIN || '1234';
 
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
@@ -2242,7 +2243,7 @@ router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
     }
 
     // Validate PIN
-    if (pin !== '1234') {
+    if (pin !== USER_DELETION_PIN) {
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid PIN. Please enter the correct PIN to delete users.' 
