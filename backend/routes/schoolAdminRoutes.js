@@ -2414,6 +2414,387 @@ router.get('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
   }
 });
 
+// BULK CLASS CREATION via CSV
+router.post('/classes/bulk-create', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
+  console.log('\n📤 Bulk class creation request received');
+  
+  if (!req.file) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'No file uploaded' 
+    });
+  }
+
+  const schoolAdmin = req.schoolAdmin;
+  if (!schoolAdmin.schoolId) {
+    return res.status(400).json({
+      success: false,
+      error: 'School admin must be associated with a school'
+    });
+  }
+
+  const results = {
+    classesCreated: 0,
+    teachersCreated: 0,
+    studentsCreated: 0,
+    parentsCreated: 0,
+    teachersAssigned: 0,
+    studentsAssigned: 0,
+    errors: [],
+    warnings: []
+  };
+
+  try {
+    console.log('📄 Parsing CSV file...');
+    
+    // Parse entire CSV file
+    const rows = [];
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (row) => rows.push(row))
+        .on('end', () => {
+          console.log(`✅ Found ${rows.length} rows in CSV`);
+          resolve();
+        })
+        .on('error', (error) => {
+          console.error('❌ CSV parsing error:', error);
+          reject(error);
+        });
+    });
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'CSV file is empty'
+      });
+    }
+
+    // Get school data for license checking
+    const schoolData = await School.findById(schoolAdmin.schoolId).populate('licenseId');
+    if (!schoolData) {
+      throw new Error('School not found');
+    }
+    
+    if (!schoolData.licenseId) {
+      throw new Error('School does not have a license assigned');
+    }
+
+    // Extract class metadata from first row
+    const classNameField = rows[0]['Class Name'] || rows[0]['class_name'] || rows[0]['ClassName'];
+    const gradeField = rows[0]['Grade'] || rows[0]['grade'];
+    const subjectField = rows[0]['Subject'] || rows[0]['subject'];
+
+    if (!classNameField || !gradeField || !subjectField) {
+      return res.status(400).json({
+        success: false,
+        error: 'CSV must include Class Name, Grade, and Subject in the first row'
+      });
+    }
+
+    console.log(`\n📚 Creating class: ${classNameField} (${gradeField}, ${subjectField})`);
+
+    // Check if class already exists
+    const existingClass = await Class.findOne({
+      class_name: classNameField,
+      school_id: schoolAdmin.schoolId
+    });
+
+    if (existingClass) {
+      return res.status(409).json({
+        success: false,
+        error: `A class with name "${classNameField}" already exists`
+      });
+    }
+
+    // Check class limit
+    const currentClasses = schoolData.current_classes || 0;
+    const classLimit = schoolData.licenseId.maxClasses;
+    
+    if (classLimit !== -1 && currentClasses >= classLimit) {
+      return res.status(403).json({
+        success: false,
+        error: `Class limit reached (${currentClasses}/${classLimit}). Please upgrade your plan.`
+      });
+    }
+
+    // Create the class first
+    const newClass = new Class({
+      class_name: classNameField,
+      grade: gradeField,
+      subjects: [subjectField],
+      teachers: [],
+      students: [],
+      school_id: schoolAdmin.schoolId
+    });
+
+    await newClass.save();
+    results.classesCreated++;
+
+    // Update school class count
+    schoolData.current_classes = (schoolData.current_classes || 0) + 1;
+    await schoolData.save();
+
+    console.log(`✅ Class created: ${newClass._id}`);
+
+    // Process teacher and student rows
+    let teacherProcessed = false;
+    const studentIds = [];
+    let currentTeacherCount = schoolData.current_teachers || 0;
+    let currentStudentCount = schoolData.current_students || 0;
+    let currentParentCount = schoolData.current_parents || 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNumber = i + 2; // Account for header row
+
+      // Check if this row is for a teacher
+      const teacherName = row['Teacher Name'] || row['teacher_name'] || row['TeacherName'];
+      const teacherEmail = row['Teacher Email'] || row['teacher_email'] || row['TeacherEmail'];
+      const teacherRole = row['Teacher Role'] || row['teacher_role'] || row['TeacherRole'];
+
+      if (teacherName && teacherEmail && teacherRole && teacherRole.toLowerCase() === 'teacher') {
+        if (teacherProcessed) {
+          results.warnings.push({
+            row: rowNumber,
+            message: 'Only one teacher per class is allowed. Skipping additional teacher.'
+          });
+          continue;
+        }
+
+        // Check teacher limit
+        const teacherLimit = schoolData.licenseId.maxTeachers;
+        if (teacherLimit !== -1 && currentTeacherCount >= teacherLimit) {
+          results.errors.push({
+            row: rowNumber,
+            email: teacherEmail,
+            error: `Teacher limit reached (${currentTeacherCount}/${teacherLimit})`
+          });
+          continue;
+        }
+
+        // Check if teacher already exists
+        let teacher = await User.findOne({ 
+          email: teacherEmail.toLowerCase().trim() 
+        });
+
+        if (teacher) {
+          // Teacher exists, just assign to class
+          if (!teacher.assignedClasses) {
+            teacher.assignedClasses = [];
+          }
+          if (!teacher.assignedClasses.includes(newClass._id.toString())) {
+            teacher.assignedClasses.push(newClass._id.toString());
+            await teacher.save();
+          }
+          
+          newClass.teachers.push(teacher._id);
+          results.teachersAssigned++;
+          teacherProcessed = true;
+          
+          console.log(`✅ Existing teacher assigned: ${teacherEmail}`);
+        } else {
+          // Create new teacher
+          const tempPassword = generateTempPassword('Teacher');
+          const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+          teacher = await User.create({
+            name: teacherName,
+            email: teacherEmail.toLowerCase().trim(),
+            password: hashedPassword,
+            role: 'Teacher',
+            schoolId: schoolAdmin.schoolId,
+            subject: subjectField,
+            assignedClasses: [newClass._id.toString()],
+            emailVerified: true,
+            requirePasswordChange: true,
+            tempPassword: tempPassword,
+            credentialsSent: false,
+            createdBy: schoolAdmin._id.toString()
+          });
+
+          newClass.teachers.push(teacher._id);
+          results.teachersCreated++;
+          results.teachersAssigned++;
+          currentTeacherCount++;
+          teacherProcessed = true;
+
+          console.log(`✅ New teacher created: ${teacherEmail}`);
+        }
+      }
+
+      // Check if this row is for a student
+      const studentName = row['Student Name'] || row['student_name'] || row['StudentName'];
+      const studentEmail = row['Student Email'] || row['student_email'] || row['StudentEmail'];
+      const studentRole = row['Student Role'] || row['student_role'] || row['StudentRole'];
+      const parentEmail = row['Linked Parent Email'] || row['linked_parent_email'] || row['LinkedParentEmail'] || row['Parent Email'] || row['parent_email'] || row['ParentEmail'];
+
+      if (studentName && studentEmail && studentRole && studentRole.toLowerCase() === 'student') {
+        // Check student limit
+        const studentLimit = schoolData.licenseId.maxStudents;
+        if (studentLimit !== -1 && currentStudentCount >= studentLimit) {
+          results.errors.push({
+            row: rowNumber,
+            email: studentEmail,
+            error: `Student limit reached (${currentStudentCount}/${studentLimit})`
+          });
+          continue;
+        }
+
+        // Check if student already exists
+        let student = await User.findOne({ 
+          email: studentEmail.toLowerCase().trim() 
+        });
+
+        if (student) {
+          // Student exists, just assign to class
+          student.class = newClass._id.toString();
+          student.gradeLevel = gradeField;
+          await student.save();
+          
+          newClass.students.push(student._id);
+          studentIds.push(student._id);
+          results.studentsAssigned++;
+          
+          console.log(`✅ Existing student assigned: ${studentEmail}`);
+        } else {
+          // Create new student
+          const tempPassword = generateTempPassword('Student');
+          const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+          student = await User.create({
+            name: studentName,
+            email: studentEmail.toLowerCase().trim(),
+            password: hashedPassword,
+            role: 'Student',
+            schoolId: schoolAdmin.schoolId,
+            class: newClass._id.toString(),
+            gradeLevel: gradeField,
+            emailVerified: true,
+            requirePasswordChange: true,
+            tempPassword: tempPassword,
+            credentialsSent: false,
+            createdBy: schoolAdmin._id.toString()
+          });
+
+          newClass.students.push(student._id);
+          studentIds.push(student._id);
+          results.studentsCreated++;
+          results.studentsAssigned++;
+          currentStudentCount++;
+
+          console.log(`✅ New student created: ${studentEmail}`);
+        }
+
+        // Handle parent linking if parent email is provided
+        if (parentEmail && parentEmail.trim()) {
+          const parentEmailClean = parentEmail.toLowerCase().trim();
+          
+          // Check if parent already exists
+          let parent = await User.findOne({ 
+            email: parentEmailClean 
+          });
+
+          if (parent) {
+            // Parent exists, link to student if not already linked
+            if (!parent.linkedStudents) {
+              parent.linkedStudents = [];
+            }
+            
+            const alreadyLinked = parent.linkedStudents.some(
+              link => link.studentId.toString() === student._id.toString()
+            );
+            
+            if (!alreadyLinked) {
+              parent.linkedStudents.push({
+                studentId: student._id,
+                relationship: 'Parent'
+              });
+              await parent.save();
+            }
+            
+            console.log(`✅ Student linked to existing parent: ${parentEmailClean}`);
+          } else {
+            // Check parent limit
+            const parentLimit = schoolData.licenseId.maxParents;
+            if (parentLimit !== -1 && currentParentCount >= parentLimit) {
+              results.warnings.push({
+                row: rowNumber,
+                message: `Parent limit reached (${currentParentCount}/${parentLimit}). Parent not created for ${parentEmailClean}`
+              });
+              continue;
+            }
+
+            // Create new parent
+            const tempPassword = generateTempPassword('Parent');
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+            // Use student name to derive parent name if not provided
+            const parentName = `Parent of ${studentName}`;
+
+            parent = await User.create({
+              name: parentName,
+              email: parentEmailClean,
+              password: hashedPassword,
+              role: 'Parent',
+              schoolId: schoolAdmin.schoolId,
+              linkedStudents: [{
+                studentId: student._id,
+                relationship: 'Parent'
+              }],
+              emailVerified: true,
+              requirePasswordChange: true,
+              tempPassword: tempPassword,
+              credentialsSent: false,
+              createdBy: schoolAdmin._id.toString()
+            });
+
+            results.parentsCreated++;
+            currentParentCount++;
+
+            console.log(`✅ New parent created: ${parentEmailClean}`);
+          }
+        }
+      }
+    }
+
+    // Save the class with all teachers and students
+    await newClass.save();
+
+    // Update school counts
+    schoolData.current_teachers = currentTeacherCount;
+    schoolData.current_students = currentStudentCount;
+    schoolData.current_parents = currentParentCount;
+    await schoolData.save();
+
+    console.log('\n✅ Bulk class creation completed successfully');
+
+    res.status(201).json({
+      success: true,
+      message: `Class created successfully with ${results.teachersCreated + results.teachersAssigned} teacher(s) and ${results.studentsCreated + results.studentsAssigned} student(s)`,
+      data: {
+        classId: newClass._id,
+        className: newClass.class_name,
+        grade: newClass.grade,
+        subject: newClass.subjects[0],
+        summary: results
+      }
+    });
+
+  } catch (error) {
+    console.error('Bulk class creation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to create class from CSV'
+    });
+  } finally {
+    // Clean up uploaded file
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+  }
+});
+
 // CREATE new class
 router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
   try {
