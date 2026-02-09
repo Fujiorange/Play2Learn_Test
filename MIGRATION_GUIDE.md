@@ -9,10 +9,10 @@ The `licenses` collection has a unique index on the `type` field (`type_1`), whi
 E11000 duplicate key error collection: play2learn.licenses index: type_1 dup key: { type: "paid" }
 ```
 
-### Solution
-Run the migration script to drop the `type_1` unique index.
+### Solutions
+There are **two ways** to run the migration:
 
-### Steps
+#### Option 1: Command-Line Script (Recommended for local development)
 
 1. **Backup your database** (recommended before any migration):
    ```bash
@@ -47,6 +47,74 @@ Run the migration script to drop the `type_1` unique index.
    ✅ Migration completed successfully!
    📝 Note: Multiple licenses with the same type (free/paid) can now be created.
    ```
+
+#### Option 2: Admin API Endpoint (Recommended for production)
+
+This method allows you to run the migration through the admin panel without command-line access.
+
+1. **Check migration status** (optional):
+   ```bash
+   GET https://play2learn-test.onrender.com/api/p2ladmin/migrations/status
+   Authorization: Bearer <your-admin-token>
+   ```
+
+   **Response**:
+   ```json
+   {
+     "success": true,
+     "data": {
+       "licenseTypeIndexExists": true,
+       "migrationNeeded": true,
+       "allIndexes": [
+         { "name": "_id_", "keys": { "_id": 1 }, "unique": false },
+         { "name": "name_1", "keys": { "name": 1 }, "unique": true },
+         { "name": "type_1", "keys": { "type": 1 }, "unique": true }
+       ],
+       "recommendations": [
+         "The type_1 unique index should be dropped to allow multiple licenses with the same type",
+         "Use POST /api/p2ladmin/migrations/drop-license-type-index to run the migration"
+       ]
+     }
+   }
+   ```
+
+2. **Run the migration**:
+   ```bash
+   POST https://play2learn-test.onrender.com/api/p2ladmin/migrations/drop-license-type-index
+   Authorization: Bearer <your-admin-token>
+   ```
+
+   **Success Response**:
+   ```json
+   {
+     "success": true,
+     "message": "Successfully dropped type_1 unique index",
+     "details": {
+       "indexDropped": "type_1",
+       "remainingIndexes": [
+         { "name": "_id_", "keys": { "_id": 1 }, "unique": false },
+         { "name": "name_1", "keys": { "name": 1 }, "unique": true }
+       ]
+     },
+     "note": "Multiple licenses with the same type (free/paid) can now be created."
+   }
+   ```
+
+   **If Already Migrated**:
+   ```json
+   {
+     "success": true,
+     "message": "type_1 index does not exist. No action needed.",
+     "details": {
+       "currentIndexes": [
+         { "name": "_id_", "keys": { "_id": 1 }, "unique": false },
+         { "name": "name_1", "keys": { "name": 1 }, "unique": true }
+       ]
+     }
+   }
+   ```
+
+### Verify the Fix
 
 5. **Verify the fix**:
    - Navigate to https://play2learn-test.onrender.com/p2ladmin/licenses
