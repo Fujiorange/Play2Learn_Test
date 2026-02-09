@@ -16,6 +16,19 @@ class AuthService {
     }
   }
 
+  async registerSchoolAdmin(userData) {
+    try {
+      const res = await fetch(`${API_URL}/mongo/auth/register-school-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+      return await res.json();
+    } catch (e) {
+      return { success: false, error: 'Registration failed. Please try again.' };
+    }
+  }
+
   async login(email, password) {
     try {
       const res = await fetch(`${API_URL}/mongo/auth/login`, {

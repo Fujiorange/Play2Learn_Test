@@ -7,12 +7,16 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const School = require('../models/School');
 const Class = require('../models/Class');
+const SupportTicket = require('../models/SupportTicket');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+
+// Default stock for shop items (unlimited-like value)
+const DEFAULT_SHOP_ITEM_STOCK = 999;
 
 // ==================== AUTHENTICATION MIDDLEWARE ====================
 const authenticateToken = (req, res, next) => {
@@ -63,7 +67,7 @@ const upload = multer({ dest: 'uploads/' });
 
 // ==================== LICENSE CHECKING HELPER ====================
 async function checkLicenseAvailability(schoolId, role) {
-  const school = await School.findById(schoolId);
+  const school = await School.findById(schoolId).populate('licenseId');
   
   if (!school) {
     return { available: false, error: 'School not found' };
@@ -72,12 +76,19 @@ async function checkLicenseAvailability(schoolId, role) {
   if (!school.is_active) {
     return { available: false, error: 'School is not active' };
   }
+
+  if (!school.licenseId) {
+    return { available: false, error: 'School has no license assigned' };
+  }
+  
+  const license = school.licenseId;
   
   if (role === 'Teacher') {
     const currentTeachers = school.current_teachers || 0;
-    const teacherLimit = school.plan_info.teacher_limit;
+    const teacherLimit = license.maxTeachers;
     
-    if (currentTeachers >= teacherLimit) {
+    // -1 means unlimited
+    if (teacherLimit !== -1 && currentTeachers >= teacherLimit) {
       return { 
         available: false, 
         error: `Teacher limit reached (${currentTeachers}/${teacherLimit}). Please upgrade your plan.` 
@@ -88,9 +99,10 @@ async function checkLicenseAvailability(schoolId, role) {
   
   if (role === 'Student') {
     const currentStudents = school.current_students || 0;
-    const studentLimit = school.plan_info.student_limit;
+    const studentLimit = license.maxStudents;
     
-    if (currentStudents >= studentLimit) {
+    // -1 means unlimited
+    if (studentLimit !== -1 && currentStudents >= studentLimit) {
       return { 
         available: false, 
         error: `Student limit reached (${currentStudents}/${studentLimit}). Please upgrade your plan.` 
@@ -183,12 +195,19 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
       });
     }
     
-    const school = await School.findById(schoolAdmin.schoolId);
+    const school = await School.findById(schoolAdmin.schoolId).populate('licenseId');
     
     if (!school) {
       return res.status(404).json({
         success: false,
         error: 'School not found'
+      });
+    }
+    
+    if (!school.licenseId) {
+      return res.status(500).json({
+        success: false,
+        error: 'School does not have a license assigned'
       });
     }
     
@@ -205,35 +224,37 @@ router.get('/school-info', authenticateSchoolAdmin, async (req, res) => {
       await school.save();
     }
     
+    const license = school.licenseId;
+    
     res.json({
       success: true,
       school: {
         id: school._id,
         organization_name: school.organization_name,
         organization_type: school.organization_type,
-        plan: school.plan,
+        plan: license.name, // For backward compatibility
         plan_info: {
-          teacher_limit: school.plan_info.teacher_limit,
-          student_limit: school.plan_info.student_limit,
-          price: school.plan_info.price
+          teacher_limit: license.maxTeachers,
+          student_limit: license.maxStudents,
+          price: license.priceMonthly
         },
         current_teachers: currentTeachers,
         current_students: currentStudents,
         is_active: school.is_active
       },
       license: {
-        plan: school.plan,
+        plan: license.name,
         teachers: {
           current: currentTeachers,
-          limit: school.plan_info.teacher_limit,
-          available: Math.max(0, school.plan_info.teacher_limit - currentTeachers),
-          limitReached: currentTeachers >= school.plan_info.teacher_limit
+          limit: license.maxTeachers,
+          available: license.maxTeachers === -1 ? -1 : Math.max(0, license.maxTeachers - currentTeachers),
+          limitReached: license.maxTeachers !== -1 && currentTeachers >= license.maxTeachers
         },
         students: {
           current: currentStudents,
-          limit: school.plan_info.student_limit,
-          available: Math.max(0, school.plan_info.student_limit - currentStudents),
-          limitReached: currentStudents >= school.plan_info.student_limit
+          limit: license.maxStudents,
+          available: license.maxStudents === -1 ? -1 : Math.max(0, license.maxStudents - currentStudents),
+          limitReached: license.maxStudents !== -1 && currentStudents >= license.maxStudents
         }
       }
     });
@@ -294,9 +315,12 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
 
     console.log(`âœ… Found ${users.length} users matching filter`);
 
-    // Map class values to display names
-    // Note: user.class can be either an ObjectId OR a class name string
-    const classValues = [...new Set(users.map(u => u.class).filter(Boolean))];
+    // Map class IDs to names for display
+    // Collect class IDs from students (class field) and teachers (assignedClasses array)
+    const studentClassIds = users.map(u => u.class).filter(Boolean);
+    const teacherClassIds = users.filter(u => u.role === 'Teacher' && u.assignedClasses && u.assignedClasses.length > 0)
+      .flatMap(u => u.assignedClasses);
+    const classIds = [...new Set([...studentClassIds, ...teacherClassIds])];
     const classLookup = {};
     
     if (classValues.length > 0) {
@@ -381,6 +405,15 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
         const classKey = user.class ? user.class.toString() : null;
         const userIdStr = user._id.toString();
         
+        // For teachers, resolve assignedClasses IDs to class names
+        let teacherClassName = null;
+        if (user.role === 'Teacher' && user.assignedClasses && user.assignedClasses.length > 0) {
+          const resolvedClassNames = user.assignedClasses
+            .map(classId => classLookup[classId] || null)
+            .filter(Boolean);
+          teacherClassName = resolvedClassNames.length > 0 ? resolvedClassNames.join(', ') : null;
+        }
+        
         // Build response object
         const result = {
           id: user._id,
@@ -388,7 +421,7 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
           email: user.email,
           role: user.role,
           class: user.class,
-          className: classKey ? (classLookup[classKey] || classKey) : null,
+          className: user.role === 'Teacher' ? teacherClassName : (classKey ? (classLookup[classKey] || classKey) : null),
           gradeLevel: user.gradeLevel,
           subject: user.subject,
           contact: user.contact,
@@ -604,9 +637,13 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     console.log('\nðŸ”„ Processing students...\n');
 
     // Get school data once for all operations
-    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolData = await School.findById(schoolAdmin.schoolId).populate('licenseId');
     if (!schoolData) {
       throw new Error('School not found');
+    }
+    
+    if (!schoolData.licenseId) {
+      throw new Error('School does not have a license assigned');
     }
 
     // Build a class name to ID lookup for the school
@@ -626,10 +663,10 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         
         // Check license availability using cached school data
         const currentStudents = (schoolData.current_students || 0) + studentsCreatedCount;
-        const studentLimit = schoolData.plan_info.student_limit;
+        const studentLimit = schoolData.licenseId.maxStudents;
         
-        if (currentStudents >= studentLimit) {
-          console.log(`âš ï¸  License limit reached - stopping bulk import`);
+        if (studentLimit !== -1 && currentStudents >= studentLimit) {
+          console.log(`⚠️  License limit reached - stopping bulk import`);
           results.limitReached = true;
           const processedCount = results.created + results.failed;
           results.errors.push({ 
@@ -841,9 +878,13 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
     });
 
     // Get school data once for all operations
-    const schoolData = await School.findById(schoolAdmin.schoolId);
+    const schoolData = await School.findById(schoolAdmin.schoolId).populate('licenseId');
     if (!schoolData) {
       throw new Error('School not found');
+    }
+    
+    if (!schoolData.licenseId) {
+      throw new Error('School does not have a license assigned');
     }
     
     // Track teachers created in this batch for atomic update at the end
@@ -853,10 +894,10 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
       try {
         // Check license availability using cached school data
         const currentTeachers = (schoolData.current_teachers || 0) + teachersCreatedCount;
-        const teacherLimit = schoolData.plan_info.teacher_limit;
+        const teacherLimit = schoolData.licenseId.maxTeachers;
         
-        if (currentTeachers >= teacherLimit) {
-          console.log(`âš ï¸  License limit reached - stopping bulk import`);
+        if (teacherLimit !== -1 && currentTeachers >= teacherLimit) {
+          console.log(`⚠️  License limit reached - stopping bulk import`);
           results.limitReached = true;
           const processedCount = results.created + results.failed;
           results.errors.push({ 
@@ -2443,6 +2484,27 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
         error: 'Invalid school ID format' 
       });
     }
+
+    // Check class limit
+    const school = await School.findById(schoolObjectId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    if (!school.licenseId) {
+      return res.status(400).json({ success: false, error: 'School has no license assigned' });
+    }
+
+    const license = school.licenseId;
+    const currentClasses = school.current_classes || 0;
+    
+    // -1 means unlimited
+    if (license.maxClasses !== -1 && currentClasses >= license.maxClasses) {
+      return res.status(403).json({ 
+        success: false, 
+        error: `Class limit reached (${currentClasses}/${license.maxClasses}). Please upgrade your plan.` 
+      });
+    }
     
     // Check if class name already exists for this school
     const existingClass = await Class.findOne({
@@ -2465,6 +2527,10 @@ router.post('/classes', authenticateSchoolAdmin, async (req, res) => {
     });
     
     await newClass.save();
+
+    // Update school class count
+    school.current_classes = (school.current_classes || 0) + 1;
+    await school.save();
     
     // Update users with class assignment
     if (teachers && teachers.length > 0) {
@@ -3031,18 +3097,29 @@ router.get('/parents/:parentId/students', authenticateSchoolAdmin, async (req, r
       return res.status(403).json({ success: false, error: 'You can only manage users from your school' });
     }
     
-    // Get linked students with details
+    // Get linked students with details (students linked to THIS parent)
     const linkedStudentIds = parent.linkedStudents?.map(ls => ls.studentId) || [];
     const linkedStudents = await User.find({
       _id: { $in: linkedStudentIds },
       role: 'Student'
     }).select('_id name email class gradeLevel');
     
-    // Get all students in the school that are NOT linked to this parent
+    // Find all students that are already linked to ANY parent in the school
+    const allParentsWithLinks = await User.find({
+      schoolId: schoolAdmin.schoolId,
+      role: 'Parent',
+      'linkedStudents.0': { $exists: true }
+    }).select('linkedStudents');
+    
+    // Collect all student IDs that are linked to any parent (as ObjectIds for efficient query)
+    const allLinkedStudentIds = allParentsWithLinks.flatMap(p => p.linkedStudents.map(ls => ls.studentId));
+    
+    // Get all students in the school that are NOT linked to ANY parent
+    // (since each student can only have 1 parent)
     const availableStudents = await User.find({
       schoolId: schoolAdmin.schoolId,
       role: 'Student',
-      _id: { $nin: linkedStudentIds }
+      _id: { $nin: allLinkedStudentIds }
     }).select('_id name email class gradeLevel');
     
     // Build class lookup map to resolve class IDs to class names
@@ -3252,6 +3329,924 @@ router.put('/students/:studentId/parent', authenticateSchoolAdmin, async (req, r
   } catch (error) {
     console.error('Update student parent error:', error);
     res.status(500).json({ success: false, error: 'Failed to update student-parent link' });
+  }
+});
+
+// ==================== SUPPORT TICKET MANAGEMENT ====================
+// Get all school-related support tickets for this school
+router.get('/support-tickets', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { status, sortBy, sortOrder, search } = req.query;
+    
+    // Get school admin info to filter tickets by school
+    const schoolAdmin = await User.findById(req.user.userId);
+    if (!schoolAdmin || !schoolAdmin.school) {
+      return res.status(400).json({
+        success: false,
+        error: 'School information not found'
+      });
+    }
+    
+    // Build query - only school-related tickets from this school
+    const query = { 
+      category: 'school',
+      school_id: schoolAdmin.school
+    };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    // Build sort object
+    const sortOptions = {};
+    const validSortFields = ['created_at', 'updated_at', 'status', 'priority'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+    sortOptions[sortField] = sortOrder === 'asc' ? 1 : -1;
+    
+    // Get tickets
+    const tickets = await SupportTicket.find(query)
+      .populate('user_id', 'name email role')
+      .populate('school_id', 'name')
+      .sort(sortOptions)
+      .lean();
+    
+    // Filter by search term if provided
+    let filteredTickets = tickets;
+    if (search && search.trim() !== '') {
+      const searchLower = search.toLowerCase();
+      filteredTickets = tickets.filter(ticket => 
+        ticket.subject?.toLowerCase().includes(searchLower) ||
+        ticket.message?.toLowerCase().includes(searchLower) ||
+        ticket.user_name?.toLowerCase().includes(searchLower) ||
+        ticket.user_email?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    res.json({
+      success: true,
+      tickets: filteredTickets.map(ticket => ({
+        _id: ticket._id,
+        user_name: ticket.user_name || 'Unknown',
+        user_email: ticket.user_email || 'N/A',
+        user_role: ticket.user_role || 'Unknown',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      })),
+      total: filteredTickets.length
+    });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support tickets' 
+    });
+  }
+});
+
+// Get single support ticket
+router.get('/support-tickets/:id', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.school // Ensure admin can only view tickets from their school
+    })
+      .populate('user_id', 'name email school')
+      .populate('school_id', 'name')
+      .lean();
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // If ticket is 'open' and admin is viewing it, change status to 'pending'
+    const updatedStatus = ticket.status === 'open' ? 'pending' : ticket.status;
+    if (ticket.status === 'open') {
+      await SupportTicket.findByIdAndUpdate(req.params.id, {
+        status: 'pending',
+        updated_at: new Date()
+      });
+    }
+    
+    res.json({
+      success: true,
+      ticket: {
+        _id: ticket._id,
+        user_name: ticket.user_name || 'Unknown',
+        user_email: ticket.user_email || 'N/A',
+        user_role: ticket.user_role || 'Unknown',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: updatedStatus, // Return the updated status
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support ticket' 
+    });
+  }
+});
+
+// Reply to a support ticket
+router.post('/support-tickets/:id/reply', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { response } = req.body;
+    
+    if (!response || response.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Response message is required' 
+      });
+    }
+    
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.school
+    });
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    ticket.admin_response = response;
+    ticket.responded_by = req.user.userId;
+    ticket.responded_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Reply sent successfully',
+      ticket: {
+        _id: ticket._id,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        status: ticket.status
+      }
+    });
+  } catch (error) {
+    console.error('Reply to support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send reply' 
+    });
+  }
+});
+
+// Close a support ticket
+router.post('/support-tickets/:id/close', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.school
+    });
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    ticket.status = 'closed';
+    ticket.closed_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Ticket closed successfully',
+      ticket: {
+        _id: ticket._id,
+        status: ticket.status,
+        closed_at: ticket.closed_at
+      }
+    });
+  } catch (error) {
+    console.error('Close support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to close ticket' 
+    });
+  }
+});
+
+// Get support ticket statistics
+router.get('/support-tickets-stats', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const [openCount, pendingCount, closedCount] = await Promise.all([
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'open' }),
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'pending' }),
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'closed' })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        open: openCount,
+        pending: pendingCount,
+        closed: closedCount,
+        total: openCount + pendingCount + closedCount
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch ticket statistics' 
+    });
+  }
+});
+
+// ==================== SCHOOL ADMIN'S OWN SUPPORT TICKETS ====================
+// These are tickets created by school admin for P2L Admin (website-related)
+
+// Create a support ticket for P2L Admin
+router.post('/my-support-tickets', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { subject, message, priority } = req.body;
+    
+    if (!subject || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Subject and message are required'
+      });
+    }
+    
+    const schoolAdmin = await User.findById(req.user.userId);
+    if (!schoolAdmin) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const ticket = await SupportTicket.create({
+      user_id: schoolAdmin._id,
+      user_name: schoolAdmin.name,
+      user_email: schoolAdmin.email,
+      user_role: 'School Admin',
+      school_id: schoolAdmin.school,
+      school_name: schoolAdmin.schoolName || '',
+      subject,
+      category: 'website', // School admins only create website-related tickets
+      message,
+      status: 'open',
+      priority: priority || 'normal'
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Support ticket created successfully',
+      ticketId: ticket._id,
+      ticket: {
+        id: ticket._id,
+        subject: ticket.subject,
+        status: ticket.status,
+        created_at: ticket.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Create support ticket error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create support ticket'
+    });
+  }
+});
+
+// Get school admin's own tickets
+router.get('/my-support-tickets', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdminId = req.user.userId;
+    
+    const tickets = await SupportTicket.find({
+      user_id: schoolAdminId
+    }).sort({ created_at: -1 }).lean();
+    
+    const formattedTickets = tickets.map(t => ({
+      id: t._id,
+      ticketId: t._id,
+      subject: t.subject,
+      message: t.message,
+      status: t.status,
+      priority: t.priority,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      admin_response: t.admin_response,
+      responded_at: t.responded_at,
+      hasReply: !!t.admin_response
+    }));
+    
+    res.json({
+      success: true,
+      tickets: formattedTickets,
+      totalTickets: formattedTickets.length
+    });
+  } catch (error) {
+    console.error('Get my support tickets error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load support tickets'
+    });
+  }
+});
+
+// ==================== BADGE MANAGEMENT ENDPOINTS ====================
+
+// Get all badges for the school
+router.get('/badges', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const badges = await db.collection('badges')
+      .find({ school_id: schoolId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      badges
+    });
+  } catch (error) {
+    console.error('Get badges error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load badges' });
+  }
+});
+
+// Create a new badge
+router.post('/badges', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, criteriaType, criteriaTarget, criteriaValue, rarity, isActive } = req.body;
+
+    if (!name || !description) {
+      return res.status(400).json({ success: false, error: 'Name and description are required' });
+    }
+
+    const newBadge = {
+      name,
+      description,
+      icon: icon || '🏆',
+      criteriaType: criteriaType || 'quizzes_completed',
+      criteriaTarget: criteriaTarget || null,
+      criteriaValue: parseInt(criteriaValue) || 1,
+      rarity: rarity || 'common',
+      isActive: isActive !== false,
+      school_id: schoolId,
+      earnedCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('badges').insertOne(newBadge);
+    newBadge._id = result.insertedId;
+
+    console.log(`✅ Badge created: ${name} for school ${schoolId}`);
+
+    res.json({
+      success: true,
+      badge: newBadge,
+      message: 'Badge created successfully'
+    });
+  } catch (error) {
+    console.error('Create badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create badge' });
+  }
+});
+
+// Update a badge
+router.put('/badges/:badgeId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, criteriaType, criteriaTarget, criteriaValue, rarity, isActive } = req.body;
+
+    const updateData = {
+      updatedAt: new Date()
+    };
+
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (icon) updateData.icon = icon;
+    if (criteriaType) updateData.criteriaType = criteriaType;
+    if (criteriaTarget !== undefined) updateData.criteriaTarget = criteriaTarget;
+    if (criteriaValue) updateData.criteriaValue = parseInt(criteriaValue);
+    if (rarity) updateData.rarity = rarity;
+    if (typeof isActive === 'boolean') updateData.isActive = isActive;
+
+    const result = await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(badgeId), school_id: schoolId },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+
+    console.log(`✅ Badge updated: ${badgeId}`);
+
+    res.json({
+      success: true,
+      message: 'Badge updated successfully'
+    });
+  } catch (error) {
+    console.error('Update badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update badge' });
+  }
+});
+
+// Delete a badge
+router.delete('/badges/:badgeId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const result = await db.collection('badges').deleteOne({
+      _id: new mongoose.Types.ObjectId(badgeId),
+      school_id: schoolId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+
+    // Also remove student badges associated with this badge
+    await db.collection('student_badges').deleteMany({
+      badge_id: new mongoose.Types.ObjectId(badgeId)
+    });
+
+    console.log(`✅ Badge deleted: ${badgeId}`);
+
+    res.json({
+      success: true,
+      message: 'Badge deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete badge' });
+  }
+});
+
+// Toggle badge active status
+router.patch('/badges/:badgeId/toggle', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { badgeId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const badge = await db.collection('badges').findOne({
+      _id: new mongoose.Types.ObjectId(badgeId),
+      school_id: schoolId
+    });
+
+    if (!badge) {
+      return res.status(404).json({ success: false, error: 'Badge not found' });
+    }
+
+    await db.collection('badges').updateOne(
+      { _id: new mongoose.Types.ObjectId(badgeId) },
+      { $set: { isActive: !badge.isActive, updatedAt: new Date() } }
+    );
+
+    res.json({
+      success: true,
+      isActive: !badge.isActive,
+      message: `Badge ${!badge.isActive ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Toggle badge error:', error);
+    res.status(500).json({ success: false, error: 'Failed to toggle badge' });
+  }
+});
+
+// ==================== SHOP MANAGEMENT ENDPOINTS ====================
+
+// Get all shop items for the school
+router.get('/shop-items', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const items = await db.collection('shop_items')
+      .find({ school_id: schoolId })
+      .sort({ category: 1, cost: 1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      items
+    });
+  } catch (error) {
+    console.error('Get shop items error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load shop items' });
+  }
+});
+
+// Create a new shop item
+router.post('/shop-items', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, cost, category, stock, duration, multiplier } = req.body;
+
+    if (!name || !description) {
+      return res.status(400).json({ success: false, error: 'Name and description are required' });
+    }
+
+    const newItem = {
+      name,
+      description,
+      icon: icon || '🎁',
+      cost: parseInt(cost) || 50,
+      category: category || 'cosmetic',
+      stock: stock === -1 ? -1 : (parseInt(stock) || DEFAULT_SHOP_ITEM_STOCK),
+      isActive: true,
+      school_id: schoolId,
+      purchaseCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Add booster-specific fields if applicable
+    if (category === 'booster') {
+      newItem.duration = duration || '1 day';
+      newItem.multiplier = parseFloat(multiplier) || 1.5;
+    }
+
+    const result = await db.collection('shop_items').insertOne(newItem);
+    newItem._id = result.insertedId;
+
+    console.log(`✅ Shop item created: ${name} for school ${schoolId}`);
+
+    res.json({
+      success: true,
+      item: newItem,
+      message: 'Shop item created successfully'
+    });
+  } catch (error) {
+    console.error('Create shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create shop item' });
+  }
+});
+
+// Update a shop item
+router.put('/shop-items/:itemId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const { name, description, icon, cost, category, stock, duration, multiplier, isActive } = req.body;
+
+    const updateData = {
+      updatedAt: new Date()
+    };
+
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (icon) updateData.icon = icon;
+    if (cost !== undefined) updateData.cost = parseInt(cost);
+    if (category) updateData.category = category;
+    if (stock !== undefined) {
+      // -1 means unlimited, otherwise parse as integer with fallback
+      updateData.stock = stock === -1 ? -1 : (parseInt(stock) || DEFAULT_SHOP_ITEM_STOCK);
+    }
+    if (duration) updateData.duration = duration;
+    if (multiplier) updateData.multiplier = parseFloat(multiplier);
+    if (typeof isActive === 'boolean') updateData.isActive = isActive;
+
+    const result = await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId), school_id: schoolId },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+
+    console.log(`✅ Shop item updated: ${itemId}`);
+
+    res.json({
+      success: true,
+      message: 'Shop item updated successfully'
+    });
+  } catch (error) {
+    console.error('Update shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update shop item' });
+  }
+});
+
+// Delete a shop item
+router.delete('/shop-items/:itemId', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const result = await db.collection('shop_items').deleteOne({
+      _id: new mongoose.Types.ObjectId(itemId),
+      school_id: schoolId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+
+    console.log(`✅ Shop item deleted: ${itemId}`);
+
+    res.json({
+      success: true,
+      message: 'Shop item deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete shop item' });
+  }
+});
+
+// Toggle shop item active status
+router.patch('/shop-items/:itemId/toggle', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const { itemId } = req.params;
+    const schoolAdmin = await User.findById(req.user.userId);
+    const schoolId = schoolAdmin.school;
+
+    const item = await db.collection('shop_items').findOne({
+      _id: new mongoose.Types.ObjectId(itemId),
+      school_id: schoolId
+    });
+
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Shop item not found' });
+    }
+
+    await db.collection('shop_items').updateOne(
+      { _id: new mongoose.Types.ObjectId(itemId) },
+      { $set: { isActive: !item.isActive, updatedAt: new Date() } }
+    );
+
+    res.json({
+      success: true,
+      isActive: !item.isActive,
+      message: `Shop item ${!item.isActive ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Toggle shop item error:', error);
+    res.status(500).json({ success: false, error: 'Failed to toggle shop item' });
+  }
+});
+
+// ==================== LICENSE MANAGEMENT ====================
+const License = require('../models/License');
+
+// GET /api/mongo/school-admin/license-info - Get current school's license information
+router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    if (!school.licenseId) {
+      return res.status(404).json({ success: false, error: 'No license assigned to school' });
+    }
+
+    const license = school.licenseId;
+
+    // Calculate days remaining
+    let daysRemaining = null;
+    if (school.licenseExpiresAt) {
+      const now = new Date();
+      const expiresAt = new Date(school.licenseExpiresAt);
+      daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+    }
+
+    return res.json({
+      success: true,
+      license: {
+        type: license.type,
+        name: license.name,
+        description: license.description,
+        expiresAt: school.licenseExpiresAt,
+        daysRemaining,
+        limits: {
+          maxTeachers: license.maxTeachers,
+          maxStudents: license.maxStudents,
+          maxClasses: license.maxClasses
+        },
+        usage: {
+          currentTeachers: school.current_teachers,
+          currentStudents: school.current_students,
+          currentClasses: school.current_classes
+        },
+        isExpired: daysRemaining !== null && daysRemaining <= 0,
+        isNearExpiry: daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 7
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching license info:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch license information' });
+  }
+});
+
+// POST /api/mongo/school-admin/upgrade-license - Process license upgrade with payment
+router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { licenseId, billingCycle, paymentInfo } = req.body;
+
+    // Validate required fields
+    if (!licenseId || !billingCycle || !paymentInfo) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'License ID, billing cycle, and payment information are required' 
+      });
+    }
+
+    // Validate billing cycle
+    if (!['monthly', 'yearly'].includes(billingCycle)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid billing cycle. Must be "monthly" or "yearly"' 
+      });
+    }
+
+    // Validate payment information
+    const { cardNumber, expiryDate, cvv } = paymentInfo;
+    
+    // Card number validation (16 digits)
+    if (!cardNumber || !/^\d{16}$/.test(cardNumber)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid card number. Must be 16 digits' 
+      });
+    }
+
+    // Expiry date validation (MM/YY format and not expired)
+    if (!expiryDate || !/^\d{2}\/\d{2}$/.test(expiryDate)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid expiry date. Must be in MM/YY format' 
+      });
+    }
+
+    const [month, year] = expiryDate.split('/');
+    const monthNum = parseInt(month, 10);
+    // Handle year: assume 2000s for years 00-99
+    // For production, consider cards typically expire within 10-20 years from now
+    const yearNum = parseInt(year, 10);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentCentury = Math.floor(currentYear / 100) * 100;
+    const fullYear = currentCentury + yearNum;
+    
+    if (monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid month in expiry date' 
+      });
+    }
+
+    const currentMonth = now.getMonth() + 1;
+    
+    if (fullYear < currentYear || (fullYear === currentYear && monthNum < currentMonth)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Card has expired' 
+      });
+    }
+
+    // CVV validation (3 digits)
+    if (!cvv || !/^\d{3}$/.test(cvv)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid CVV. Must be 3 digits' 
+      });
+    }
+
+    // Get user and school
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+    
+    if (!school.licenseId) {
+      return res.status(500).json({ success: false, error: 'School does not have a license assigned' });
+    }
+
+    // Get the new license
+    const newLicense = await License.findById(licenseId);
+    if (!newLicense) {
+      return res.status(404).json({ success: false, error: 'License not found' });
+    }
+
+    // Validate the new license is active and paid
+    if (!newLicense.isActive) {
+      return res.status(400).json({ success: false, error: 'Selected license is not active' });
+    }
+
+    if (newLicense.type !== 'paid') {
+      return res.status(400).json({ success: false, error: 'Selected license must be a paid plan' });
+    }
+
+    // Simulate payment processing (in production, this would call a payment gateway)
+    console.log('🔒 Processing simulated payment...');
+    console.log('Card ending in:', cardNumber.slice(-4));
+    console.log('Amount:', billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly);
+    
+    // Simulate a small delay for payment processing
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Save previous plan name before updating
+    const previousPlanName = school.licenseId ? school.licenseId.name : 'Unknown';
+
+    // Payment successful - Update school's license
+    school.licenseId = newLicense._id;
+    
+    // For paid licenses, we don't set an expiry date (or set it far in the future)
+    // Remove expiry date for paid licenses
+    school.licenseExpiresAt = null;
+    
+    await school.save();
+
+    console.log('✅ License upgraded successfully');
+    console.log(`School ${school.name} upgraded to ${newLicense.name}`);
+
+    return res.json({
+      success: true,
+      message: 'Payment successful! Your license has been upgraded.',
+      upgradeDetails: {
+        previousPlan: previousPlanName,
+        newPlan: newLicense.name,
+        billingCycle,
+        amountPaid: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly,
+        newLimits: {
+          maxTeachers: newLicense.maxTeachers,
+          maxStudents: newLicense.maxStudents,
+          maxClasses: newLicense.maxClasses
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error processing license upgrade:', error);
+    return res.status(500).json({ success: false, error: 'Failed to process payment. Please try again.' });
   }
 });
 

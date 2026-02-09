@@ -1,7 +1,7 @@
 // Question Bank Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, bulkDeleteQuestions } from '../../services/p2lAdminService';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, bulkDeleteQuestions } from '../../services/p2lAdminService';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -9,17 +9,20 @@ function QuestionBank() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '' });
+  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '' });
   const [subjects, setSubjects] = useState([]);
   const [topics, setTopics] = useState([]);
+  const [grades, setGrades] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
     choices: ['', '', '', ''],
     answer: '',
     difficulty: 3,
+    quiz_level: 1,
     subject: 'General',
-    topic: ''
+    topic: '',
+    grade: 'Primary 1'
   });
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
@@ -34,6 +37,7 @@ function QuestionBank() {
   useEffect(() => {
     fetchSubjects();
     fetchTopics();
+    fetchGrades();
   }, []);
 
   const fetchQuestions = async () => {
@@ -65,6 +69,15 @@ function QuestionBank() {
       setTopics(response.data || []);
     } catch (error) {
       console.error('Failed to fetch topics:', error);
+    }
+  };
+
+  const fetchGrades = async () => {
+    try {
+      const response = await getQuestionGrades();
+      setGrades(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch grades:', error);
     }
   };
 
@@ -118,8 +131,10 @@ function QuestionBank() {
       choices: question.choices || ['', '', '', ''],
       answer: question.answer,
       difficulty: question.difficulty,
+      quiz_level: question.quiz_level || 1,
       subject: question.subject || 'General',
-      topic: question.topic || ''
+      topic: question.topic || '',
+      grade: question.grade || 'Primary 1'
     });
     setShowForm(true);
   };
@@ -187,8 +202,10 @@ function QuestionBank() {
       choices: ['', '', '', ''],
       answer: '',
       difficulty: 3,
+      quiz_level: 1,
       subject: 'General',
-      topic: ''
+      topic: '',
+      grade: 'Primary 1'
     });
   };
 
@@ -250,10 +267,10 @@ function QuestionBank() {
   };
 
   const downloadTemplate = () => {
-    const template = `text,choice1,choice2,choice3,choice4,answer,difficulty,subject,topic
-"What is 2 + 2?","2","3","4","5","4",1,"Math","Addition"
-"What is the capital of France?","London","Berlin","Paris","Rome","Paris",2,"Geography","Capitals"
-"Which planet is closest to the sun?","Venus","Mars","Mercury","Earth","Mercury",3,"Science","Solar System"`;
+    const template = `text,choice1,choice2,choice3,choice4,answer,difficulty,quiz_level,subject,topic,grade
+"What is 2 + 2?","2","3","4","5","4",1,1,"Math","Addition","Primary 1"
+"What is the capital of France?","London","Berlin","Paris","Rome","Paris",2,1,"Geography","Capitals","Primary 1"
+"Which planet is closest to the sun?","Venus","Mars","Mercury","Earth","Mercury",3,2,"Science","Solar System","Primary 1"`;
     
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -331,7 +348,22 @@ function QuestionBank() {
           </select>
         </div>
 
-        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '' })} className="btn-clear">
+        <div className="filter-group">
+          <label>Grade:</label>
+          <select 
+            value={filters.grade}
+            onChange={(e) => setFilters({ ...filters, grade: e.target.value })}
+          >
+            <option value="">All</option>
+            {grades.map((grade) => (
+              <option key={grade} value={grade}>
+                {grade}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '' })} className="btn-clear">
           Clear Filters
         </button>
         
@@ -445,6 +477,27 @@ function QuestionBank() {
                 </div>
 
                 <div className="form-group">
+                  <label>Quiz Level *</label>
+                  <select
+                    name="quiz_level"
+                    value={formData.quiz_level}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value={1}>Quiz Level 1</option>
+                    <option value={2}>Quiz Level 2</option>
+                    <option value={3}>Quiz Level 3</option>
+                    <option value={4}>Quiz Level 4</option>
+                    <option value={5}>Quiz Level 5</option>
+                    <option value={6}>Quiz Level 6</option>
+                    <option value={7}>Quiz Level 7</option>
+                    <option value={8}>Quiz Level 8</option>
+                    <option value={9}>Quiz Level 9</option>
+                    <option value={10}>Quiz Level 10</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
                   <label>Subject</label>
                   <input
                     type="text"
@@ -463,6 +516,22 @@ function QuestionBank() {
                   value={formData.topic}
                   onChange={handleInputChange}
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Grade</label>
+                <select
+                  name="grade"
+                  value={formData.grade}
+                  onChange={handleInputChange}
+                >
+                  <option value="Primary 1">Primary 1</option>
+                  <option value="Primary 2" disabled>Primary 2 (Coming Soon)</option>
+                  <option value="Primary 3" disabled>Primary 3 (Coming Soon)</option>
+                  <option value="Primary 4" disabled>Primary 4 (Coming Soon)</option>
+                  <option value="Primary 5" disabled>Primary 5 (Coming Soon)</option>
+                  <option value="Primary 6" disabled>Primary 6 (Coming Soon)</option>
+                </select>
               </div>
 
               <div className="form-actions">
@@ -492,8 +561,10 @@ function QuestionBank() {
                   <li><strong>choice1, choice2, choice3, choice4</strong> - Answer choices (optional)</li>
                   <li><strong>answer</strong> - The correct answer (required)</li>
                   <li><strong>difficulty</strong> - Number from 1-5 (default: 3)</li>
+                  <li><strong>quiz_level</strong> - Number from 1-10 (required, default: 1)</li>
                   <li><strong>subject</strong> - Subject name (default: General)</li>
                   <li><strong>topic</strong> - Topic name (optional)</li>
+                  <li><strong>grade</strong> - Grade level: Primary 1 to 6 (default: Primary 1)</li>
                 </ul>
                 <button onClick={downloadTemplate} className="btn-download">
                   📥 Download Template
@@ -598,6 +669,7 @@ function QuestionBank() {
                   {getDifficultyLabel(question.difficulty)}
                 </span>
                 <span className="subject-badge">{question.subject}</span>
+                {question.grade && <span className="grade-badge">{question.grade}</span>}
               </div>
               
               <p className="question-text">{question.text}</p>

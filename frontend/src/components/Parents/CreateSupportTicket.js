@@ -10,6 +10,7 @@ export default function CreateSupportTicket() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
     category: 'website',
+    priority: 'normal',
     subject: '',
     description: '',
   });
@@ -43,7 +44,8 @@ export default function CreateSupportTicket() {
         // Reset form
         setTimeout(() => {
           setFormData({ 
-            category: 'website', 
+            category: 'website',
+            priority: 'normal',
             subject: '', 
             description: '' 
           });

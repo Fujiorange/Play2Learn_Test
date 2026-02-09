@@ -3,6 +3,7 @@
 // ✅ UPDATED: Added createTestimonial(formData) method for WriteTestimonial.js
 // ✅ Includes everything from Phase 2 + new skills method
 // ✅ FIXED: Dynamic API_BASE_URL based on environment (localhost vs deployed)
+// ✅ FIXED: getChildActivities now properly fetches quiz attempts from backend
 
 import authService from './authService';
 
@@ -77,6 +78,8 @@ class ParentService {
     try {
       const token = authService.getToken();
       
+      console.log(`📊 Fetching activities for student: ${studentId}`);
+      
       const response = await fetch(`${API_BASE_URL}/child/${studentId}/activities?limit=${limit}`, {
         method: 'GET',
         headers: {
@@ -88,9 +91,12 @@ class ParentService {
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('❌ Failed to fetch activities:', data.error);
         throw new Error(data.error || 'Failed to load activities');
       }
 
+      console.log(`✅ Activities fetched successfully: ${data.activities?.length || 0} items`);
+      
       return data;
     } catch (error) {
       console.error('Error loading activities:', error);
@@ -135,29 +141,66 @@ class ParentService {
   
   async createSupportTicket(ticketData) {
     try {
+      if (!ticketData.subject || !ticketData.description) {
+        return {
+          success: false,
+          error: 'Subject and description are required'
+        };
+      }
+
       const token = authService.getToken();
-      
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      // Ensure required fields and proper field names
+      const payload = {
+        category: ticketData.category || 'general',
+        priority: ticketData.priority || 'normal',
+        subject: ticketData.subject || '',
+        description: ticketData.description || '',
+      };
+
+      // Validate required fields
+      if (!payload.subject || !payload.subject.trim()) {
+        return { success: false, error: 'Subject is required' };
+      }
+      if (!payload.description || !payload.description.trim()) {
+        return { success: false, error: 'Description is required' };
+      }
+
+      console.log('📤 Parent creating support ticket:', payload);
+
       const response = await fetch(`${API_BASE_URL}/support-tickets`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(ticketData)
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create support ticket');
+        console.error('❌ Parent ticket creation failed:', data);
+        return {
+          success: false,
+          error: data.error || data.details || 'Failed to create support ticket'
+        };
       }
 
-      return data;
+      console.log('✅ Parent ticket created successfully:', data);
+      return {
+        success: true,
+        ticketId: data.ticketId || data.ticket?.ticketId || data.ticket?._id,
+        message: data.message || 'Support ticket created successfully'
+      };
     } catch (error) {
-      console.error('Error creating support ticket:', error);
+      console.error('❌ Error creating parent support ticket:', error);
       return {
         success: false,
-        error: error.message
+        error: 'Network error. Please check your connection and try again.'
       };
     }
   }

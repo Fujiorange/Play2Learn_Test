@@ -103,6 +103,11 @@ function P2LAdminDashboard() {
             <p>Create admin accounts for schools</p>
           </Link>
 
+          <Link to="/p2ladmin/licenses" className="management-card">
+            <h3>📜 License Management</h3>
+            <p>Configure license types and pricing plans</p>
+          </Link>
+
           <Link to="/p2ladmin/questions" className="management-card">
             <h3>📚 Question Bank</h3>
             <p>Manage questions with difficulty levels</p>
@@ -111,6 +116,16 @@ function P2LAdminDashboard() {
           <Link to="/p2ladmin/quizzes" className="management-card">
             <h3>📝 Adaptive Quiz Manager</h3>
             <p>Create and manage adaptive quizzes</p>
+          </Link>
+
+          <Link to="/p2ladmin/support-tickets" className="management-card">
+            <h3>🎫 Support Tickets</h3>
+            <p>View and reply to website-related support tickets</p>
+          </Link>
+
+          <Link to="/p2ladmin/skill-points" className="management-card">
+            <h3>⚙️ Skill Points Config</h3>
+            <p>Configure difficulty points for skill matrix</p>
           </Link>
 
           <Link to="/p2ladmin/maintenance" className="management-card">

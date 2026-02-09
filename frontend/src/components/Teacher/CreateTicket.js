@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import teacherService from '../../services/teacherService';
 
 export default function CreateTicket() {
   const navigate = useNavigate();
@@ -9,6 +10,24 @@ export default function CreateTicket() {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [formData, setFormData] = useState({
+    category: 'website',
+    priority: 'normal',
+    routeTo: 'website',
+    subject: '',
+    description: '',
+  });
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!authService.isAuthenticated()) {
+        navigate('/login');
+        return;
+      }
+      setLoading(false);
+    };
+    loadData();
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,29 +44,38 @@ export default function CreateTicket() {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/mongo/teacher/support-tickets', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ subject, description, priority })
-      });
+      // Use teacherService which handles user_id extraction and field mapping
+      const result = await teacherService.createSupportTicket(formData);
 
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Ticket created successfully!' });
-        setSubject('');
-        setDescription('');
-        setPriority('medium');
+      if (result.success) {
+        setMessage({ 
+          type: 'success', 
+          text: `Support ticket #${result.ticketId} created successfully! We will get back to you soon.` 
+        });
+        
+        // Reset form
+        setTimeout(() => {
+          setFormData({ 
+            category: 'website', 
+            priority: 'normal', 
+            routeTo: 'website', 
+            subject: '', 
+            description: '' 
+          });
+          setMessage({ type: '', text: '' });
+        }, 3000);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to create ticket' });
+        setMessage({ 
+          type: 'error', 
+          text: result.error || 'Failed to create support ticket' 
+        });
       }
     } catch (error) {
-      console.error('Error creating ticket:', error);
-      setMessage({ type: 'error', text: 'Failed to connect to server' });
+      console.error('Create ticket error:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to create support ticket. Please try again.' 
+      });
     } finally {
       setSubmitting(false);
     }

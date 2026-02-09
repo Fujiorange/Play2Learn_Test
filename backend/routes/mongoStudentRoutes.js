@@ -43,12 +43,49 @@ const SupportTicket = require('../models/SupportTicket');
 const Testimonial = require('../models/Testimonial');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
+const SkillPointsConfig = require('../models/SkillPointsConfig');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
 
 // ==================== TIME HELPERS ====================
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Level thresholds for points-based leveling system
+// Each entry defines the min points required to reach that level
+const LEVEL_THRESHOLDS = [
+  { level: 0, min: 0, max: 25 },      // Level 0: 0-24 points
+  { level: 1, min: 25, max: 50 },     // Level 1: 25-49 points
+  { level: 2, min: 50, max: 100 },    // Level 2: 50-99 points
+  { level: 3, min: 100, max: 200 },   // Level 3: 100-199 points
+  { level: 4, min: 200, max: 400 },   // Level 4: 200-399 points
+  { level: 5, min: 400, max: Infinity } // Level 5: 400+ points (max level)
+];
+
+// Helper function to calculate level from points
+function calculateLevelFromPoints(points) {
+  // Find the highest level threshold that the points meet
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (points >= LEVEL_THRESHOLDS[i].min) {
+      return LEVEL_THRESHOLDS[i].level;
+    }
+  }
+  return 0;
+}
+
+// Helper function to calculate progress percentage within current level
+function calculateLevelProgress(points) {
+  const level = calculateLevelFromPoints(points);
+  const threshold = LEVEL_THRESHOLDS[level];
+  
+  // If at max level, return 100%
+  if (level === 5) return 100;
+  
+  // Calculate percentage progress within current level range
+  const rangeSize = threshold.max - threshold.min;
+  const progressInRange = points - threshold.min;
+  return Math.min(100, Math.floor((progressInRange / rangeSize) * 100));
+}
 
 function getSingaporeTime() {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore" }));
@@ -150,6 +187,7 @@ if (!mongoose.models.MathSkill) {
     skill_name: { type: String, required: true },
     current_level: { type: Number, default: 0 },
     xp: { type: Number, default: 0 },
+    points: { type: Number, default: 0 },
     unlocked: { type: Boolean, default: true },
     updatedAt: { type: Date, default: Date.now },
   });
@@ -323,20 +361,69 @@ function generateQuestion(range, operation) {
   };
 }
 
-async function updateSkillsFromQuiz(studentId, questions, percentage, currentProfile) {
+// Helper function to get default difficulty points configuration
+function getDefaultDifficultyPoints() {
+  return {
+    1: { correct: 1, wrong: -2.5 },
+    2: { correct: 2, wrong: -2.0 },
+    3: { correct: 3, wrong: -1.5 },
+    4: { correct: 4, wrong: -1.0 },
+    5: { correct: 5, wrong: -0.5 }
+  };
+}
+
+// Updated function to use difficulty-based points system
+async function updateSkillsFromQuiz(studentId, questions, percentage, currentProfile, quizType = 'regular') {
   try {
+    // Get skill points configuration
+    let pointsConfig;
+    try {
+      pointsConfig = await SkillPointsConfig.getConfig();
+    } catch (err) {
+      console.log("Using default points configuration");
+      pointsConfig = { difficultyPoints: getDefaultDifficultyPoints() };
+    }
+    
+    const difficultyPoints = pointsConfig.difficultyPoints || getDefaultDifficultyPoints();
+    
+    // Calculate points change for each skill/topic
     const skillUpdates = {};
 
     questions.forEach((q) => {
-      const skill = q.operation
-        ? q.operation.charAt(0).toUpperCase() + q.operation.slice(1)
-        : "Addition";
+      // Get skill name from operation (for placement/regular quiz) or topic (for adaptive quiz)
+      let skill;
+      if (q.topic && q.topic.trim() !== '') {
+        // Capitalize first letter of topic
+        skill = q.topic.charAt(0).toUpperCase() + q.topic.slice(1);
+      } else if (q.operation) {
+        skill = q.operation.charAt(0).toUpperCase() + q.operation.slice(1);
+      } else {
+        skill = "Addition"; // Default
+      }
+      
+      // Get difficulty level (default to 3 if not specified)
+      const difficulty = q.difficulty || 3;
+      const difficultyStr = String(difficulty);
+      
+      // Get points for this difficulty level
+      const levelPoints = difficultyPoints[difficultyStr] || difficultyPoints['3'];
       
       if (!skillUpdates[skill]) {
-        skillUpdates[skill] = { correct: 0, total: 0 };
+        skillUpdates[skill] = { 
+          correct: 0, 
+          total: 0, 
+          pointsChange: 0 
+        };
       }
+      
       skillUpdates[skill].total++;
-      if (q.is_correct) skillUpdates[skill].correct++;
+      
+      if (q.is_correct || q.isCorrect) {
+        skillUpdates[skill].correct++;
+        skillUpdates[skill].pointsChange += levelPoints.correct;
+      } else {
+        skillUpdates[skill].pointsChange += levelPoints.wrong;
+      }
     });
 
     const skillNames = Object.keys(skillUpdates);
@@ -352,6 +439,8 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
 
     for (const [skillName, stats] of Object.entries(skillUpdates)) {
       const skillPercentage = (stats.correct / stats.total) * 100;
+      // XP is still calculated and stored for backward compatibility and display purposes
+      // but is no longer used for level calculation (points are used instead)
       const xpGain = Math.floor(skillPercentage / 10);
 
       const existingSkill = skillMap.get(skillName);
@@ -359,14 +448,22 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
       if (existingSkill) {
         // Update existing skill using bulk operation
         const newXp = existingSkill.xp + xpGain;
-        const newLevel = Math.min(5, Math.floor(newXp / 100));
+        
+        // Calculate new points (minimum 0 - cannot go negative)
+        const currentPoints = existingSkill.points || 0;
+        const newPoints = Math.max(0, currentPoints + stats.pointsChange);
+        
+        // Calculate level based on points using helper function
+        const newLevel = calculateLevelFromPoints(newPoints);
+        
         bulkOps.push({
           updateOne: {
             filter: { _id: existingSkill._id },
             update: { 
               $set: { 
                 xp: newXp, 
-                current_level: newLevel, 
+                current_level: newLevel,
+                points: newPoints,
                 updatedAt: new Date() 
               } 
             }
@@ -375,7 +472,13 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
       } else {
         // Insert new skill using bulk operation
         const newXp = xpGain;
-        const newLevel = Math.min(5, Math.floor(newXp / 100));
+        
+        // New skill starts with calculated points (minimum 0)
+        const newPoints = Math.max(0, stats.pointsChange);
+        
+        // Calculate level based on points using helper function
+        const newLevel = calculateLevelFromPoints(newPoints);
+        
         bulkOps.push({
           insertOne: {
             document: {
@@ -383,6 +486,7 @@ async function updateSkillsFromQuiz(studentId, questions, percentage, currentPro
               skill_name: skillName,
               current_level: newLevel,
               xp: newXp,
+              points: newPoints,
               unlocked: true,
               updatedAt: new Date()
             }
@@ -421,13 +525,22 @@ router.get("/dashboard", async (req, res) => {
     }
 
     // ✅ FIX: Get all regular quizzes, then filter out unsubmitted ones
-    const allQuizzes = await StudentQuiz.find({ 
+    const allRegularQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
       quiz_type: "regular" 
     });
 
     // Filter: Only count quizzes that have been submitted (have student answers)
-    const completedQuizzes = allQuizzes.filter(isQuizCompleted).length;
+    const completedRegularQuizzes = allRegularQuizzes.filter(isQuizCompleted).length;
+    
+    // Also get adaptive quiz attempts
+    const completedAdaptiveQuizzes = await QuizAttempt.countDocuments({
+      userId: studentId,
+      is_completed: true
+    });
+    
+    // Total completed quizzes (regular + adaptive)
+    const completedQuizzes = completedRegularQuizzes + completedAdaptiveQuizzes;
 
     const user = await User.findById(studentId);
     const { effective: effectiveStreak } = computeEffectiveStreak(mathProfile);
@@ -554,13 +667,16 @@ router.get("/math-skills", async (req, res) => {
 
     // Use lean() for read-only queries to improve performance
     const mathProfile = await MathProfile.findOne({ student_id: studentId }).lean();
+    
+    // Get all skills for this student (dynamic - includes any topics from quizzes)
     const skills = await MathSkill.find({ student_id: studentId });
 
-    const requiredSkills = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
+    // Ensure base skills exist (Addition, Subtraction, Multiplication, Division)
+    const baseSkills = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
     const existingSkillNames = skills.map(s => s.skill_name);
 
-    // Batch create missing skills instead of creating one at a time
-    const missingSkills = requiredSkills.filter(name => !existingSkillNames.includes(name));
+    // Batch create missing base skills
+    const missingSkills = baseSkills.filter(name => !existingSkillNames.includes(name));
     
     if (missingSkills.length > 0) {
       const newSkillDocs = missingSkills.map(skillName => ({
@@ -568,6 +684,7 @@ router.get("/math-skills", async (req, res) => {
         skill_name: skillName,
         current_level: 0,
         xp: 0,
+        points: 0,
         unlocked: true,
       }));
       const createdSkills = await MathSkill.insertMany(newSkillDocs);
@@ -581,9 +698,10 @@ router.get("/math-skills", async (req, res) => {
         skill_name: s.skill_name,
         current_level: s.current_level,
         xp: s.xp,
+        points: s.points || 0,
         max_level: 5,
         unlocked: s.unlocked,
-        percentage: Math.min(100, (s.xp % 100)),
+        percentage: calculateLevelProgress(s.points || 0),
       }))
     });
   } catch (error) {
@@ -909,29 +1027,51 @@ router.get("/math-progress", async (req, res) => {
     const studentId = req.user.userId;
 
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
-    const { effective: effectiveStreak, shouldPersistReset } = computeEffectiveStreak(mathProfile);
 
-    if (mathProfile && shouldPersistReset) {
-      mathProfile.streak = 0;
-      await mathProfile.save();
-    }
-
-    // Use lean() for read-only query to improve performance
-    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
+    // Get all quizzes (regular)
+    const allRegularQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
       .sort({ completed_at: -1 })
       .lean();
+    
+    const regularQuizzes = allRegularQuizzes.filter(isQuizCompleted);
 
-    // Filter out unsubmitted quizzes using the shared isQuizCompleted function
-    const quizzes = allQuizzes.filter(isQuizCompleted);
+    // Get all adaptive quizzes
+    const adaptiveAttempts = await QuizAttempt.find({ 
+      userId: studentId, 
+      is_completed: true 
+    }).sort({ completedAt: -1 }).lean();
 
-    const totalQuizzes = quizzes.length;
+    // Combine all quizzes for streak/stats calculation
+    const allQuizzes = [
+      ...regularQuizzes.map(q => ({ date: q.completed_at, type: 'regular' })),
+      ...adaptiveAttempts.map(a => ({ date: a.completedAt, type: 'adaptive' }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Calculate streak based on all quiz types
+    let streak = 0;
+    if (allQuizzes.length > 0) {
+      const lastQuizDate = new Date(allQuizzes[0].date);
+      const today = new Date();
+      const diffDays = Math.floor((today - lastQuizDate) / (1000 * 60 * 60 * 24));
+      
+      // If last quiz was today or yesterday, maintain streak
+      if (diffDays <= 1) {
+        streak = mathProfile ? (mathProfile.streak || 0) : 0;
+      } else {
+        streak = 0;
+      }
+    }
+
+    const totalQuizzes = regularQuizzes.length + adaptiveAttempts.length;
     const averageScore =
       totalQuizzes > 0
-        ? Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes)
+        ? Math.round(
+            (regularQuizzes.reduce((sum, q) => sum + q.percentage, 0) +
+              adaptiveAttempts.reduce((sum, a) => sum + ((a.correct_count / a.total_answered) * 100 || 0), 0)) /
+              totalQuizzes
+          )
         : 0;
 
-    // Use total_points from MathProfile (source of truth) instead of recalculating
-    // This ensures consistency with Dashboard and Shop, accounting for both earned and spent points
     const totalPoints = mathProfile ? (mathProfile.total_points || 0) : 0;
 
     res.json({
@@ -941,8 +1081,8 @@ router.get("/math-progress", async (req, res) => {
         totalQuizzes,
         averageScore,
         totalPoints,
-        streak: effectiveStreak,
-        recentQuizzes: quizzes.slice(0, 10).map((q) => ({
+        streak,
+        recentQuizzes: regularQuizzes.slice(0, 10).map((q) => ({
           date: q.completed_at.toLocaleDateString(),
           time: q.completed_at.toLocaleTimeString(),
           profile: q.profile_level,
@@ -1145,7 +1285,7 @@ router.get("/leaderboard", async (req, res) => {
 // ==================== SUPPORT TICKETS ====================
 router.post("/support-tickets", async (req, res) => {
   try {
-    const studentId = req.user.userId;
+    const userId = req.user.userId;
     const { subject, category, message, description, student_name, student_email } = req.body;
 
     const finalSubject = subject || 'Support Request';
@@ -1158,15 +1298,38 @@ router.post("/support-tickets", async (req, res) => {
       });
     }
 
+    // Get user info for details
+    const user = await User.findById(userId).lean();
+    
+    // Detect user role for the ticket
+    let userRole = 'Student';
+    if (user?.role) {
+      if (user.role === 'Teacher' || user.role === 'Trial Teacher') {
+        userRole = 'Teacher';
+      } else if (user.role === 'Parent') {
+        userRole = 'Parent';
+      } else {
+        userRole = 'Student';
+      }
+    }
+    
     const ticket = await SupportTicket.create({
-      student_id: studentId,
-      student_name: student_name || req.user.name || 'Unknown',
-      student_email: student_email || req.user.email || 'unknown@email.com',
+      // New unified fields
+      user_id: userId,
+      user_name: student_name || req.user.name || user?.name || 'Unknown',
+      user_email: student_email || req.user.email || user?.email || 'unknown@email.com',
+      user_role: userRole,
+      school_id: user?.school,
+      school_name: user?.schoolName || '',
       subject: finalSubject,
       category: category || 'general',
       message: finalMessage,
       status: 'open',
       priority: req.body.priority || 'normal',
+      // Legacy fields for backward compatibility
+      student_id: userId,
+      student_name: student_name || req.user.name || user?.name || 'Unknown',
+      student_email: student_email || req.user.email || user?.email || 'unknown@email.com',
     });
 
     res.status(201).json({
@@ -1192,7 +1355,9 @@ router.get("/support-tickets", async (req, res) => {
     const studentId = req.user.userId;
 
     // Use lean() for read-only query to improve performance
-    const tickets = await SupportTicket.find({ student_id: studentId })
+    const tickets = await SupportTicket.find({ 
+      $or: [{ student_id: studentId }, { user_id: studentId }] 
+    })
       .sort({ created_at: -1 })
       .lean();
 
@@ -1210,11 +1375,55 @@ router.get("/support-tickets", async (req, res) => {
         created_at: t.created_at,
         updated_at: t.updated_at,
         admin_response: t.admin_response,
+        responded_at: t.responded_at,
+        hasReply: !!t.admin_response,
       }))
     });
   } catch (error) {
     console.error("❌ Get support tickets error:", error);
     res.status(500).json({ success: false, error: "Failed to load support tickets" });
+  }
+});
+
+// Get single support ticket with details
+router.get("/support-tickets/:ticketId", async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+    const { ticketId } = req.params;
+
+    const ticket = await SupportTicket.findOne({
+      _id: ticketId,
+      $or: [{ student_id: studentId }, { user_id: studentId }]
+    }).lean();
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      ticket: {
+        id: ticket._id,
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        createdOn: ticket.created_at.toLocaleDateString(),
+        lastUpdate: ticket.updated_at.toLocaleDateString(),
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        hasReply: !!ticket.admin_response,
+      }
+    });
+  } catch (error) {
+    console.error("❌ Get support ticket error:", error);
+    res.status(500).json({ success: false, error: "Failed to load support ticket" });
   }
 });
 
@@ -1319,8 +1528,21 @@ router.get("/testimonials", async (req, res) => {
 router.get("/shop", async (req, res) => {
   try {
     const db = mongoose.connection.db;
+    const userId = req.user.userId;
+
+    // Get user's school
+    const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(userId) });
+    const schoolId = user?.school;
+
+    // Get shop items for this school
     const shopItems = await db.collection('shop_items')
-      .find({ isActive: true })
+      .find({ 
+        isActive: true,
+        $or: [
+          { school_id: schoolId },
+          { school_id: { $exists: false } } // Include legacy items without school_id
+        ]
+      })
       .sort({ category: 1, cost: 1 })
       .toArray();
 
@@ -1457,10 +1679,21 @@ router.get("/badges", async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const userEmail = req.user.email;
+    const userId = req.user.userId;
 
-    // Get all active badges
+    // Get user's school
+    const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(userId) });
+    const schoolId = user?.school;
+
+    // Get all active badges for this school
     const badges = await db.collection('badges')
-      .find({ isActive: true })
+      .find({ 
+        isActive: true,
+        $or: [
+          { school_id: schoolId },
+          { school_id: { $exists: false } } // Include legacy badges without school_id
+        ]
+      })
       .sort({ rarity: 1, criteriaValue: 1 })
       .toArray();
 
@@ -1491,6 +1724,11 @@ router.get("/badges/progress", async (req, res) => {
 
     console.log(`📊 Math Profile for ${userEmail}:`, mathProfile);
 
+    // Get user's school for filtering badges
+    const db = mongoose.connection.db;
+    const user = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(studentId) });
+    const schoolId = user?.school;
+
     // ✅ FIX: Use Quiz model with SAME logic as Dashboard/Progress
     const allQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
@@ -1498,33 +1736,79 @@ router.get("/badges/progress", async (req, res) => {
     });
 
     // Filter: Only count quizzes that have been submitted (have student answers)
-    const completedQuizzes = allQuizzes.filter(isQuizCompleted);
+    const completedRegularQuizzes = allQuizzes.filter(isQuizCompleted);
+    
+    // Also count adaptive quiz attempts
+    const completedAdaptiveQuizzes = await QuizAttempt.countDocuments({
+      userId: studentId,
+      is_completed: true
+    });
+    
+    // Total completed quizzes (regular + adaptive)
+    const completedQuizzes = [...completedRegularQuizzes];
+    const totalCompletedCount = completedRegularQuizzes.length + completedAdaptiveQuizzes;
 
-    console.log(`📝 Found ${completedQuizzes.length} completed quizzes for ${userEmail}`);
+    console.log(`📝 Found ${completedRegularQuizzes.length} regular quizzes + ${completedAdaptiveQuizzes} adaptive quizzes for ${userEmail}`);
     
     // Log quiz scores for debugging
-    if (completedQuizzes.length > 0) {
-      console.log(`Quiz scores:`, completedQuizzes.map(q => ({
+    if (completedRegularQuizzes.length > 0) {
+      console.log(`Quiz scores:`, completedRegularQuizzes.map(q => ({
         score: q.score,
         percentage: q.percentage,
         date: q.completed_at
       })));
     }
 
+    // Count perfect scores from regular quizzes (score === totalQuestions)
+    let perfectScoresCount = 0;
+    for (const quiz of completedRegularQuizzes) {
+      if (quiz.score === quiz.totalQuestions) {
+        perfectScoresCount++;
+      }
+    }
+    
+    // Count high scores from regular quizzes (percentage >= 90)
+    const highScoresRegular = completedRegularQuizzes.filter(q => q.percentage >= 90).length;
+    
+    // Count perfect and high scores from adaptive quizzes
+    let perfectScoresAdaptive = 0;
+    let highScoresAdaptive = 0;
+    if (completedAdaptiveQuizzes > 0) {
+      const adaptiveQuizzes = await QuizAttempt.find({
+        userId: studentId,
+        is_completed: true
+      });
+      
+      for (const quiz of adaptiveQuizzes) {
+        const percentage = (quiz.correct_count / quiz.total_answered) * 100;
+        if (quiz.correct_count === quiz.total_answered) {
+          perfectScoresAdaptive++;
+        }
+        if (percentage >= 90) {
+          highScoresAdaptive++;
+        }
+      }
+    }
+
     // Calculate progress for different criteria
     const progress = {
-      quizzes_completed: completedQuizzes.length,
+      quizzes_completed: totalCompletedCount,
       login_streak: mathProfile?.streak || 0,
-      perfect_scores: completedQuizzes.filter(q => q.score === 15).length, // 15/15 = 100%
-      high_scores: completedQuizzes.filter(q => q.percentage >= 90).length,
+      perfect_scores: perfectScoresCount + perfectScoresAdaptive,
+      high_scores: highScoresRegular + highScoresAdaptive,
       points_earned: mathProfile?.total_points || 0
     };
 
     console.log(`📊 Badge progress for ${userEmail}:`, progress);
 
-    // Check and auto-award badges
-    const db = mongoose.connection.db;
-    const badges = await db.collection('badges').find({ isActive: true }).toArray();
+    // Check and auto-award badges - filter by school
+    const badges = await db.collection('badges').find({ 
+      isActive: true,
+      $or: [
+        { school_id: schoolId },
+        { school_id: { $exists: false } }
+      ]
+    }).toArray();
     const earnedBadges = await db.collection('student_badges')
       .find({ student_email: userEmail })
       .toArray();

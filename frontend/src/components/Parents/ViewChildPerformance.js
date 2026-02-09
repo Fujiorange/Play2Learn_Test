@@ -200,8 +200,7 @@ export default function ViewChildPerformance() {
     );
   }
 
-  // Extract the 5 essential stats (matching student view)
-  const currentProfile = performanceData?.currentProfile || 1;
+  // Extract the 4 essential stats (matching student view exactly)
   const totalQuizzes = performanceData?.totalQuizzes || 0;
   const highestScore = performanceData?.highestScore || 0;
   const streak = performanceData?.streak || 0;

@@ -12,6 +12,7 @@ const StudentQuiz = require('../models/StudentQuiz');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const Testimonial = require('../models/Testimonial');
+const SupportTicket = require('../models/SupportTicket');
 const { authMiddleware } = require('../middleware/auth');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
@@ -47,6 +48,7 @@ if (!mongoose.models.MathSkill) {
     skill_name: { type: String, required: true },
     current_level: { type: Number, default: 0, min: 0, max: 5 },
     xp: { type: Number, default: 0 },
+    points: { type: Number, default: 0 },
     unlocked: { type: Boolean, default: true },
     updatedAt: { type: Date, default: Date.now }
   });
@@ -370,18 +372,98 @@ router.get('/child/:studentId/activities', authenticateParent, async (req, res) 
       });
     }
 
+    // ✅ FIX: Query BOTH collections just like student routes do
+    console.log(`📊 Fetching quiz activities for student: ${studentId}`);
+
+    // Get regular quizzes from StudentQuiz collection
+    const regularQuizzes = await StudentQuiz.find({ 
+      student_id: studentId, 
+      quiz_type: "regular" 
+    })
+      .sort({ completed_at: -1 })
+      .limit(limit)
+      .lean();
+
+    // Filter completed quizzes
+    const completedRegularQuizzes = regularQuizzes.filter(q => 
+      q.is_submitted && q.completed_at
+    );
+
+    // Get adaptive quizzes from QuizAttempt collection  
+    const adaptiveAttempts = await QuizAttempt.find({ 
+      userId: studentId, 
+      is_completed: true 
+    })
+      .sort({ completedAt: -1 })
+      .limit(limit)
+      .lean();
+
+    console.log(`✅ Found ${completedRegularQuizzes.length} regular + ${adaptiveAttempts.length} adaptive quizzes`);
+
+    // Format regular quizzes
+    const regularActivities = completedRegularQuizzes.map(q => {
+      const percentage = q.percentage || (q.total_questions > 0 ? Math.round((q.score / q.total_questions) * 100) : 0);
+      
+      return {
+        type: 'quiz_attempt',
+        date: q.completed_at ? new Date(q.completed_at).toLocaleDateString('en-SG') : 'Recent',
+        quiz_title: `Profile ${q.profile_level} Quiz`,
+        quiz_id: q._id,
+        score: q.score || 0,
+        total_questions: q.total_questions || 0,
+        total: q.total_questions || 0,
+        percentage: percentage,
+        timestamp: q.completed_at,
+        profile: q.profile_level,
+        created_at: q.completed_at
+      };
+    });
+
+    // Format adaptive quizzes
+    const adaptiveActivities = adaptiveAttempts.map(attempt => {
+      const total = attempt.total_answered || 0;
+      const score = attempt.score || attempt.correct_count || 0;
+      const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+
+      return {
+        type: 'quiz_attempt',
+        date: attempt.completedAt ? new Date(attempt.completedAt).toLocaleDateString('en-SG') : 'Recent',
+        quiz_title: `Adaptive Quiz #${attempt.current_difficulty || '?'}`,
+        quiz_id: attempt.quizId,
+        score: score,
+        total_questions: total,
+        total: total,
+        percentage: percentage,
+        timestamp: attempt.completedAt,
+        profile: attempt.current_difficulty,
+        created_at: attempt.completedAt
+      };
+    });
+
+    // Combine and sort by date (most recent first)
+    const allActivities = [...regularActivities, ...adaptiveActivities]
+      .sort((a, b) => {
+        const dateA = a.timestamp ? new Date(a.timestamp) : new Date(0);
+        const dateB = b.timestamp ? new Date(b.timestamp) : new Date(0);
+        return dateB - dateA;
+      })
+      .slice(0, limit); // Apply limit after combining
+
+    console.log(`✅ Formatted ${allActivities.length} total activities`);
+
     res.json({
       success: true,
-      activities: [],
-      message: 'Activity tracking will be available soon'
+      activities: allActivities,
+      count: allActivities.length
     });
 
   } catch (error) {
-    console.error('Error fetching activities:', error);
+    console.error('❌ Error fetching activities:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to load activities',
-      details: error.message
+      details: error.message,
+      activities: []
     });
   }
 });
@@ -500,17 +582,50 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
     }
 
 
-    // ✅ FIX: Map 'normal' to 'medium' for backward compatibility
+    // Priority mapping for both models - ParentSupportTicket uses 'medium', unified uses 'normal'
+    // We use 'normal' as the standard and convert when needed
     const priorityMap = {
-      'normal': 'medium',
+      'normal': 'normal',
       'low': 'low',
+      'medium': 'normal',  // Convert 'medium' to 'normal' for unified model
+      'high': 'high',
+      'urgent': 'urgent'
+    };
+    const unifiedPriority = priorityMap[priority] || 'normal';
+    
+    // For ParentSupportTicket model which uses 'medium' instead of 'normal'
+    const legacyPriorityMap = {
+      'normal': 'medium',
+      'low': 'low', 
       'medium': 'medium',
       'high': 'high',
       'urgent': 'urgent'
     };
-    const finalPriority = priorityMap[priority] || 'medium';
+    const legacyPriority = legacyPriorityMap[priority] || 'medium';
+    
     const ticketId = `TICKET-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
 
+    // Create ticket in unified SupportTicket model for P2L Admin access
+    const unifiedTicket = await SupportTicket.create({
+      user_id: parent._id,
+      user_name: parent.name,
+      user_email: parent.email,
+      user_role: 'Parent',
+      school_id: parent.school,
+      school_name: parent.schoolName || '',
+      subject,
+      category: category || 'general',
+      message: description,
+      status: 'open',
+      priority: unifiedPriority,
+      // Legacy fields for backward compatibility
+      student_id: parent._id,
+      student_name: parent.name,
+      student_email: parent.email,
+    });
+
+    // Also create in ParentSupportTicket for backward compatibility
+    // NOTE: This dual-write pattern should be deprecated once migration is complete
     const newTicket = new ParentSupportTicket({
       ticketId,
       userId: parent._id,
@@ -518,7 +633,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
       userName: parent.name,
       userRole: 'Parent',
       category,
-      priority: finalPriority,
+      priority: legacyPriority,
       subject,
       description,
       status: 'open',
@@ -531,6 +646,7 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
     res.status(201).json({
       success: true,
       ticket: newTicket,
+      ticketId: unifiedTicket._id,
       message: 'Support ticket created successfully'
     });
 
@@ -546,14 +662,35 @@ router.post('/support-tickets', authenticateParent, async (req, res) => {
 
 router.get('/support-tickets', authenticateParent, async (req, res) => {
   try {
-    const tickets = await ParentSupportTicket.find({
-      userId: req.user.userId
-    }).sort({ createdAt: -1 });
+    const parentId = req.user.userId;
+    
+    // Fetch from unified SupportTicket model which has admin responses
+    const unifiedTickets = await SupportTicket.find({
+      $or: [{ user_id: parentId }, { student_id: parentId }]
+    }).sort({ created_at: -1 }).lean();
+
+    // Format tickets with admin response information
+    const formattedTickets = unifiedTickets.map(ticket => ({
+      ticketId: ticket._id,
+      id: `#${ticket._id.toString().slice(-6).toUpperCase()}`,
+      subject: ticket.subject,
+      category: ticket.category === 'website' ? 'Website-Related Problem' : 
+                ticket.category === 'school' ? 'School-Related Problem' : 
+                ticket.category,
+      priority: ticket.priority,
+      status: ticket.status,
+      message: ticket.message,
+      createdAt: ticket.created_at,
+      updatedAt: ticket.updated_at,
+      admin_response: ticket.admin_response,
+      responded_at: ticket.responded_at,
+      hasReply: !!ticket.admin_response,
+    }));
 
     res.json({
       success: true,
-      tickets,
-      totalTickets: tickets.length
+      tickets: formattedTickets,
+      totalTickets: formattedTickets.length
     });
 
   } catch (error) {
@@ -569,22 +706,47 @@ router.get('/support-tickets', authenticateParent, async (req, res) => {
 router.get('/support-tickets/:ticketId', authenticateParent, async (req, res) => {
   try {
     const { ticketId } = req.params;
+    const parentId = req.user.userId;
 
-    const ticket = await ParentSupportTicket.findOne({
-      ticketId,
-      userId: req.user.userId
-    });
+    // Try to find in unified SupportTicket model first (has admin responses)
+    let ticket = await SupportTicket.findOne({
+      _id: ticketId,
+      $or: [{ user_id: parentId }, { student_id: parentId }]
+    }).lean();
 
     if (!ticket) {
-      return res.status(404).json({
-        success: false,
-        error: 'Ticket not found'
-      });
+      // Fallback to legacy ParentSupportTicket model
+      ticket = await ParentSupportTicket.findOne({
+        ticketId,
+        userId: parentId
+      }).lean();
+
+      if (!ticket) {
+        return res.status(404).json({
+          success: false,
+          error: 'Ticket not found'
+        });
+      }
     }
 
     res.json({
       success: true,
-      ticket
+      ticket: {
+        ticketId: ticket._id || ticket.ticketId,
+        id: `#${(ticket._id || ticket.ticketId).toString().slice(-6).toUpperCase()}`,
+        subject: ticket.subject,
+        category: ticket.category === 'website' ? 'Website-Related Problem' : 
+                  ticket.category === 'school' ? 'School-Related Problem' : 
+                  ticket.category,
+        priority: ticket.priority,
+        status: ticket.status,
+        message: ticket.message || ticket.description,
+        createdAt: ticket.created_at || ticket.createdAt,
+        updatedAt: ticket.updated_at || ticket.updatedAt,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        hasReply: !!ticket.admin_response,
+      }
     });
 
   } catch (error) {
@@ -819,21 +981,39 @@ router.get('/child/:studentId/performance', authenticateParent, async (req, res)
     console.log('📊 MathProfile data:', { currentProfile, streak, totalPoints });
 
     // 2. Get Quiz Results (for totalQuizzes, highestScore, recentQuizzes)
-    // ✅ FIX: Query StudentQuiz collection (quiz attempts), not Quiz collection
-    const allQuizzes = await StudentQuiz.find({ 
+    // ✅ FIX: Query both regular AND adaptive quizzes to match student view
+    const allRegularQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
       quiz_type: 'regular'
     }).sort({ completed_at: -1 });
 
-    // ✅ FIX: Filter out unsubmitted quizzes (only count completed ones with scores > 0)
-    const quizzes = allQuizzes.filter(quiz => quiz.score > 0 && quiz.percentage > 0);
+    // ✅ Filter out unsubmitted quizzes (only count completed ones with scores > 0)
+    const regularQuizzes = allRegularQuizzes.filter(quiz => quiz.score > 0 && quiz.percentage > 0);
 
-    const totalQuizzes = quizzes.length;
+    // ✅ Get adaptive quizzes completed by this student
+    const adaptiveAttempts = await QuizAttempt.find({
+      userId: studentId,
+      is_completed: true
+    }).sort({ completedAt: -1 }).lean();
 
+    // ✅ Combine all quizzes from both types
+    const totalQuizzes = regularQuizzes.length + adaptiveAttempts.length;
+
+    // ✅ Calculate highest score across BOTH quiz types
     let highestScore = 0;
-    if (quizzes.length > 0) {
-      highestScore = Math.max(...quizzes.map(q => q.percentage || 0));
+    if (regularQuizzes.length > 0) {
+      const regularMax = Math.max(...regularQuizzes.map(q => q.percentage || 0));
+      highestScore = Math.max(highestScore, regularMax);
     }
+    if (adaptiveAttempts.length > 0) {
+      const adaptiveMax = Math.max(...adaptiveAttempts.map(a => {
+        return a.total_answered > 0 ? Math.round((a.correct_count / a.total_answered) * 100) : 0;
+      }));
+      highestScore = Math.max(highestScore, adaptiveMax);
+    }
+
+    // ✅ Use regular quizzes for recent display (showing regular quizzes in parent view)
+    const quizzes = regularQuizzes;
 
     console.log('📊 Quiz data:', { totalQuizzes, highestScore });
 
@@ -946,7 +1126,7 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     // Format quiz data as "activities"
     const recentActivities = recentQuizzes.map(quiz => {
       const percentage = quiz.percentage || 0;
-      const scoreEmoji = percentage >= 70 ? '🎉' : percentage >= 50 ? '📝' : '📚';
+      const scoreEmoji = percentage >= 70 ? '🎉' : percentage >= 50 ? '�' : '�';
       
       return {
         description: `${scoreEmoji} Completed Profile ${quiz.profile_level} Quiz - Score: ${quiz.score}/${quiz.total_questions} (${percentage}%)`,
@@ -1088,6 +1268,7 @@ router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
         skill_name: skill.skill_name,
         current_level: skill.current_level || 0,
         xp: skill.xp || 0,
+        points: skill.points || 0,
         max_level: 5, // Fixed max level
         percentage: skill.xp || 0, // XP is the percentage (0-100)
         unlocked: skill.unlocked !== undefined ? skill.unlocked : true
@@ -1099,10 +1280,10 @@ router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
       // No skills yet - return defaults
       console.log('⚠️ No skills found, returning defaults');
       skills = [
-        { skill_name: 'Addition', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: true },
-        { skill_name: 'Subtraction', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: true },
-        { skill_name: 'Multiplication', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: false },
-        { skill_name: 'Division', current_level: 0, xp: 0, max_level: 5, percentage: 0, unlocked: false }
+        { skill_name: 'Addition', current_level: 0, xp: 0, points: 0, max_level: 5, percentage: 0, unlocked: true },
+        { skill_name: 'Subtraction', current_level: 0, xp: 0, points: 0, max_level: 5, percentage: 0, unlocked: true },
+        { skill_name: 'Multiplication', current_level: 0, xp: 0, points: 0, max_level: 5, percentage: 0, unlocked: false },
+        { skill_name: 'Division', current_level: 0, xp: 0, points: 0, max_level: 5, percentage: 0, unlocked: false }
       ];
     }
 

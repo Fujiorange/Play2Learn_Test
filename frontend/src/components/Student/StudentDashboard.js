@@ -95,6 +95,7 @@ export default function StudentDashboard() {
           rank: userRank,
           completedQuizzes,
           grade_level: gradeLevel,
+          placementCompleted: dashboardInfo.placementCompleted || false,
         });
         console.log('✅ Dashboard data set successfully');
       } else {
@@ -220,7 +221,7 @@ export default function StudentDashboard() {
     {
       id: 'quiz',
       title: 'Placement Quiz',
-      description: 'Complete placement quiz to unlock adaptive quizzes',
+      description: 'Take a placement quiz to assess your skill level',
       icon: '🎯',
       action: () => navigate('/student/quiz/attempt'),
     },
@@ -380,7 +381,10 @@ export default function StudentDashboard() {
         </div>
 
         <div style={styles.menuGrid}>
-          {menuItems.filter(item => !(item.id === 'quiz' && placementCompleted)).map((item) => (
+          {menuItems
+            // ✅ Hide Placement Quiz if already completed
+            .filter(item => item.id !== 'quiz' || !dashboardData.placementCompleted)
+            .map((item) => (
             <div
               key={item.id}
               style={{

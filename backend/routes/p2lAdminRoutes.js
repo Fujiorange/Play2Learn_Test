@@ -8,6 +8,7 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const User = require('../models/User');
 const School = require('../models/School');
+const License = require('../models/License');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
@@ -15,6 +16,7 @@ const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -208,7 +210,7 @@ router.get('/dashboard-stats', authenticateP2LAdmin, async (req, res) => {
 // Get all schools
 router.get('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
-    const schools = await School.find().sort({ createdAt: -1 });
+    const schools = await School.find().populate('licenseId').sort({ createdAt: -1 });
     res.json({
       success: true,
       data: schools
@@ -225,7 +227,7 @@ router.get('/schools', authenticateP2LAdmin, async (req, res) => {
 // Get single school
 router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const school = await School.findById(req.params.id);
+    const school = await School.findById(req.params.id).populate('licenseId');
     if (!school) {
       return res.status(404).json({ 
         success: false, 
@@ -248,25 +250,36 @@ router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
 // Create school
 router.post('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, plan, plan_info, contact } = req.body;
+    const { organization_name, organization_type, licenseId, contact } = req.body;
     
     // Validate required fields
-    if (!organization_name || !plan || !plan_info) {
+    if (!organization_name || !licenseId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'organization_name, plan, and plan_info are required' 
+        error: 'organization_name and licenseId are required' 
+      });
+    }
+
+    // Verify license exists
+    const license = await License.findById(licenseId);
+    if (!license) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'License not found' 
       });
     }
 
     const school = new School({
       organization_name,
       organization_type: organization_type || 'school',
-      plan,
-      plan_info,
+      licenseId,
       contact: contact || ''
     });
 
     await school.save();
+
+    // Populate license data before returning
+    await school.populate('licenseId');
 
     res.status(201).json({
       success: true,
@@ -285,7 +298,7 @@ router.post('/schools', authenticateP2LAdmin, async (req, res) => {
 // Update school
 router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, plan, plan_info, contact, is_active } = req.body;
+    const { organization_name, organization_type, licenseId, contact, is_active } = req.body;
     
     const school = await School.findById(req.params.id);
     if (!school) {
@@ -295,15 +308,28 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Verify license exists if being updated
+    if (licenseId && licenseId !== school.licenseId.toString()) {
+      const license = await License.findById(licenseId);
+      if (!license) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'License not found' 
+        });
+      }
+    }
+
     // Update fields if provided
     if (organization_name) school.organization_name = organization_name;
     if (organization_type) school.organization_type = organization_type;
-    if (plan) school.plan = plan;
-    if (plan_info) school.plan_info = plan_info;
+    if (licenseId) school.licenseId = licenseId;
     if (contact !== undefined) school.contact = contact;
     if (is_active !== undefined) school.is_active = is_active;
 
     await school.save();
+    
+    // Populate license data before returning
+    await school.populate('licenseId');
 
     res.json({
       success: true,
@@ -743,12 +769,13 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
 // Get all questions
 router.get('/questions', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { subject, topic, difficulty, is_active } = req.query;
+    const { subject, topic, difficulty, grade, is_active } = req.query;
     
     const filter = {};
     if (subject) filter.subject = subject;
     if (topic) filter.topic = topic;
     if (difficulty) filter.difficulty = parseInt(difficulty);
+    if (grade) filter.grade = grade;
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
     const questions = await Question.find(filter)
@@ -798,6 +825,45 @@ router.get('/questions-topics', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch topics' 
+    });
+  }
+});
+
+// Get unique grades
+router.get('/questions-grades', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const grades = await Question.distinct('grade');
+    
+    // Custom sort to order by grade level number (Primary 1, Primary 2, etc.)
+    const sortedGrades = grades
+      .filter(g => g && g.trim().length > 0)
+      .sort((a, b) => {
+        // Extract number from grade string (e.g., "Primary 1" -> 1)
+        const matchA = a.match(/\d+/);
+        const matchB = b.match(/\d+/);
+        
+        // If both have numbers, sort numerically
+        if (matchA && matchB) {
+          return parseInt(matchA[0]) - parseInt(matchB[0]);
+        }
+        
+        // If only one has a number, prioritize the one with a number
+        if (matchA && !matchB) return -1;
+        if (!matchA && matchB) return 1;
+        
+        // If neither has a number, sort alphabetically
+        return a.localeCompare(b);
+      });
+    
+    res.json({
+      success: true,
+      data: sortedGrades
+    });
+  } catch (error) {
+    console.error('Get grades error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch grades' 
     });
   }
 });
@@ -867,7 +933,7 @@ router.get('/questions/:id', authenticateP2LAdmin, async (req, res) => {
 // Create question
 router.post('/questions', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { text, choices, answer, difficulty, subject, topic, is_active } = req.body;
+    const { text, choices, answer, difficulty, subject, topic, grade, is_active } = req.body;
     
     // Validate required fields
     if (!text || !answer) {
@@ -884,6 +950,7 @@ router.post('/questions', authenticateP2LAdmin, async (req, res) => {
       difficulty: difficulty || 2,
       subject: subject || 'General',
       topic: topic || '',
+      grade: grade || 'Primary 1',
       is_active: is_active !== undefined ? is_active : true,
       created_by: req.user._id
     });
@@ -907,7 +974,7 @@ router.post('/questions', authenticateP2LAdmin, async (req, res) => {
 // Update question
 router.put('/questions/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { text, choices, answer, difficulty, subject, topic, is_active } = req.body;
+    const { text, choices, answer, difficulty, subject, topic, grade, is_active } = req.body;
     
     const question = await Question.findById(req.params.id);
     if (!question) {
@@ -924,6 +991,7 @@ router.put('/questions/:id', authenticateP2LAdmin, async (req, res) => {
     if (difficulty !== undefined) question.difficulty = difficulty;
     if (subject) question.subject = subject;
     if (topic !== undefined) question.topic = topic;
+    if (grade !== undefined) question.grade = grade;
     if (is_active !== undefined) question.is_active = is_active;
 
     await question.save();
@@ -1053,13 +1121,22 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
             difficulty = 3;
           }
 
+          // Parse quiz_level (default to 1 if not provided or invalid)
+          let quiz_level = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level']) || 1;
+          if (quiz_level < 1 || quiz_level > 10) {
+            console.warn(`⚠️ Invalid quiz_level ${quiz_level} on line ${lineNumber}, defaulting to 1`);
+            quiz_level = 1;
+          }
+
           results.push({
             text: text.trim(),
             choices: choices,
             answer: answer.trim(),
             difficulty: difficulty,
+            quiz_level: quiz_level,
             subject: normalizedRow.subject || 'General',
             topic: normalizedRow.topic || '',
+            grade: normalizedRow.grade || 'Primary 1',
             is_active: normalizedRow.is_active !== 'false' && normalizedRow.is_active !== '0'
           });
         })
@@ -1182,76 +1259,91 @@ router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Create quiz
+// Create quiz (BLOCKED - quizzes should be auto-generated)
 router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
-    
-    // Validate required fields
-    if (!title) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'title is required' 
-      });
-    }
-
-    // Populate questions with full details from Question references
-    const populatedQuestions = [];
-    if (questions && questions.length > 0) {
-      // Fetch all questions in parallel for better performance
-      const questionIds = questions.map(q => q.question_id).filter(id => id);
-      const questionDocs = await Question.find({ _id: { $in: questionIds } });
-      
-      // Create a map for quick lookup
-      const questionMap = new Map(questionDocs.map(doc => [doc._id.toString(), doc]));
-      
-      // Populate questions in order, log warnings for missing questions
-      for (const q of questions) {
-        if (q.question_id) {
-          const questionDoc = questionMap.get(q.question_id.toString());
-          if (questionDoc) {
-            populatedQuestions.push({
-              question_id: questionDoc._id,
-              text: questionDoc.text,
-              choices: questionDoc.choices,
-              answer: questionDoc.answer,
-              difficulty: questionDoc.difficulty
-            });
-          } else {
-            console.warn(`⚠️ Question not found: ${q.question_id}`);
-          }
-        }
-      }
-      
-      if (populatedQuestions.length !== questionIds.length) {
-        console.warn(`⚠️ Some questions were not found. Expected ${questionIds.length}, got ${populatedQuestions.length}`);
-      }
-    }
-
-    const finalQuizType = quiz_type || (is_adaptive ? 'adaptive' : 'placement');
-
-    const quiz = new Quiz({
-      title,
-      description: description || '',
-      quiz_type: finalQuizType,
-      questions: populatedQuestions,
-      is_adaptive: is_adaptive !== undefined ? is_adaptive : (finalQuizType === 'adaptive'),
-      is_active: is_active !== undefined ? is_active : true,
-      created_by: req.user._id
-    });
-
-    await quiz.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Quiz created successfully',
-      data: quiz
+    // Block manual quiz creation
+    return res.status(403).json({
+      success: false,
+      error: 'Manual quiz creation is disabled. Please use the quiz generation endpoint instead.',
+      hint: 'Use POST /api/p2ladmin/quizzes/generate to auto-generate quizzes'
     });
   } catch (error) {
     console.error('Create quiz error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create quiz' 
+    });
+  }
+});
+
+// Generate quiz automatically
+router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { quiz_level, student_id, trigger_reason } = req.body;
+    
+    // Validate quiz_level
+    if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid quiz_level. Must be between 1 and 10'
+      });
+    }
+    
+    // Check if generation is possible
+    const availability = await checkGenerationAvailability(quiz_level);
+    if (!availability.available) {
+      return res.status(400).json({
+        success: false,
+        error: availability.message,
+        data: availability
+      });
+    }
+    
+    // Generate the quiz
+    const quiz = await generateQuiz(
+      quiz_level,
+      student_id || null,
+      trigger_reason || 'manual'
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: `Quiz generated successfully for level ${quiz_level}`,
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Quiz generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate quiz'
+    });
+  }
+});
+
+// Check quiz generation availability for a level
+router.get('/quizzes/check-availability/:level', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const level = parseInt(req.params.level);
+    
+    if (!level || level < 1 || level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid quiz level. Must be between 1 and 10'
+      });
+    }
+    
+    const availability = await checkGenerationAvailability(level);
+    
+    res.json({
+      success: true,
+      data: availability
+    });
+  } catch (error) {
+    console.error('Check availability error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check availability'
     });
   }
 });
@@ -1296,13 +1388,23 @@ router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
 // Delete quiz
 router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const quiz = await Quiz.findByIdAndDelete(req.params.id);
+    const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz not found' 
       });
     }
+    
+    // Block deletion of auto-generated quizzes
+    if (quiz.is_auto_generated) {
+      return res.status(403).json({
+        success: false,
+        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
+      });
+    }
+    
+    await Quiz.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,
@@ -1605,6 +1707,83 @@ router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete landing page' 
+    });
+  }
+});
+
+// ==================== Landing Page Statistics ====================
+// In-memory cache for statistics (1-hour duration)
+// This also serves as a rate-limiting mechanism to prevent database overload
+let statisticsCache = {
+  data: null,
+  timestamp: null,
+  CACHE_DURATION: 3600000, // 1 hour in milliseconds
+  requestCount: 0,
+  lastReset: Date.now()
+};
+
+// Get landing page statistics (schools, students, teachers)
+// NOTE: This endpoint is intentionally public (no auth required) because
+// statistics are displayed on the public landing page About section
+// Rate limiting: Cache serves dual purpose of performance optimization and rate limiting
+router.get('/landing/statistics', async (req, res) => {
+  try {
+    // Track request count for monitoring
+    statisticsCache.requestCount++;
+    
+    // Check if cache is valid
+    const now = Date.now();
+    if (statisticsCache.data && statisticsCache.timestamp && 
+        (now - statisticsCache.timestamp) < statisticsCache.CACHE_DURATION) {
+      return res.json({
+        success: true,
+        ...statisticsCache.data,
+        fromCache: true
+      });
+    }
+
+    // Fetch fresh data only if cache expired
+    // Get active schools
+    const activeSchools = await School.find({ is_active: true });
+    const activeSchoolIds = activeSchools.map(school => school._id.toString());
+    
+    // Count statistics
+    const schoolCount = activeSchools.length;
+    
+    // Count students from active schools
+    const studentCount = await User.countDocuments({
+      role: 'Student',
+      schoolId: { $in: activeSchoolIds }
+    });
+    
+    // Count teachers from active schools
+    const teacherCount = await User.countDocuments({
+      role: 'Teacher',
+      schoolId: { $in: activeSchoolIds }
+    });
+    
+    // Prepare response
+    const stats = {
+      schools: schoolCount,
+      students: studentCount,
+      teachers: teacherCount,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Update cache
+    statisticsCache.data = stats;
+    statisticsCache.timestamp = now;
+    
+    res.json({
+      success: true,
+      ...stats,
+      fromCache: false
+    });
+  } catch (error) {
+    console.error('Get landing page statistics error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch statistics' 
     });
   }
 });
@@ -2058,6 +2237,317 @@ router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete users' 
+    });
+  }
+});
+
+// ==================== SUPPORT TICKET MANAGEMENT ====================
+const SupportTicket = require('../models/SupportTicket');
+
+// Get all website-related support tickets
+router.get('/support-tickets', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { status, sortBy, sortOrder, search } = req.query;
+    
+    // Build query - only website-related tickets
+    const query = { category: 'website' };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    // Build sort object
+    const sortOptions = {};
+    const validSortFields = ['created_at', 'updated_at', 'status', 'priority'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+    sortOptions[sortField] = sortOrder === 'asc' ? 1 : -1;
+    
+    let tickets = await SupportTicket.find(query)
+      .populate('user_id', 'name email school')
+      .populate('school_id', 'name')
+      .sort(sortOptions)
+      .lean();
+    
+    // Apply search filter if provided
+    if (search) {
+      const searchLower = search.toLowerCase();
+      tickets = tickets.filter(ticket => 
+        (ticket.user_name && ticket.user_name.toLowerCase().includes(searchLower)) ||
+        (ticket.user_email && ticket.user_email.toLowerCase().includes(searchLower)) ||
+        (ticket.subject && ticket.subject.toLowerCase().includes(searchLower)) ||
+        (ticket.message && ticket.message.toLowerCase().includes(searchLower)) ||
+        // Legacy field support
+        (ticket.student_name && ticket.student_name.toLowerCase().includes(searchLower)) ||
+        (ticket.student_email && ticket.student_email.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    res.json({
+      success: true,
+      data: tickets.map(ticket => ({
+        _id: ticket._id,
+        user_name: ticket.user_name || ticket.student_name,
+        user_email: ticket.user_email || ticket.student_email,
+        user_role: ticket.user_role || 'Student',
+        school_name: ticket.school_name || (ticket.school_id && ticket.school_id.name) || 'N/A',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      })),
+      total: tickets.length
+    });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support tickets' 
+    });
+  }
+});
+
+// Get single support ticket
+router.get('/support-tickets/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id)
+      .populate('user_id', 'name email school')
+      .populate('school_id', 'name')
+      .lean();
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // If ticket is 'open' and admin is viewing it, change status to 'pending'
+    if (ticket.status === 'open') {
+      await SupportTicket.findByIdAndUpdate(req.params.id, { 
+        status: 'pending',
+        updated_at: new Date()
+      });
+      ticket.status = 'pending';
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        _id: ticket._id,
+        user_name: ticket.user_name || ticket.student_name,
+        user_email: ticket.user_email || ticket.student_email,
+        user_role: ticket.user_role || 'Student',
+        school_name: ticket.school_name || (ticket.school_id && ticket.school_id.name) || 'N/A',
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch support ticket' 
+    });
+  }
+});
+
+// Reply to a support ticket
+router.post('/support-tickets/:id/reply', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { response } = req.body;
+    
+    if (!response || response.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Response message is required' 
+      });
+    }
+    
+    const ticket = await SupportTicket.findById(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // Update ticket with admin response
+    ticket.admin_response = response;
+    ticket.responded_by = req.user._id;
+    ticket.responded_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Reply sent successfully',
+      data: {
+        _id: ticket._id,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        status: ticket.status
+      }
+    });
+  } catch (error) {
+    console.error('Reply to support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send reply' 
+    });
+  }
+});
+
+// Close a support ticket
+router.post('/support-tickets/:id/close', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    ticket.status = 'closed';
+    ticket.closed_at = new Date();
+    ticket.updated_at = new Date();
+    
+    await ticket.save();
+    
+    res.json({
+      success: true,
+      message: 'Ticket closed successfully',
+      data: {
+        _id: ticket._id,
+        status: ticket.status,
+        closed_at: ticket.closed_at
+      }
+    });
+  } catch (error) {
+    console.error('Close support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to close ticket' 
+    });
+  }
+});
+
+// Get support ticket statistics
+router.get('/support-tickets-stats', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const [openCount, pendingCount, closedCount] = await Promise.all([
+      SupportTicket.countDocuments({ category: 'website', status: 'open' }),
+      SupportTicket.countDocuments({ category: 'website', status: 'pending' }),
+      SupportTicket.countDocuments({ category: 'website', status: 'closed' })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        open: openCount,
+        pending: pendingCount,
+        closed: closedCount,
+        total: openCount + pendingCount + closedCount
+      }
+    });
+  } catch (error) {
+    console.error('Get support ticket stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch ticket statistics' 
+    });
+  }
+});
+
+// ==================== SKILL POINTS CONFIGURATION ====================
+const SkillPointsConfig = require('../models/SkillPointsConfig');
+
+// Get skill points configuration
+router.get('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const config = await SkillPointsConfig.getConfig();
+    
+    res.json({
+      success: true,
+      data: {
+        difficultyPoints: config.difficultyPoints,
+        updatedAt: config.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Get skill points config error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch skill points configuration' 
+    });
+  }
+});
+
+// Update skill points configuration
+router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { difficultyPoints } = req.body;
+    
+    if (!difficultyPoints) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'difficultyPoints configuration is required' 
+      });
+    }
+    
+    // Validate the structure
+    const requiredLevels = ['1', '2', '3', '4', '5'];
+    for (const level of requiredLevels) {
+      if (!difficultyPoints[level] || 
+          typeof difficultyPoints[level].correct !== 'number' || 
+          typeof difficultyPoints[level].wrong !== 'number') {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Invalid configuration for difficulty level ${level}. Each level must have 'correct' and 'wrong' numeric values.` 
+        });
+      }
+    }
+    
+    let config = await SkillPointsConfig.findOne({ configId: 'default' });
+    
+    if (!config) {
+      config = new SkillPointsConfig({ configId: 'default' });
+    }
+    
+    config.difficultyPoints = difficultyPoints;
+    config.updatedAt = new Date();
+    config.updatedBy = req.user._id;
+    
+    await config.save();
+    
+    res.json({
+      success: true,
+      message: 'Skill points configuration updated successfully',
+      data: {
+        difficultyPoints: config.difficultyPoints,
+        updatedAt: config.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Update skill points config error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update skill points configuration' 
     });
   }
 });

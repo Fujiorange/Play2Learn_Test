@@ -14,6 +14,7 @@ const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const MathProfile = require('../models/MathProfile');
 const MathSkill = require('../models/MathSkill');
+const SupportTicket = require('../models/SupportTicket');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -918,6 +919,158 @@ router.post('/testimonials', async (req, res) => {
   } catch (error) {
     console.error('Create testimonial error:', error);
     res.status(500).json({ success: false, error: 'Failed to submit testimonial' });
+  }
+});
+
+// ==================== SUPPORT TICKETS ====================
+router.post('/support-tickets', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { subject, category, message, description, priority } = req.body;
+
+    const finalSubject = subject || 'Support Request';
+    const finalMessage = message || description || '';
+
+    if (!finalMessage) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Message is required" 
+      });
+    }
+
+    // Get teacher info
+    const teacher = await User.findById(userId).lean();
+    
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: 'Teacher not found'
+      });
+    }
+    
+    const ticket = await SupportTicket.create({
+      // New unified fields
+      user_id: userId,
+      user_name: teacher.name || 'Unknown',
+      user_email: teacher.email || 'unknown@email.com',
+      user_role: 'Teacher',
+      school_id: teacher.school,
+      school_name: teacher.schoolName || '',
+      subject: finalSubject,
+      category: category || 'general',
+      message: finalMessage,
+      status: 'open',
+      priority: priority || 'normal',
+      // Legacy fields for backward compatibility
+      // NOTE: These student_* fields are maintained for compatibility with older code
+      // that expects these fields. They will be removed in a future update.
+      student_id: userId,
+      student_name: teacher.name || 'Unknown',
+      student_email: teacher.email || 'unknown@email.com',
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Support ticket created successfully",
+      ticketId: ticket._id,
+      ticket: {
+        id: ticket._id,
+        subject: ticket.subject,
+        category: ticket.category,
+        status: ticket.status,
+        created_at: ticket.created_at,
+      }
+    });
+  } catch (error) {
+    console.error("❌ Create support ticket error:", error);
+    res.status(500).json({ success: false, error: "Failed to create support ticket" });
+  }
+});
+
+router.get('/support-tickets', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+
+    // Use lean() for read-only query to improve performance
+    const tickets = await SupportTicket.find({ 
+      $or: [{ student_id: teacherId }, { user_id: teacherId }] 
+    })
+      .sort({ created_at: -1 })
+      .lean();
+
+    // Format tickets for frontend
+    const formattedTickets = tickets.map(ticket => ({
+      id: `#${ticket._id.toString().slice(-6).toUpperCase()}`,
+      ticketId: ticket._id,
+      subject: ticket.subject,
+      category: ticket.category === 'website' ? 'Website-Related Problem' : 
+                ticket.category === 'school' ? 'School-Related Problem' : 
+                ticket.category,
+      priority: ticket.priority,
+      status: ticket.status,
+      message: ticket.message,
+      createdOn: new Date(ticket.created_at).toLocaleDateString(),
+      lastUpdate: new Date(ticket.updated_at || ticket.created_at).toLocaleDateString(),
+      created_at: ticket.created_at,
+      updated_at: ticket.updated_at,
+      admin_response: ticket.admin_response,
+      responded_at: ticket.responded_at,
+      hasReply: !!ticket.admin_response,
+    }));
+
+    res.json({
+      success: true,
+      tickets: formattedTickets,
+      totalTickets: formattedTickets.length
+    });
+  } catch (error) {
+    console.error("❌ Get support tickets error:", error);
+    res.status(500).json({ success: false, error: "Failed to load support tickets" });
+  }
+});
+
+// Get single support ticket with details
+router.get('/support-tickets/:ticketId', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+    const { ticketId } = req.params;
+
+    const ticket = await SupportTicket.findOne({
+      _id: ticketId,
+      $or: [{ student_id: teacherId }, { user_id: teacherId }]
+    }).lean();
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      ticket: {
+        id: `#${ticket._id.toString().slice(-6).toUpperCase()}`,
+        ticketId: ticket._id,
+        subject: ticket.subject,
+        category: ticket.category === 'website' ? 'Website-Related Problem' : 
+                  ticket.category === 'school' ? 'School-Related Problem' : 
+                  ticket.category,
+        priority: ticket.priority,
+        status: ticket.status,
+        message: ticket.message,
+        createdOn: new Date(ticket.created_at).toLocaleDateString(),
+        lastUpdate: new Date(ticket.updated_at || ticket.created_at).toLocaleDateString(),
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at,
+        hasReply: !!ticket.admin_response,
+      }
+    });
+  } catch (error) {
+    console.error("❌ Get support ticket error:", error);
+    res.status(500).json({ success: false, error: "Failed to load support ticket" });
   }
 });
 

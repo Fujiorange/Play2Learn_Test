@@ -1,5 +1,5 @@
 // frontend/src/components/Parents/ViewChildProgress.js
-// ✅ SIMPLIFIED - Removed confusing Subject Progress section
+// ✅ FIXED: Now properly fetches and displays recent quiz activities
 // ✅ Shows correct child name
 // ✅ Math-only platform (no English)
 
@@ -31,15 +31,55 @@ export default function ViewChildProgress() {
 
       try {
         console.log('📈 Loading progress for student:', childInfo.studentId);
-        const result = await parentService.getChildProgress(childInfo.studentId);
         
-        if (result.success) {
-          console.log('✅ Progress data loaded:', result.progress);
-          setProgressData(result.progress);
+        // Fetch both progress data and activities in parallel
+        const [progressResult, activitiesResult] = await Promise.all([
+          parentService.getChildProgress(childInfo.studentId),
+          parentService.getChildActivities(childInfo.studentId, 10)
+        ]);
+        
+        if (progressResult.success) {
+          console.log('✅ Progress data loaded:', progressResult.progress);
+          
+          // Format activities from the API into the expected structure
+          let formattedActivities = [];
+          
+          if (activitiesResult.success && activitiesResult.activities) {
+            console.log('✅ Activities loaded:', activitiesResult.activities);
+            
+            formattedActivities = activitiesResult.activities.map(activity => {
+              // Activity could be a quiz attempt or other activity type
+              if (activity.type === 'quiz_attempt' || activity.quiz_id) {
+                return {
+                  date: activity.date || new Date(activity.timestamp || activity.created_at).toLocaleDateString('en-SG'),
+                  quizTitle: activity.quiz_title || activity.description || `Profile ${activity.profile || '?'} Quiz`,
+                  score: activity.score,
+                  total: activity.total_questions || activity.total,
+                  percentage: activity.percentage || (activity.score && activity.total ? Math.round((activity.score / activity.total) * 100) : 0),
+                  description: activity.description
+                };
+              } else {
+                // Generic activity
+                return {
+                  date: activity.date || new Date(activity.timestamp || activity.created_at).toLocaleDateString('en-SG'),
+                  description: activity.description || activity.activity_type || 'Activity',
+                  timestamp: activity.timestamp || activity.created_at
+                };
+              }
+            });
+          }
+          
+          // Merge progress data with formatted activities
+          const combinedData = {
+            ...progressResult.progress,
+            recentActivities: formattedActivities.length > 0 ? formattedActivities : progressResult.progress.recentActivities || []
+          };
+          
+          setProgressData(combinedData);
           setError(null);
         } else {
-          console.error('Failed to load progress:', result.error);
-          setError(result.error || 'Failed to load progress data');
+          console.error('Failed to load progress:', progressResult.error);
+          setError(progressResult.error || 'Failed to load progress data');
         }
       } catch (error) {
         console.error('Error loading progress:', error);
@@ -292,7 +332,7 @@ export default function ViewChildProgress() {
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
           >
-            <div style={styles.statValue}>Lvl {progressData?.currentLevel || 1}</div>
+            <div style={styles.statValue}>Lvl {progressData?.currentLevel || progressData?.currentProfile || 1}</div>
             <div style={styles.statLabel}>Current Level</div>
           </div>
 
@@ -314,8 +354,6 @@ export default function ViewChildProgress() {
             <div style={styles.statLabel}>Day Streak</div>
           </div>
         </div>
-
-        {/* ❌ REMOVED: Subject Progress section (was showing English + 0/10 topics) */}
 
         {/* Achievements */}
         <div style={styles.achievementsCard}>
@@ -349,25 +387,39 @@ export default function ViewChildProgress() {
           )}
         </div>
 
-        {/* Recent Activities */}
+        {/* Recent Activities - ✅ FIXED: Now properly displays quiz attempts */}
         <div style={styles.activitiesCard}>
           <h2 style={styles.sectionTitle}>📝 Recent Activities</h2>
           {progressData?.recentActivities && progressData.recentActivities.length > 0 ? (
-            <>
-              {progressData.recentActivities.map((activity, index) => (
-                <div key={index} style={styles.activityItem}>
-                  <span style={styles.activityText}>{activity.description}</span>
-                  <span style={styles.activityTime}>
-                    {activity.timestamp ? new Date(activity.timestamp).toLocaleDateString('en-SG') : activity.date || 'Recent'}
-                  </span>
-                </div>
-              ))}
-            </>
+            <div>
+              {progressData.recentActivities.map((activity, index) => {
+                // Check if this is a quiz activity with score data
+                const hasScore = activity.score !== undefined && activity.total !== undefined;
+                const percentage = hasScore ? (activity.percentage || Math.round((activity.score / activity.total) * 100)) : 0;
+                const scoreColor = percentage >= 70 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
+
+                return (
+                  <div key={index} style={styles.quizItem}>
+                    <div style={styles.quizInfo}>
+                      <div style={styles.quizDate}>{activity.date || 'Recent'}</div>
+                      <div style={styles.quizProfile}>
+                        {activity.quizTitle || activity.description || 'Activity'}
+                      </div>
+                    </div>
+                    {hasScore && (
+                      <div style={{ ...styles.quizScore, color: scoreColor }}>
+                        {activity.score}/{activity.total} ({percentage}%)
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <div style={styles.emptyState}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
               <p style={{ fontSize: '18px', fontWeight: '600' }}>No recent activities</p>
-              <p>Activities will appear here as {childInfo?.studentName || 'your child'} uses the platform</p>
+              <p>Activities will appear here as {childInfo?.studentName || 'your child'} completes quizzes and uses the platform</p>
             </div>
           )}
         </div>

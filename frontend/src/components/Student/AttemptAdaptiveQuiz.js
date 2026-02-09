@@ -73,6 +73,42 @@ function AttemptAdaptiveQuiz() {
 
       const data = await response.json();
 
+      // If there's an incomplete attempt, offer to cancel it
+      if (!data.success && data.error.includes('incomplete attempt') && data.attemptId) {
+        console.log('Found incomplete attempt, offering to cancel...');
+        const shouldCancel = window.confirm(
+          'You have an incomplete quiz attempt. Would you like to cancel it and start fresh?'
+        );
+        
+        if (shouldCancel) {
+          // Cancel the incomplete attempt
+          const cancelResponse = await fetch(
+            `${API_BASE_URL}/api/adaptive-quiz/attempts/${data.attemptId}/cancel`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${getToken()}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          const cancelData = await cancelResponse.json();
+          if (cancelData.success) {
+            // Retry starting the quiz
+            return startQuiz();
+          } else {
+            setError('Failed to cancel incomplete attempt');
+            setLoading(false);
+            return;
+          }
+        } else {
+          setError(data.error);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (data.success) {
         setAttemptId(data.data.attemptId);
         setProgress({

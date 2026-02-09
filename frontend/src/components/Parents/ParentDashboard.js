@@ -23,7 +23,6 @@ export default function ParentDashboard() {
   
   // Selected child's data
   const [childStats, setChildStats] = useState(null);
-  const [childActivities, setChildActivities] = useState([]);
   const [statsLoading, setStatsLoading] = useState(false);
 
   // Load dashboard data on mount
@@ -94,12 +93,6 @@ export default function ParentDashboard() {
       if (statsResult.success) {
         setChildStats(statsResult.stats);
       }
-
-      // Fetch child activities
-      const activitiesResult = await parentService.getChildActivities(studentId, 5);
-      if (activitiesResult.success) {
-        setChildActivities(activitiesResult.activities || []);
-      }
     } catch (error) {
       console.error('Error loading child stats:', error);
     } finally {
@@ -143,11 +136,6 @@ export default function ParentDashboard() {
     welcomeTitle: { fontSize: '28px', fontWeight: '700', margin: '0 0 8px 0' },
     welcomeSubtitle: { fontSize: '16px', opacity: 0.9, margin: 0 },
     childSelectorWrapper: { marginBottom: '32px' },
-    activitiesCard: { background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', marginBottom: '32px' },
-    activitiesTitle: { fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '16px' },
-    activityItem: { padding: '12px', background: '#f9fafb', borderRadius: '8px', marginBottom: '8px', borderLeft: '3px solid #10b981' },
-    activityTitle: { fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '2px' },
-    activityDetails: { fontSize: '12px', color: '#6b7280' },
     sectionsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' },
     section: { background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
     sectionHeader: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
@@ -247,25 +235,6 @@ export default function ParentDashboard() {
         STAT CARDS REMOVED (from file 16)
         ========================================
         */}
-
-        {/* Recent Activities - KEPT AS IS */}
-        {selectedChild && !statsLoading && childActivities.length > 0 && (
-          <div style={styles.activitiesCard}>
-            <h2 style={styles.activitiesTitle}>
-              🎯 Recent Activities - {selectedChild.studentName}
-            </h2>
-            {childActivities.map((activity, index) => (
-              <div key={index} style={styles.activityItem}>
-                <div style={styles.activityTitle}>
-                  {activity.icon} {activity.title}
-                </div>
-                <div style={styles.activityDetails}>
-                  {activity.description} • {parentService.formatDate(activity.timestamp)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {statsLoading && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>

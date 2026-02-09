@@ -9,10 +9,8 @@ const API_BASE_URL =
 function AdaptiveQuizzes() {
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
-  const [myAttempts, setMyAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('available');
 
   useEffect(() => {
     fetchData();
@@ -22,25 +20,15 @@ function AdaptiveQuizzes() {
 
   const fetchData = async () => {
     try {
-      const [quizzesRes, attemptsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/adaptive-quiz/quizzes`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        }),
-        fetch(`${API_BASE_URL}/api/adaptive-quiz/my-attempts`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        })
-      ]);
+      const quizzesRes = await fetch(`${API_BASE_URL}/api/adaptive-quiz/quizzes`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
 
       const quizzesData = await quizzesRes.json();
-      const attemptsData = await attemptsRes.json();
 
       if (quizzesData.success) {
         // Only show launched quizzes
         setQuizzes(quizzesData.data || []);
-      }
-
-      if (attemptsData.success) {
-        setMyAttempts(attemptsData.data);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -90,23 +78,7 @@ function AdaptiveQuizzes() {
 
       {error && <div className="error-message">{error}</div>}
 
-      <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'available' ? 'active' : ''}`}
-          onClick={() => setActiveTab('available')}
-        >
-          Available Quizzes ({quizzes.length})
-        </button>
-        <button 
-          className={`tab ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
-        >
-          My Attempts ({myAttempts.length})
-        </button>
-      </div>
-
-      {activeTab === 'available' && (
-        <div className="quizzes-grid">
+      <div className="quizzes-grid">
           {quizzes.length === 0 ? (
             <div className="no-data">
               <div className="no-data-icon">📝</div>
@@ -184,63 +156,6 @@ function AdaptiveQuizzes() {
             ))
           )}
         </div>
-      )}
-
-      {activeTab === 'history' && (
-        <div className="attempts-list">
-          {myAttempts.length === 0 ? (
-            <div className="no-data">
-              <div className="no-data-icon">📊</div>
-              <p>You haven't attempted any adaptive quizzes yet.</p>
-            </div>
-          ) : (
-            myAttempts.map((attempt) => (
-              <div key={attempt.attemptId} className="attempt-card">
-                <div className="attempt-header">
-                  <h4>{attempt.quizTitle}</h4>
-                  <span className={`status-badge ${attempt.is_completed ? 'completed' : 'incomplete'}`}>
-                    {attempt.is_completed ? 'Completed' : 'In Progress'}
-                  </span>
-                </div>
-
-                <div className="attempt-stats">
-                  <div className="attempt-stat">
-                    <span className="stat-label">Correct:</span>
-                    <span className="stat-value">
-                      {attempt.correct_count} / {attempt.target_correct_answers}
-                    </span>
-                  </div>
-                  <div className="attempt-stat">
-                    <span className="stat-label">Total Answered:</span>
-                    <span className="stat-value">{attempt.total_answered}</span>
-                  </div>
-                  <div className="attempt-stat">
-                    <span className="stat-label">Accuracy:</span>
-                    <span className="stat-value">{attempt.accuracy}%</span>
-                  </div>
-                </div>
-
-                <div className="attempt-footer">
-                  <span className="attempt-date">
-                    {attempt.is_completed 
-                      ? `Completed: ${formatDate(attempt.completedAt)}`
-                      : `Started: ${formatDate(attempt.startedAt)}`
-                    }
-                  </span>
-                  {attempt.is_completed && (
-                    <button 
-                      className="btn-view-results"
-                      onClick={() => navigate(`/student/adaptive-quiz/${attempt.attemptId}/results`)}
-                    >
-                      View Results
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
     </div>
   );
 }

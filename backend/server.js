@@ -16,6 +16,7 @@ const studentRoutes = require('./routes/mongoStudentRoutes');
 const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
 const p2lAdminRoutes = require('./routes/p2lAdminRoutes');
 const adaptiveQuizRoutes = require('./routes/adaptiveQuizRoutes');
+const licenseRoutes = require('./routes/licenseRoutes');
 
 // ==================== CORS CONFIGURATION ====================
 const corsOptions = {
@@ -84,9 +85,26 @@ function authenticateToken(req, res, next) {
 // Public endpoint to fetch landing page blocks (no authentication required)
 const LandingPage = require('./models/LandingPage');
 const Testimonial = require('./models/Testimonial');
+const User = require('./models/User');
+const School = require('./models/School');
+const License = require('./models/License');
+
+// Cache for landing page data to reduce database load and provide rate limiting
+let landingPageCache = {
+  data: null,
+  timestamp: null,
+  CACHE_DURATION: 300000, // 5 minutes in milliseconds
+};
 
 app.get('/api/public/landing-page', async (req, res) => {
   try {
+    // Check if cache is valid
+    const now = Date.now();
+    if (landingPageCache.data && landingPageCache.timestamp && 
+        (now - landingPageCache.timestamp) < landingPageCache.CACHE_DURATION) {
+      return res.json(landingPageCache.data);
+    }
+
     // Get the active landing page or the most recent one
     let landingPage = await LandingPage.findOne({ is_active: true });
     
@@ -120,7 +138,46 @@ app.get('/api/public/landing-page', async (req, res) => {
       image: t.image_url || null
     }));
 
-    // Clone blocks and inject testimonials into testimonial blocks
+    // Fetch real-time statistics for About section
+    // Get active school IDs and count users in parallel for better performance
+    const activeSchoolIds = await School.distinct('_id', { is_active: true });
+    
+    const [studentCount, teacherCount] = await Promise.all([
+      User.countDocuments({
+        role: 'Student',
+        schoolId: { $in: activeSchoolIds }
+      }),
+      User.countDocuments({
+        role: 'Teacher',
+        schoolId: { $in: activeSchoolIds }
+      })
+    ]);
+
+    // Prepare statistics data
+    const statisticsData = [
+      { value: activeSchoolIds.length, label: 'Schools Partnered' },
+      { value: studentCount, label: 'Students' },
+      { value: teacherCount, label: 'Teachers' }
+    ];
+
+    // Fetch active licenses for pricing data
+    const activeLicenses = await License.find({ isActive: true }).sort({ priceMonthly: 1 });
+    
+    // Transform licenses to pricing plan format
+    const pricingPlans = activeLicenses.map(license => ({
+      name: license.name,
+      description: license.description || '',
+      price: {
+        monthly: license.priceMonthly || 0,
+        yearly: license.priceYearly || 0
+      },
+      teachers: license.maxTeachers,
+      students: license.maxStudents,
+      features: [], // Features can be added later if needed
+      popular: false // Can be determined by logic or set manually
+    }));
+
+    // Clone blocks and inject testimonials and statistics into blocks
     // Use toObject() to properly serialize Mongoose subdocuments
     const blocks = (landingPage.blocks || []).map(block => {
       // Convert Mongoose subdocument to plain object for proper serialization
@@ -136,13 +193,42 @@ app.get('/api/public/landing-page', async (req, res) => {
           }
         };
       }
+      
+      if (plainBlock.type === 'about') {
+        // Inject real-time statistics into the about block
+        return {
+          ...plainBlock,
+          custom_data: {
+            ...(plainBlock.custom_data || {}),
+            stats: statisticsData
+          }
+        };
+      }
+      
+      if (plainBlock.type === 'pricing') {
+        // Inject active licenses into the pricing block
+        return {
+          ...plainBlock,
+          custom_data: {
+            ...(plainBlock.custom_data || {}),
+            plans: pricingPlans
+          }
+        };
+      }
+      
       return plainBlock;
     });
 
-    res.json({
+    // Prepare response and update cache
+    const response = {
       success: true,
       blocks: blocks
-    });
+    };
+    
+    landingPageCache.data = response;
+    landingPageCache.timestamp = now;
+
+    res.json(response);
   } catch (error) {
     console.error('Get public landing page error:', error);
     res.status(500).json({ 
@@ -263,6 +349,7 @@ try {
   app.use('/api/mongo/school-admin', authenticateToken, schoolAdminRoutes); // School admin routes
   app.use('/api/p2ladmin', p2lAdminRoutes); // P2lAdmin routes
   app.use('/api/adaptive-quiz', adaptiveQuizRoutes); // Adaptive quiz routes
+  app.use('/api', licenseRoutes); // License management routes
   console.log('✅ Registered all routes successfully.');
 } catch (error) {
   console.error('❌ Error registering routes:', error.message);

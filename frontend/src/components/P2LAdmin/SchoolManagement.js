@@ -1,27 +1,29 @@
 // School Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getSchools, createSchool, updateSchool, deleteSchool, getLandingPagePricingPlans } from '../../services/p2lAdminService';
-import LICENSE_PLANS from '../../constants/licensePlans';
+import { getSchools, createSchool, updateSchool, deleteSchool } from '../../services/p2lAdminService';
 import './SchoolManagement.css';
+
+const API_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : `${window.location.origin}/api`);
 
 function SchoolManagement() {
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingSchool, setEditingSchool] = useState(null);
-  const [pricingPlans, setPricingPlans] = useState([]);
-  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [licenses, setLicenses] = useState([]);
+  const [loadingLicenses, setLoadingLicenses] = useState(false);
   const [formData, setFormData] = useState({
     organization_name: '',
     organization_type: 'school',
-    plan: '',
+    licenseId: '',
     contact: ''
   });
 
   useEffect(() => {
     fetchSchools();
-    fetchPricingPlans();
+    fetchLicenses();
   }, []);
 
   const fetchSchools = async () => {
@@ -36,42 +38,28 @@ function SchoolManagement() {
     }
   };
 
-  const fetchPricingPlans = async () => {
-    setLoadingPlans(true);
+  const fetchLicenses = async () => {
+    setLoadingLicenses(true);
     try {
-      const response = await getLandingPagePricingPlans();
-      if (response.success && response.plans && response.plans.length > 0) {
-        setPricingPlans(response.plans);
-        // Set default plan if not already set
-        if (!formData.plan && response.plans.length > 0) {
-          setFormData(prev => ({ ...prev, plan: response.plans[0].id }));
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/licenses`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } else {
-        // Use fallback plans
-        setFallbackPlans();
+      });
+      const data = await response.json();
+      if (data.success && data.licenses) {
+        setLicenses(data.licenses);
+        // Set default license if not already set
+        if (!formData.licenseId && data.licenses.length > 0) {
+          setFormData(prev => ({ ...prev, licenseId: data.licenses[0]._id }));
+        }
       }
     } catch (error) {
-      console.error('Failed to fetch pricing plans:', error);
-      // Use fallback plans
-      setFallbackPlans();
+      console.error('Failed to fetch licenses:', error);
+      alert('Failed to load licenses. Please create licenses first.');
     } finally {
-      setLoadingPlans(false);
-    }
-  };
-
-  // Helper function to use fallback pricing plans
-  const setFallbackPlans = () => {
-    console.warn('No pricing plans found in landing page, using fallback constants');
-    const fallbackPlans = Object.entries(LICENSE_PLANS).map(([key, value]) => ({
-      id: key,
-      name: value.name,
-      teacher_limit: value.teacher_limit,
-      student_limit: value.student_limit,
-      price: value.price
-    }));
-    setPricingPlans(fallbackPlans);
-    if (!formData.plan) {
-      setFormData(prev => ({ ...prev, plan: 'starter' }));
+      setLoadingLicenses(false);
     }
   };
 
@@ -83,29 +71,17 @@ function SchoolManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Get plan_info based on selected plan from landing page pricing
-      const selectedPlan = pricingPlans.find(p => p.id === formData.plan);
-      if (!selectedPlan) {
-        console.error('Invalid plan selected:', formData.plan);
-        alert('Please select a valid subscription plan');
+      // Validate license is selected
+      if (!formData.licenseId) {
+        alert('Please select a license');
         return;
       }
 
-      // Prepare data with plan_info
-      const schoolData = {
-        ...formData,
-        plan_info: {
-          teacher_limit: selectedPlan.teacher_limit,
-          student_limit: selectedPlan.student_limit,
-          price: selectedPlan.price
-        }
-      };
-
       if (editingSchool) {
-        await updateSchool(editingSchool._id, schoolData);
+        await updateSchool(editingSchool._id, formData);
         alert('School updated successfully');
       } else {
-        await createSchool(schoolData);
+        await createSchool(formData);
         alert('School created successfully');
       }
       setShowForm(false);
@@ -113,7 +89,7 @@ function SchoolManagement() {
       setFormData({
         organization_name: '',
         organization_type: 'school',
-        plan: pricingPlans.length > 0 ? pricingPlans[0].id : '',
+        licenseId: licenses.length > 0 ? licenses[0]._id : '',
         contact: ''
       });
       fetchSchools();
@@ -128,7 +104,7 @@ function SchoolManagement() {
     setFormData({
       organization_name: school.organization_name,
       organization_type: school.organization_type,
-      plan: school.plan,
+      licenseId: school.licenseId?._id || school.licenseId,
       contact: school.contact || ''
     });
     setShowForm(true);
@@ -154,7 +130,7 @@ function SchoolManagement() {
     setFormData({
       organization_name: '',
       organization_type: 'school',
-      plan: pricingPlans.length > 0 ? pricingPlans[0].id : '',
+      licenseId: licenses.length > 0 ? licenses[0]._id : '',
       contact: ''
     });
   };
@@ -170,9 +146,6 @@ function SchoolManagement() {
           <h1>School Management</h1>
           <Link to="/p2ladmin/dashboard" className="back-link">← Back to Dashboard</Link>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          + Create School
-        </button>
       </header>
 
       {showForm && (
@@ -199,31 +172,30 @@ function SchoolManagement() {
                   onChange={handleInputChange}
                 >
                   <option value="school">School</option>
-                  <option value="university">University</option>
                   <option value="training_center">Training Center</option>
                 </select>
               </div>
 
               <div className="form-group">
-                <label>License Plan *</label>
-                {loadingPlans ? (
-                  <div>Loading pricing plans...</div>
-                ) : pricingPlans.length > 0 ? (
+                <label>License *</label>
+                {loadingLicenses ? (
+                  <div>Loading licenses...</div>
+                ) : licenses.length > 0 ? (
                   <select
-                    name="plan"
-                    value={formData.plan}
+                    name="licenseId"
+                    value={formData.licenseId}
                     onChange={handleInputChange}
                     required
                   >
-                    {pricingPlans.map(plan => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name} - {plan.teacher_limit} Teachers, {plan.student_limit} Students (${(plan.price || 0).toLocaleString()})
+                    {licenses.map(license => (
+                      <option key={license._id} value={license._id}>
+                        {license.name} ({license.type}) - {license.maxTeachers} Teachers, {license.maxStudents} Students, {license.maxClasses} Classes
                       </option>
                     ))}
                   </select>
                 ) : (
                   <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
-                    ⚠️ No pricing plans found. Please create a pricing block in the Landing Page Manager first.
+                    ⚠️ No licenses found. Please create licenses in License Management first.
                   </div>
                 )}
               </div>
@@ -240,7 +212,7 @@ function SchoolManagement() {
               </div>
 
               <div className="form-actions">
-                <button type="submit" className="btn-submit" disabled={loadingPlans || pricingPlans.length === 0}>
+                <button type="submit" className="btn-submit" disabled={loadingLicenses || licenses.length === 0}>
                   {editingSchool ? 'Update' : 'Create'}
                 </button>
                 <button type="button" onClick={cancelForm} className="btn-cancel">
@@ -256,27 +228,37 @@ function SchoolManagement() {
         {schools.length === 0 ? (
           <p className="no-data">No schools found. Create your first school!</p>
         ) : (
-          schools.map((school) => (
-            <div key={school._id} className="school-card">
-              <h3>{school.organization_name}</h3>
-              <div className="school-details">
-                <p><strong>Type:</strong> {school.organization_type}</p>
-                <p><strong>Plan:</strong> {school.plan.toUpperCase()}</p>
-                <p><strong>Teachers:</strong> {school.current_teachers || 0} / {school.plan_info.teacher_limit}</p>
-                <p><strong>Students:</strong> {school.current_students || 0} / {school.plan_info.student_limit}</p>
-                <p><strong>Price:</strong> ${school.plan_info.price}</p>
-                {school.contact && <p><strong>Contact:</strong> {school.contact}</p>}
+          schools.map((school) => {
+            const license = school.licenseId;
+            return (
+              <div key={school._id} className="school-card">
+                <h3>{school.organization_name}</h3>
+                <div className="school-details">
+                  <p><strong>Type:</strong> {school.organization_type}</p>
+                  {license ? (
+                    <>
+                      <p><strong>License:</strong> {license.name} ({license.type})</p>
+                      <p><strong>Teachers:</strong> {school.current_teachers || 0} / {license.maxTeachers === -1 ? 'Unlimited' : license.maxTeachers}</p>
+                      <p><strong>Students:</strong> {school.current_students || 0} / {license.maxStudents === -1 ? 'Unlimited' : license.maxStudents}</p>
+                      <p><strong>Classes:</strong> {school.current_classes || 0} / {license.maxClasses === -1 ? 'Unlimited' : license.maxClasses}</p>
+                      <p><strong>Price:</strong> ${license.priceMonthly.toLocaleString()}/month, ${license.priceYearly.toLocaleString()}/year</p>
+                    </>
+                  ) : (
+                    <p style={{ color: 'red' }}>⚠️ No license assigned</p>
+                  )}
+                  {school.contact && <p><strong>Contact:</strong> {school.contact}</p>}
+                </div>
+                <div className="card-actions">
+                  <button onClick={() => handleEdit(school)} className="btn-edit">
+                    Edit
+                  </button>
+                  <button onClick={() => handleDelete(school._id)} className="btn-delete">
+                    Delete
+                  </button>
+                </div>
               </div>
-              <div className="card-actions">
-                <button onClick={() => handleEdit(school)} className="btn-edit">
-                  Edit
-                </button>
-                <button onClick={() => handleDelete(school._id)} className="btn-delete">
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

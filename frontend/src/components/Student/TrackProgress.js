@@ -18,10 +18,33 @@ export default function TrackProgress() {
       }
 
       try {
-        const result = await studentService.getMathProgress();
+        // Fetch progress data and quiz history
+        const progressResult = await studentService.getMathProgress();
+        const historyResult = await studentService.getMathQuizHistory();
 
-        if (result.success) {
-          setProgressData(result.progressData);
+        if (progressResult.success) {
+          let recentQuizzes = [];
+          let totalQuizzes = 0;
+          let averageScore = 0;
+          
+          // Use quiz history (includes both regular and adaptive quizzes)
+          if (historyResult.success && historyResult.history) {
+            recentQuizzes = historyResult.history.slice(0, 10);
+            totalQuizzes = historyResult.history.length;
+            
+            // Calculate average score from all quizzes
+            if (totalQuizzes > 0) {
+              const totalPercentage = historyResult.history.reduce((sum, q) => sum + (q.percentage || 0), 0);
+              averageScore = Math.round(totalPercentage / totalQuizzes);
+            }
+          }
+
+          setProgressData({
+            ...progressResult.progressData,
+            totalQuizzes,
+            averageScore,
+            recentQuizzes,
+          });
         } else {
           setError('Failed to load progress data');
           setProgressData({
@@ -76,7 +99,7 @@ export default function TrackProgress() {
 
     let maxPct = 0;
     for (const q of quizzes) {
-      const total = Number(q?.total) || 0;
+      const total = Number(q?.totalQuestions) || Number(q?.total) || 0;
       const score = Number(q?.score) || 0;
       if (total <= 0) continue;
 
@@ -303,17 +326,19 @@ export default function TrackProgress() {
           <h2 style={styles.cardTitle}>Recent Quiz Attempts</h2>
           {progressData?.recentQuizzes && progressData.recentQuizzes.length > 0 ? (
             progressData.recentQuizzes.map((quiz, idx) => {
-              const percentage = Math.round((quiz.score / quiz.total) * 100);
+              const total = Number(quiz?.totalQuestions) || Number(quiz?.total) || 0;
+              const score = Number(quiz?.score) || 0;
+              const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
               const scoreColor = percentage >= 70 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
 
               return (
                 <div key={idx} style={styles.quizItem}>
                   <div style={styles.quizInfo}>
                     <div style={styles.quizDate}>{quiz.date}</div>
-                    <div style={styles.quizProfile}>Profile {quiz.profile} Quiz</div>
+                    <div style={styles.quizProfile}>{quiz.quizTitle || `Profile ${quiz.profile} Quiz`}</div>
                   </div>
                   <div style={{ ...styles.quizScore, color: scoreColor }}>
-                    {quiz.score}/{quiz.total} ({percentage}%)
+                    {score}/{total} ({percentage}%)
                   </div>
                 </div>
               );

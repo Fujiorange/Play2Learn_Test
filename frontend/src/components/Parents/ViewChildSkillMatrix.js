@@ -19,6 +19,46 @@ function sortSkillsBySequence(skills) {
   });
 }
 
+function getSkillColor(level, maxLevel) {
+  const percentage = (level / maxLevel) * 100;
+  if (percentage >= 80) return "#10b981";
+  if (percentage >= 60) return "#f59e0b";
+  if (percentage >= 40) return "#3b82f6";
+  if (percentage >= 20) return "#a855f7";
+  return "#ef4444";
+}
+
+function getSkillIcon(skillName) {
+  const name = (skillName || "").toLowerCase();
+  if (name.includes("addition")) return "➕";
+  if (name.includes("subtraction")) return "➖";
+  if (name.includes("multiplication")) return "✖️";
+  if (name.includes("division")) return "➗";
+  return "📊";
+}
+
+function getSkillLevel(level) {
+  if (level >= 5) return { label: "🏆 Master", color: "#10b981" };
+  if (level >= 4) return { label: "⭐ Advanced", color: "#f59e0b" };
+  if (level >= 3) return { label: "📈 Intermediate", color: "#3b82f6" };
+  if (level >= 2) return { label: "🌟 Beginner", color: "#a855f7" };
+  if (level >= 1) return { label: "🌱 Learning", color: "#8b5cf6" };
+  return { label: "✨ Novice", color: "#ef4444" };
+}
+
+function getLevelPointRange(level) {
+  const ranges = [
+    "0-24", "25-49", "50-99", "100-199", "200-399", "400+"
+  ];
+  return ranges[level] || "0-24";
+}
+
+function getNextLevelThreshold(currentLevel) {
+  const thresholds = [25, 50, 100, 200, 400];
+  if (currentLevel >= 5) return null;
+  return thresholds[currentLevel];
+}
+
 export default function ViewChildSkillMatrix() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,10 +92,10 @@ export default function ViewChildSkillMatrix() {
           setError(result.error || 'Failed to load skill matrix');
           // Fallback to default skills
           const fallback = sortSkillsBySequence([
-            { skill_name: 'Addition', current_level: 0, xp: 0, max_level: 5, unlocked: true, percentage: 0 },
-            { skill_name: 'Subtraction', current_level: 0, xp: 0, max_level: 5, unlocked: true, percentage: 0 },
-            { skill_name: 'Multiplication', current_level: 0, xp: 0, max_level: 5, unlocked: false, percentage: 0 },
-            { skill_name: 'Division', current_level: 0, xp: 0, max_level: 5, unlocked: false, percentage: 0 },
+            { skill_name: 'Addition', current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
+            { skill_name: 'Subtraction', current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
+            { skill_name: 'Multiplication', current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: false, percentage: 0 },
+            { skill_name: 'Division', current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: false, percentage: 0 },
           ]);
           setSkills(fallback);
           setCurrentProfile(1);
@@ -250,7 +290,7 @@ export default function ViewChildSkillMatrix() {
           </div>
 
           <p style={styles.description}>
-            Track progress in the 4 core math operations. Skills improve automatically as your child completes quizzes!
+            Track progress in the 4 core math operations. Skills improve automatically as your child completes quizzes! Each skill has 6 levels (0-5) based on points earned.
           </p>
 
           {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
@@ -259,6 +299,8 @@ export default function ViewChildSkillMatrix() {
             <div style={styles.infoText}>
               🎯 {childInfo?.studentName || 'Your child'} is currently at Profile {currentProfile}. 
               {currentProfile < 6 && ' Multiplication & Division will unlock at Profile 6!'}
+              <br />
+              💡 Points-based leveling: Level 0 (0-24pts) → Level 1 (25-49pts) → Level 2 (50-99pts) → Level 3 (100-199pts) → Level 4 (200-399pts) → Level 5 (400+pts)
             </div>
           </div>
         </div>
@@ -272,8 +314,8 @@ export default function ViewChildSkillMatrix() {
                 ? skill.xp
                 : 0;
 
-              const color = parentService.getSkillColor(skill.current_level, skill.max_level);
-              const levelInfo = parentService.getSkillLevel(skill.current_level);
+              const color = getSkillColor(skill.current_level, skill.max_level);
+              const levelInfo = getSkillLevel(skill.current_level);
 
               // Lock rule by profile: ×/÷ locked below 6
               const isAdvanced = ['Multiplication', 'Division'].includes(skill.skill_name);
@@ -298,7 +340,7 @@ export default function ViewChildSkillMatrix() {
                   )}
 
                   <div style={styles.skillHeader}>
-                    <div style={styles.skillIcon}>{parentService.getSkillIcon(skill.skill_name)}</div>
+                    <div style={styles.skillIcon}>{getSkillIcon(skill.skill_name)}</div>
                     <div style={styles.skillName}>{skill.skill_name}</div>
                   </div>
 
@@ -320,7 +362,28 @@ export default function ViewChildSkillMatrix() {
                   </div>
 
                   <div style={{ ...styles.badge, background: levelInfo.color }}>{levelInfo.label}</div>
-                  <div style={styles.xp}>XP: {skill.xp || 0} / 100</div>
+                  <div style={styles.xp}>Level Range: {getLevelPointRange(skill.current_level)} points</div>
+                  <div style={{
+                    marginTop: "4px",
+                    fontSize: "14px",
+                    color: "#3b82f6",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}>
+                    🎯 Current Points: {skill.points || 0}
+                  </div>
+                  {skill.current_level < 5 && (
+                    <div style={{
+                      marginTop: "4px",
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      fontStyle: "italic"
+                    }}>
+                      Next level at {getNextLevelThreshold(skill.current_level)} points
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -4,6 +4,9 @@ const jwt = require('jsonwebtoken');
 const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const User = require('../models/User');
+const MathSkill = require('../models/MathSkill');
+const MathProfile = require('../models/MathProfile');
+const SkillPointsConfig = require('../models/SkillPointsConfig');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -21,6 +24,242 @@ const authenticateToken = async (req, res, next) => {
     return res.status(403).json({ error: 'Invalid token' });
   }
 };
+
+// Helper function to get default difficulty points configuration
+function getDefaultDifficultyPoints() {
+  return {
+    1: { correct: 1, wrong: -2.5 },
+    2: { correct: 2, wrong: -2.0 },
+    3: { correct: 3, wrong: -1.5 },
+    4: { correct: 4, wrong: -1.0 },
+    5: { correct: 5, wrong: -0.5 }
+  };
+}
+
+// Level thresholds for points-based leveling system
+const LEVEL_THRESHOLDS = [
+  { level: 0, min: 0, max: 25 },      // Level 0: 0-24 points
+  { level: 1, min: 25, max: 50 },     // Level 1: 25-49 points
+  { level: 2, min: 50, max: 100 },    // Level 2: 50-99 points
+  { level: 3, min: 100, max: 200 },   // Level 3: 100-199 points
+  { level: 4, min: 200, max: 400 },   // Level 4: 200-399 points
+  { level: 5, min: 400, max: Infinity } // Level 5: 400+ points (max level)
+];
+
+// Helper function to calculate level from points
+function calculateLevelFromPoints(points) {
+  // Find the highest level threshold that the points meet
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (points >= LEVEL_THRESHOLDS[i].min) {
+      return LEVEL_THRESHOLDS[i].level;
+    }
+  }
+  return 0;
+}
+
+// Helper function to update skills from adaptive quiz answers
+async function updateSkillsFromAdaptiveQuiz(userId, answers) {
+  try {
+    // Get skill points configuration
+    let pointsConfig;
+    try {
+      pointsConfig = await SkillPointsConfig.getConfig();
+    } catch (err) {
+      console.log("Using default points configuration for adaptive quiz");
+      pointsConfig = { difficultyPoints: getDefaultDifficultyPoints() };
+    }
+    
+    const difficultyPoints = pointsConfig.difficultyPoints || getDefaultDifficultyPoints();
+    
+    // Calculate points change for each skill/topic
+    const skillUpdates = {};
+
+    answers.forEach((answer) => {
+      // Get topic from the answer - prefer explicit topic from question metadata
+      // The topic field should be set on the question when it's created in the quiz
+      let topic = answer.topic || 'General';
+      
+      // Fallback: If no explicit topic, try basic pattern matching as last resort
+      // Note: This is a best-effort fallback and may not be accurate for all questions
+      // Ideally, all questions should have explicit topic metadata set
+      if (!topic || topic === 'General' || topic === '') {
+        const questionText = (answer.question_text || '').toLowerCase();
+        // Only use pattern matching for simple arithmetic operators
+        if (questionText.includes('+')) {
+          topic = 'Addition';
+        } else if (questionText.includes('-') && !questionText.includes('subtract')) {
+          // Check for minus sign without the word 'subtract' to avoid double matching
+          topic = 'Subtraction';
+        } else if (questionText.includes('subtract') || questionText.includes('minus')) {
+          topic = 'Subtraction';
+        } else if (questionText.includes('×') || questionText.includes('*')) {
+          topic = 'Multiplication';
+        } else if (questionText.includes('multiply') || questionText.includes('times')) {
+          topic = 'Multiplication';
+        } else if (questionText.includes('÷') || questionText.includes('/')) {
+          topic = 'Division';
+        } else if (questionText.includes('divide')) {
+          topic = 'Division';
+        }
+        // If still 'General', keep it as the default fallback topic
+      }
+      
+      // Capitalize first letter
+      topic = topic.charAt(0).toUpperCase() + topic.slice(1);
+      
+      // Get difficulty level (default to 3 if not specified)
+      const difficulty = answer.difficulty || 3;
+      const difficultyStr = String(difficulty);
+      
+      // Get points for this difficulty level
+      const levelPoints = difficultyPoints[difficultyStr] || difficultyPoints['3'];
+      
+      if (!skillUpdates[topic]) {
+        skillUpdates[topic] = { 
+          correct: 0, 
+          total: 0, 
+          pointsChange: 0 
+        };
+      }
+      
+      skillUpdates[topic].total++;
+      
+      if (answer.isCorrect) {
+        skillUpdates[topic].correct++;
+        skillUpdates[topic].pointsChange += levelPoints.correct;
+      } else {
+        skillUpdates[topic].pointsChange += levelPoints.wrong;
+      }
+    });
+
+    const topicNames = Object.keys(skillUpdates);
+    
+    if (topicNames.length === 0) return;
+    
+    // Fetch all existing skills
+    const existingSkills = await MathSkill.find({ 
+      student_id: userId, 
+      skill_name: { $in: topicNames } 
+    });
+    
+    const skillMap = new Map(existingSkills.map(s => [s.skill_name, s]));
+    const bulkOps = [];
+
+    for (const [topicName, stats] of Object.entries(skillUpdates)) {
+      const skillPercentage = stats.total > 0 ? (stats.correct / stats.total) * 100 : 0;
+      // XP is still calculated and stored for backward compatibility and display purposes
+      // but is no longer used for level calculation (points are used instead)
+      const xpGain = Math.floor(skillPercentage / 10);
+
+      const existingSkill = skillMap.get(topicName);
+      
+      if (existingSkill) {
+        // Update existing skill
+        const newXp = existingSkill.xp + xpGain;
+        
+        // Calculate new points (minimum 0 - cannot go negative)
+        const currentPoints = existingSkill.points || 0;
+        const newPoints = Math.max(0, currentPoints + stats.pointsChange);
+        
+        // Calculate level based on points using helper function
+        const newLevel = calculateLevelFromPoints(newPoints);
+        
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: existingSkill._id },
+            update: { 
+              $set: { 
+                xp: newXp, 
+                current_level: newLevel,
+                points: newPoints,
+                updatedAt: new Date() 
+              } 
+            }
+          }
+        });
+      } else {
+        // Insert new skill
+        const newXp = xpGain;
+        const newPoints = Math.max(0, stats.pointsChange);
+        
+        // Calculate level based on points using helper function
+        const newLevel = calculateLevelFromPoints(newPoints);
+        
+        bulkOps.push({
+          insertOne: {
+            document: {
+              student_id: userId,
+              skill_name: topicName,
+              current_level: newLevel,
+              xp: newXp,
+              points: newPoints,
+              unlocked: true,
+              updatedAt: new Date()
+            }
+          }
+        });
+      }
+    }
+
+    // Execute all updates
+    if (bulkOps.length > 0) {
+      await MathSkill.bulkWrite(bulkOps);
+    }
+  } catch (error) {
+    console.error("Error updating skills from adaptive quiz:", error);
+  }
+}
+
+// Helper function to update streak and points when adaptive quiz is completed
+async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, totalAnswered) {
+  try {
+    const mathProfile = await MathProfile.findOne({ student_id: userId });
+    
+    // Calculate points: 10 points per correct answer
+    const pointsEarned = Math.max(0, correctCount * 10);
+    
+    if (!mathProfile) {
+      // Create profile if doesn't exist
+      const newProfile = new MathProfile({
+        student_id: userId,
+        streak: 1,
+        last_mid: new Date(),
+        total_points: pointsEarned
+      });
+      await newProfile.save();
+      return;
+    }
+
+    // Check if last quiz was yesterday or today
+    const now = new Date();
+    const lastQuizDate = mathProfile.last_mid ? new Date(mathProfile.last_mid) : null;
+    
+    if (!lastQuizDate) {
+      // First quiz
+      mathProfile.streak = 1;
+    } else {
+      const diffDays = Math.floor((now - lastQuizDate) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) {
+        // Same day, keep streak as is
+        // Do nothing
+      } else if (diffDays === 1) {
+        // Consecutive day, increment streak
+        mathProfile.streak = (mathProfile.streak || 0) + 1;
+      } else {
+        // Gap in days, reset streak
+        mathProfile.streak = 1;
+      }
+    }
+
+    // Update last quiz date and add points
+    mathProfile.last_mid = now;
+    mathProfile.total_points = (mathProfile.total_points || 0) + pointsEarned;
+    await mathProfile.save();
+  } catch (error) {
+    console.error("Error updating streak and points:", error);
+  }
+}
 
 // Helper function to check if a quiz is available for a student
 const isQuizAvailableForStudent = async (quiz, userId) => {
@@ -174,11 +413,21 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
     });
 
     if (existingAttempt) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'You have an incomplete attempt. Please complete or cancel it first.',
-        attemptId: existingAttempt._id
-      });
+      // If the incomplete attempt was started more than 24 hours ago, automatically delete it
+      const timeElapsed = new Date() - new Date(existingAttempt.startedAt);
+      const hoursElapsed = timeElapsed / (1000 * 60 * 60);
+      
+      if (hoursElapsed > 24) {
+        console.log(`Deleting stale incomplete attempt for user ${userId}, quiz ${quizId}`);
+        await QuizAttempt.deleteOne({ _id: existingAttempt._id });
+      } else {
+        // Incomplete attempt is still recent - return error
+        return res.status(400).json({ 
+          success: false, 
+          error: 'You have an incomplete attempt. Please complete or cancel it first.',
+          attemptId: existingAttempt._id
+        });
+      }
     }
 
     // Create new quiz attempt
@@ -253,6 +502,12 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
       await attempt.save();
+      
+      // Update skill matrix based on answers
+      await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
+      
+      // Update streak and award points when quiz is completed
+      await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
       return res.json({
         success: true,
@@ -305,6 +560,12 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
       await attempt.save();
+      
+      // Update skill matrix based on answers
+      await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
+      
+      // Update streak and award points when quiz is completed
+      await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
       return res.json({
         success: true,
@@ -580,6 +841,47 @@ router.get('/my-attempts', authenticateToken, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to get quiz attempts' 
+    });
+  }
+});
+
+// Cancel/Reset incomplete quiz attempt
+router.post('/attempts/:attemptId/cancel', authenticateToken, async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    const userId = req.user.userId;
+
+    const attempt = await QuizAttempt.findOne({
+      _id: attemptId,
+      userId
+    });
+
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Quiz attempt not found'
+      });
+    }
+
+    if (attempt.is_completed) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot cancel a completed quiz attempt'
+      });
+    }
+
+    // Delete the incomplete attempt
+    await QuizAttempt.deleteOne({ _id: attemptId });
+
+    res.json({
+      success: true,
+      message: 'Quiz attempt cancelled successfully. You can now start a new attempt.'
+    });
+  } catch (error) {
+    console.error('Cancel quiz attempt error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to cancel quiz attempt'
     });
   }
 });

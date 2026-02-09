@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import schoolAdminService from '../../services/schoolAdminService';
 import './SchoolAdmin.css';
 
-// Point earning rules (automated)
+// Point earning rules (automated) - these are display-only for now
 const defaultPointRules = [
   { id: 'rule_1', action: 'Daily Login', points: 5, isActive: true },
   { id: 'rule_2', action: 'Login Streak (7 days)', points: 20, isActive: true },
@@ -12,19 +13,6 @@ const defaultPointRules = [
   { id: 'rule_5', action: 'Perfect Score (100%)', points: 25, isActive: true },
   { id: 'rule_6', action: 'Retry & Improve Score', points: 10, isActive: true },
   { id: 'rule_7', action: 'Late Quiz Completion', points: 5, isActive: true }
-];
-
-// Shop items - cosmetics and boosters only (no real-world rewards)
-const defaultShopItems = [
-  { id: 'shop_1', name: 'Unicorn Badge', description: 'A magical unicorn for your profile', icon: '🦄', cost: 75, type: 'cosmetic', stock: 999, purchased: 12 },
-  { id: 'shop_2', name: 'Dragon Badge', description: 'A fierce dragon to show your power', icon: '🐉', cost: 100, type: 'cosmetic', stock: 999, purchased: 8 },
-  { id: 'shop_3', name: 'Rainbow Badge', description: 'Colorful and cheerful!', icon: '🌈', cost: 50, type: 'cosmetic', stock: 999, purchased: 23 },
-  { id: 'shop_4', name: 'Lion Badge', description: 'King of the math jungle', icon: '🦁', cost: 80, type: 'cosmetic', stock: 999, purchased: 15 },
-  { id: 'shop_5', name: 'Dolphin Badge', description: 'Smart and playful', icon: '🐬', cost: 60, type: 'cosmetic', stock: 999, purchased: 19 },
-  { id: 'shop_6', name: 'Butterfly Badge', description: 'Beautiful transformation', icon: '🦋', cost: 40, type: 'cosmetic', stock: 999, purchased: 31 },
-  { id: 'shop_7', name: 'Turbo Boost', description: '2x points for 1 day', icon: '⚡', cost: 150, type: 'booster', duration: '1 day', multiplier: 2, stock: 50, purchased: 5 },
-  { id: 'shop_8', name: 'Rocket Boost', description: '1.5x points for 3 days', icon: '🚀', cost: 200, type: 'booster', duration: '3 days', multiplier: 1.5, stock: 30, purchased: 3 },
-  { id: 'shop_9', name: 'Sparkle Boost', description: '1.25x points for 5 days', icon: '✨', cost: 100, type: 'booster', duration: '5 days', multiplier: 1.25, stock: 100, purchased: 8 }
 ];
 
 const shopIcons = ['🎁', '🦄', '🐉', '🌈', '🦁', '🐬', '🦋', '🐱', '🐶', '🦊', '🐼', '🐨', '⚡', '🚀', '✨', '💫', '🌟', '💎'];
@@ -41,12 +29,13 @@ export default function PointsManagement() {
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showEditItemModal, setShowEditItemModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [adjustmentAmount, setAdjustmentAmount] = useState(5);
   const [adjustmentRemarks, setAdjustmentRemarks] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [newItemForm, setNewItemForm] = useState({ name: '', description: '', icon: '🎁', cost: 50, type: 'cosmetic', stock: 999, duration: '1 day', multiplier: 1.5 });
+  const [newItemForm, setNewItemForm] = useState({ name: '', description: '', icon: '🎁', cost: 50, category: 'cosmetic', stock: 999, duration: '1 day', multiplier: 1.5 });
 
   useEffect(() => {
     if (!authService.isAuthenticated()) { navigate('/login'); return; }
@@ -56,10 +45,15 @@ export default function PointsManagement() {
   }, [navigate]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Load shop items from API
+      const shopResult = await schoolAdminService.getShopItems();
+      if (shopResult.success) {
+        setShopItems(shopResult.items || []);
+      }
+      // Keep point rules as static for now
       setPointRules(defaultPointRules);
-      setShopItems(defaultShopItems);
       setStudents([]);
       setTransactions([]);
     } catch (error) {
@@ -100,41 +94,75 @@ export default function PointsManagement() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const openEditItemModal = (item) => { setSelectedItem({...item}); setShowEditItemModal(true); };
+  const openEditItemModal = (item) => { 
+    setSelectedItem({...item}); 
+    setShowEditItemModal(true); 
+  };
 
-  const handleUpdateItem = () => {
-    setShopItems(shopItems.map(item => item.id === selectedItem.id ? selectedItem : item));
-    setMessage({ type: 'success', text: `"${selectedItem.name}" updated successfully!` });
-    setShowEditItemModal(false);
+  const handleUpdateItem = async () => {
+    try {
+      const result = await schoolAdminService.updateShopItem(selectedItem._id, selectedItem);
+      if (result.success) {
+        setMessage({ type: 'success', text: `"${selectedItem.name}" updated successfully!` });
+        setShowEditItemModal(false);
+        loadData();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to update item' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update item' });
+    }
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleDeleteItem = (itemId) => {
-    if (window.confirm('Are you sure you want to remove this item from the shop?')) {
-      setShopItems(shopItems.filter(item => item.id !== itemId));
-      setMessage({ type: 'success', text: 'Item removed from shop' });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-    }
+  const openDeleteModal = (item) => {
+    setSelectedItem(item);
+    setShowDeleteModal(true);
   };
 
-  const handleAddItem = () => {
+  const handleDeleteItem = async () => {
+    try {
+      const result = await schoolAdminService.deleteShopItem(selectedItem._id);
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Item removed from shop' });
+        setShowDeleteModal(false);
+        setSelectedItem(null);
+        loadData();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to delete item' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete item' });
+    }
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  const handleAddItem = async () => {
     if (!newItemForm.name || !newItemForm.description) {
       setMessage({ type: 'error', text: 'Please fill in all required fields' });
       return;
     }
-    const newItem = { id: `shop_${Date.now()}`, ...newItemForm, purchased: 0 };
-    setShopItems([...shopItems, newItem]);
-    setMessage({ type: 'success', text: `"${newItemForm.name}" added to shop!` });
-    setShowAddItemModal(false);
-    setNewItemForm({ name: '', description: '', icon: '🎁', cost: 50, type: 'cosmetic', stock: 999, duration: '1 day', multiplier: 1.5 });
+    try {
+      const result = await schoolAdminService.createShopItem(newItemForm);
+      if (result.success) {
+        setMessage({ type: 'success', text: `"${newItemForm.name}" added to shop!` });
+        setShowAddItemModal(false);
+        setNewItemForm({ name: '', description: '', icon: '🎁', cost: 50, category: 'cosmetic', stock: 999, duration: '1 day', multiplier: 1.5 });
+        loadData();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to add item' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to add item' });
+    }
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
   const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.email.toLowerCase().includes(searchTerm.toLowerCase()) || s.class.toLowerCase().includes(searchTerm.toLowerCase()));
   const totalPoints = students.reduce((sum, s) => sum + s.points, 0);
   const avgPoints = students.length > 0 ? Math.round(totalPoints / students.length) : 0;
-  const cosmetics = shopItems.filter(i => i.type === 'cosmetic');
-  const boosters = shopItems.filter(i => i.type === 'booster');
+  const cosmetics = shopItems.filter(i => i.category === 'cosmetic');
+  const boosters = shopItems.filter(i => i.category === 'booster');
 
   if (loading) return <div className="sa-loading"><div className="sa-loading-text">Loading points system...</div></div>;
 
@@ -219,26 +247,26 @@ export default function PointsManagement() {
             <h3 className="points-card-title">🦄 Cosmetic Badges ({cosmetics.length})</h3>
             <div className="shop-grid sa-mb-4">
               {cosmetics.map(item => (
-                <div key={item.id} className="sa-card shop-card">
+                <div key={item._id || item.id} className="sa-card shop-card">
                   <div className="shop-icon">{item.icon}</div>
                   <div className="shop-name">{item.name}</div>
                   <div className="shop-description">{item.description}</div>
                   <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-type">Cosmetic</span></div>
-                  <div className="shop-stats">Purchased: {item.purchased} times</div>
-                  <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => handleDeleteItem(item.id)}>Remove</button></div>
+                  <div className="shop-stats">Purchased: {item.purchaseCount || 0} times</div>
+                  <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
                 </div>
               ))}
             </div>
             <h3 className="points-card-title">⚡ Point Boosters ({boosters.length})</h3>
             <div className="shop-grid">
               {boosters.map(item => (
-                <div key={item.id} className="sa-card shop-card">
+                <div key={item._id || item.id} className="sa-card shop-card">
                   <div className="shop-icon">{item.icon}</div>
                   <div className="shop-name">{item.name}</div>
                   <div className="shop-description">{item.description}</div>
                   <div className="shop-meta"><span className="shop-tag shop-tag-cost">💰 {item.cost} pts</span><span className="shop-tag shop-tag-booster">{item.multiplier}x for {item.duration}</span></div>
-                  <div className="shop-stats">Stock: {item.stock - item.purchased} | Purchased: {item.purchased}</div>
-                  <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => handleDeleteItem(item.id)}>Remove</button></div>
+                  <div className="shop-stats">Stock: {(item.stock === -1 ? 'Unlimited' : Math.max(0, item.stock - (item.purchaseCount || 0)))} | Purchased: {item.purchaseCount || 0}</div>
+                  <div className="shop-actions"><button className="sa-button-action" onClick={() => openEditItemModal(item)}>Edit</button><button className="sa-button-danger" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={() => openDeleteModal(item)}>Remove</button></div>
                 </div>
               ))}
             </div>
@@ -329,7 +357,7 @@ export default function PointsManagement() {
             <div className="sa-form-group"><label className="sa-label">Item Name</label><input type="text" className="sa-input" value={selectedItem.name} onChange={(e) => setSelectedItem({ ...selectedItem, name: e.target.value })} /></div>
             <div className="sa-form-group"><label className="sa-label">Description</label><textarea className="sa-textarea" value={selectedItem.description} onChange={(e) => setSelectedItem({ ...selectedItem, description: e.target.value })} style={{ minHeight: '80px' }} /></div>
             <div className="sa-form-group"><label className="sa-label">Cost (points)</label><input type="number" className="sa-input" value={selectedItem.cost} onChange={(e) => setSelectedItem({ ...selectedItem, cost: parseInt(e.target.value) || 0 })} /></div>
-            {selectedItem.type === 'booster' && (
+            {selectedItem.category === 'booster' && (
               <>
                 <div className="sa-form-group"><label className="sa-label">Stock</label><input type="number" className="sa-input" value={selectedItem.stock} onChange={(e) => setSelectedItem({ ...selectedItem, stock: parseInt(e.target.value) || 0 })} /></div>
                 <div className="sa-form-group"><label className="sa-label">Multiplier</label><select className="sa-select" value={selectedItem.multiplier} onChange={(e) => setSelectedItem({ ...selectedItem, multiplier: parseFloat(e.target.value) })}><option value={1.25}>1.25x</option><option value={1.5}>1.5x</option><option value={2}>2x</option></select></div>
@@ -346,12 +374,12 @@ export default function PointsManagement() {
         <div className="sa-modal" onClick={() => setShowAddItemModal(false)}>
           <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
             <h2 className="sa-modal-title">➕ Add Shop Item</h2>
-            <div className="sa-form-group"><label className="sa-label">Item Type</label><select className="sa-select" value={newItemForm.type} onChange={(e) => setNewItemForm({ ...newItemForm, type: e.target.value })}><option value="cosmetic">🦄 Cosmetic Badge</option><option value="booster">⚡ Point Booster</option></select></div>
+            <div className="sa-form-group"><label className="sa-label">Item Type</label><select className="sa-select" value={newItemForm.category} onChange={(e) => setNewItemForm({ ...newItemForm, category: e.target.value })}><option value="cosmetic">🦄 Cosmetic Badge</option><option value="booster">⚡ Point Booster</option></select></div>
             <div className="sa-form-group"><label className="sa-label">Item Name *</label><input type="text" className="sa-input" value={newItemForm.name} onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })} placeholder="e.g., Panda Badge" /></div>
             <div className="sa-form-group"><label className="sa-label">Description *</label><textarea className="sa-textarea" value={newItemForm.description} onChange={(e) => setNewItemForm({ ...newItemForm, description: e.target.value })} placeholder="e.g., A cute panda for your profile" style={{ minHeight: '80px' }} /></div>
             <div className="sa-form-group"><label className="sa-label">Icon</label><div className="icon-grid">{shopIcons.map((icon) => (<div key={icon} className={`icon-option ${newItemForm.icon === icon ? 'icon-option-selected' : ''}`} onClick={() => setNewItemForm({ ...newItemForm, icon })}>{icon}</div>))}</div></div>
             <div className="sa-form-group"><label className="sa-label">Cost (points)</label><input type="number" className="sa-input" value={newItemForm.cost} onChange={(e) => setNewItemForm({ ...newItemForm, cost: parseInt(e.target.value) || 0 })} /></div>
-            {newItemForm.type === 'booster' && (
+            {newItemForm.category === 'booster' && (
               <>
                 <div className="sa-form-group"><label className="sa-label">Stock</label><input type="number" className="sa-input" value={newItemForm.stock} onChange={(e) => setNewItemForm({ ...newItemForm, stock: parseInt(e.target.value) || 0 })} /></div>
                 <div className="sa-form-group"><label className="sa-label">Multiplier</label><select className="sa-select" value={newItemForm.multiplier} onChange={(e) => setNewItemForm({ ...newItemForm, multiplier: parseFloat(e.target.value) })}><option value={1.25}>1.25x</option><option value={1.5}>1.5x</option><option value={2}>2x</option></select></div>
@@ -359,6 +387,24 @@ export default function PointsManagement() {
               </>
             )}
             <div className="sa-modal-buttons"><button className="sa-modal-button-cancel" onClick={() => setShowAddItemModal(false)}>Cancel</button><button className="sa-modal-button-confirm" onClick={handleAddItem}>Add Item</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedItem && (
+        <div className="sa-modal" onClick={() => setShowDeleteModal(false)}>
+          <div className="sa-modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="sa-modal-title">🗑️ Remove Shop Item</h2>
+            <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+              Are you sure you want to remove <strong>"{selectedItem.name}"</strong> from the shop?
+              <br /><br />
+              This item has been purchased <strong>{selectedItem.purchaseCount || 0} times</strong>.
+            </p>
+            <div className="sa-modal-buttons">
+              <button className="sa-modal-button-cancel" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+              <button className="sa-modal-button-danger" onClick={handleDeleteItem}>Remove Item</button>
+            </div>
           </div>
         </div>
       )}

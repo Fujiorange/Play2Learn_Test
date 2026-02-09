@@ -108,6 +108,11 @@ export const getLandingPagePricingPlans = async () => {
   return apiCall('/api/p2ladmin/landing/pricing-plans');
 };
 
+// Get landing page statistics (schools, students, teachers)
+export const getLandingPageStatistics = async () => {
+  return apiCall('/api/p2ladmin/landing/statistics');
+};
+
 // ==================== SCHOOLS ====================
 export const getSchools = async () => {
   return apiCall('/api/p2ladmin/schools');
@@ -240,6 +245,10 @@ export const getQuestionTopics = async () => {
   return apiCall('/api/p2ladmin/questions-topics');
 };
 
+export const getQuestionGrades = async () => {
+  return apiCall('/api/p2ladmin/questions-grades');
+};
+
 export const bulkDeleteQuestions = async (ids) => {
   return apiCall('/api/p2ladmin/questions/bulk-delete', {
     method: 'POST',
@@ -273,6 +282,13 @@ export const updateQuiz = async (id, quizData) => {
 export const deleteQuiz = async (id) => {
   return apiCall(`/api/p2ladmin/quizzes/${id}`, {
     method: 'DELETE',
+  });
+};
+
+export const generateQuiz = async (generationData) => {
+  return apiCall('/api/p2ladmin/quizzes/generate', {
+    method: 'POST',
+    body: JSON.stringify(generationData),
   });
 };
 
@@ -358,6 +374,45 @@ export const deleteMaintenanceBroadcast = async (id) => {
   });
 };
 
+// ==================== SUPPORT TICKETS ====================
+export const getSupportTickets = async (filters = {}) => {
+  const queryString = new URLSearchParams(filters).toString();
+  return apiCall(`/api/p2ladmin/support-tickets${queryString ? `?${queryString}` : ''}`);
+};
+
+export const getSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}`);
+};
+
+export const replySupportTicket = async (id, response) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ response }),
+  });
+};
+
+export const closeSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}/close`, {
+    method: 'POST',
+  });
+};
+
+export const getSupportTicketStats = async () => {
+  return apiCall('/api/p2ladmin/support-tickets-stats');
+};
+
+// ==================== SKILL POINTS CONFIGURATION ====================
+export const getSkillPointsConfig = async () => {
+  return apiCall('/api/p2ladmin/skill-points-config');
+};
+
+export const updateSkillPointsConfig = async (difficultyPoints) => {
+  return apiCall('/api/p2ladmin/skill-points-config', {
+    method: 'PUT',
+    body: JSON.stringify({ difficultyPoints }),
+  });
+};
+
 export default {
   seedP2LAdmin,
   registerP2LAdmin,
@@ -365,6 +420,8 @@ export default {
   saveLandingPage,
   updateLandingPage,
   deleteLandingPage,
+  getLandingPagePricingPlans,
+  getLandingPageStatistics,
   getSchools,
   getSchool,
   createSchool,
@@ -400,4 +457,11 @@ export default {
   getAllUsers,
   getUserSchools,
   bulkDeleteUsers,
+  getSupportTickets,
+  getSupportTicket,
+  replySupportTicket,
+  closeSupportTicket,
+  getSupportTicketStats,
+  getSkillPointsConfig,
+  updateSkillPointsConfig,
 };

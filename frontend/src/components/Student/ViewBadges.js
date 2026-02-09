@@ -24,6 +24,7 @@ export default function ViewBadges() {
 
   const criteriaLabels = {
     quizzes_completed: 'Quizzes Completed',
+    assignments_completed: 'Assignments Completed',
     login_streak: 'Login Streak (days)',
     perfect_scores: 'Perfect Scores',
     high_scores: 'High Scores (90%+)',
