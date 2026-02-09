@@ -454,6 +454,10 @@ async function startServer() {
     console.log('📊 Database:', mongoose.connection.db.databaseName);
     console.log('🏢 Host:', mongoose.connection.host);
     
+    // Start automatic quiz generation job
+    const { startAutoGenerationJob } = require('./services/autoGenerationJob');
+    startAutoGenerationJob();
+    
     const server = app.listen(PORT, () => {
       console.log('╔═══════════════════════════════════════════════╗');
       console.log('║          🚀 Play2Learn Server               ║');
@@ -470,6 +474,11 @@ async function startServer() {
     // Graceful shutdown
     process.on('SIGTERM', () => {
       console.log('SIGTERM received. Shutting down gracefully...');
+      
+      // Stop auto-generation job
+      const { stopAutoGenerationJob } = require('./services/autoGenerationJob');
+      stopAutoGenerationJob();
+      
       server.close(() => {
         console.log('Server closed.');
         process.exit(0);

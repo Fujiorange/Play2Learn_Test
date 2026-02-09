@@ -8,10 +8,13 @@ const User = require('../models/User');
 const School = require('../models/School');
 const Class = require('../models/Class');
 const SupportTicket = require('../models/SupportTicket');
+const BulkUploadSession = require('../models/BulkUploadSession');
+const PendingCredential = require('../models/PendingCredential');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
@@ -4205,6 +4208,732 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error processing license upgrade:', error);
     return res.status(500).json({ success: false, error: 'Failed to process payment. Please try again.' });
+  }
+});
+
+// ==================== CSV BULK UPLOAD ENDPOINTS ====================
+
+/**
+ * POST /classes/bulk-upload
+ * Upload CSV file for bulk class/teacher/student creation
+ */
+router.post('/classes/bulk-upload', authenticateSchoolAdmin, upload.single('csvFile'), async (req, res) => {
+  let sessionId = null;
+  let uploadSession = null;
+  const createdUsers = [];
+  const createdClasses = [];
+  
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No CSV file uploaded' });
+    }
+    
+    // Generate unique session ID
+    sessionId = crypto.randomBytes(16).toString('hex');
+    
+    // Read CSV file
+    const csvData = [];
+    const filePath = req.file.path;
+    
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(csv())
+        .on('data', (row) => csvData.push(row))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+    
+    // Clean up uploaded file
+    fs.unlinkSync(filePath);
+    
+    if (csvData.length === 0) {
+      return res.status(400).json({ success: false, error: 'CSV file is empty' });
+    }
+    
+    // Detect CSV type based on headers
+    const headers = Object.keys(csvData[0]).map(h => h.trim());
+    let csvType = null;
+    
+    if (headers.includes('Class Name') && headers.includes('Grade') && headers.includes('Subject')) {
+      csvType = 'class';
+    } else if (headers.includes('Teacher Name') && headers.includes('Teacher Email') && headers.includes('Class Name')) {
+      csvType = 'teacher';
+    } else if (headers.includes('Student Name') && headers.includes('Student Email') && headers.includes('Class Name')) {
+      csvType = 'student';
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Unknown CSV format. Please use Class, Teacher, or Student CSV templates.' 
+      });
+    }
+    
+    // Create upload session
+    uploadSession = new BulkUploadSession({
+      sessionId,
+      csvType,
+      schoolId,
+      uploadedBy: schoolAdmin._id,
+      fileName: req.file.originalname,
+      totalRows: csvData.length,
+      status: 'processing'
+    });
+    
+    await uploadSession.save();
+    
+    // Process CSV based on type
+    const errors = [];
+    const entities = [];
+    let successCount = 0;
+    
+    if (csvType === 'class') {
+      // Process class creation CSV
+      for (let i = 0; i < csvData.length; i++) {
+        const row = csvData[i];
+        try {
+          const className = row['Class Name']?.trim();
+          const grade = row['Grade']?.trim();
+          const subject = row['Subject']?.trim();
+          
+          if (!className || !grade || !subject) {
+            errors.push({
+              row: i + 1,
+              field: 'Class Name, Grade, or Subject',
+              message: 'Missing required fields',
+              data: row
+            });
+            continue;
+          }
+          
+          // Check if class already exists
+          const existingClass = await Class.findOne({
+            school_id: schoolId,
+            class_name: className,
+            grade: grade
+          });
+          
+          if (existingClass) {
+            errors.push({
+              row: i + 1,
+              field: 'Class Name',
+              message: `Class "${className}" already exists for grade ${grade}`,
+              data: row
+            });
+            continue;
+          }
+          
+          // Create new class
+          const newClass = new Class({
+            class_name: className,
+            grade: grade,
+            subjects: [subject],
+            school_id: schoolId,
+            is_active: true
+          });
+          
+          await newClass.save();
+          createdClasses.push(newClass._id);
+          
+          entities.push({
+            entityType: 'class',
+            entityId: newClass._id,
+            name: className,
+            className: className
+          });
+          
+          successCount++;
+        } catch (error) {
+          errors.push({
+            row: i + 1,
+            field: 'General',
+            message: error.message,
+            data: row
+          });
+        }
+      }
+    } else if (csvType === 'teacher') {
+      // Process teacher assignment CSV
+      for (let i = 0; i < csvData.length; i++) {
+        const row = csvData[i];
+        try {
+          const teacherName = row['Teacher Name']?.trim();
+          const teacherEmail = row['Teacher Email']?.trim().toLowerCase();
+          const className = row['Class Name']?.trim();
+          
+          if (!teacherName || !teacherEmail || !className) {
+            errors.push({
+              row: i + 1,
+              field: 'Teacher Name, Email, or Class Name',
+              message: 'Missing required fields',
+              data: row
+            });
+            continue;
+          }
+          
+          // Validate email format
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(teacherEmail)) {
+            errors.push({
+              row: i + 1,
+              field: 'Teacher Email',
+              message: 'Invalid email format',
+              data: row
+            });
+            continue;
+          }
+          
+          // Find the class
+          const classDoc = await Class.findOne({
+            school_id: schoolId,
+            class_name: className
+          });
+          
+          if (!classDoc) {
+            errors.push({
+              row: i + 1,
+              field: 'Class Name',
+              message: `Class "${className}" not found. Create classes first.`,
+              data: row
+            });
+            continue;
+          }
+          
+          // Check license availability
+          const licenseCheck = await checkLicenseAvailability(schoolId, 'Teacher');
+          
+          // Check if teacher already exists
+          let teacher = await User.findOne({ email: teacherEmail });
+          
+          if (teacher) {
+            // Teacher exists, just assign to class
+            if (!classDoc.teachers.includes(teacher._id)) {
+              classDoc.teachers.push(teacher._id);
+              await classDoc.save();
+            }
+            
+            entities.push({
+              entityType: 'teacher',
+              entityId: teacher._id,
+              name: teacherName,
+              email: teacherEmail,
+              className: className
+            });
+            
+            successCount++;
+          } else {
+            // Check license before creating new teacher
+            if (!licenseCheck.available) {
+              errors.push({
+                row: i + 1,
+                field: 'License',
+                message: licenseCheck.error,
+                data: row
+              });
+              continue;
+            }
+            
+            // Create new teacher with temp password
+            const tempPassword = generateTempPassword();
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+            
+            teacher = new User({
+              name: teacherName,
+              email: teacherEmail,
+              password: hashedPassword,
+              role: 'Teacher',
+              schoolId: schoolId,
+              assignedClasses: [className],
+              tempPassword: tempPassword,
+              requirePasswordChange: true,
+              credentialsSent: false
+            });
+            
+            await teacher.save();
+            createdUsers.push(teacher._id);
+            
+            // Update school teacher count
+            const school = await School.findById(schoolId);
+            school.current_teachers = (school.current_teachers || 0) + 1;
+            await school.save();
+            
+            // Assign teacher to class
+            classDoc.teachers.push(teacher._id);
+            await classDoc.save();
+            
+            // Create pending credential
+            const pendingCred = new PendingCredential({
+              userId: teacher._id,
+              email: teacherEmail,
+              tempPassword: tempPassword,
+              role: 'Teacher',
+              name: teacherName,
+              schoolId: schoolId,
+              classAssigned: className
+            });
+            
+            await pendingCred.save();
+            
+            entities.push({
+              entityType: 'teacher',
+              entityId: teacher._id,
+              name: teacherName,
+              email: teacherEmail,
+              className: className
+            });
+            
+            successCount++;
+          }
+        } catch (error) {
+          errors.push({
+            row: i + 1,
+            field: 'General',
+            message: error.message,
+            data: row
+          });
+        }
+      }
+    } else if (csvType === 'student') {
+      // Process student creation CSV
+      for (let i = 0; i < csvData.length; i++) {
+        const row = csvData[i];
+        try {
+          const studentName = row['Student Name']?.trim();
+          const studentEmail = row['Student Email']?.trim().toLowerCase();
+          const className = row['Class Name']?.trim();
+          const parentEmail = row['Linked Parent Email']?.trim().toLowerCase();
+          
+          if (!studentName || !studentEmail || !className) {
+            errors.push({
+              row: i + 1,
+              field: 'Student Name, Email, or Class Name',
+              message: 'Missing required fields',
+              data: row
+            });
+            continue;
+          }
+          
+          // Validate email format
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(studentEmail)) {
+            errors.push({
+              row: i + 1,
+              field: 'Student Email',
+              message: 'Invalid email format',
+              data: row
+            });
+            continue;
+          }
+          
+          if (parentEmail && !emailRegex.test(parentEmail)) {
+            errors.push({
+              row: i + 1,
+              field: 'Linked Parent Email',
+              message: 'Invalid parent email format',
+              data: row
+            });
+            continue;
+          }
+          
+          // Find the class
+          const classDoc = await Class.findOne({
+            school_id: schoolId,
+            class_name: className
+          });
+          
+          if (!classDoc) {
+            errors.push({
+              row: i + 1,
+              field: 'Class Name',
+              message: `Class "${className}" not found. Create classes first.`,
+              data: row
+            });
+            continue;
+          }
+          
+          // Check license availability
+          const licenseCheck = await checkLicenseAvailability(schoolId, 'Student');
+          
+          // Check if student already exists
+          let student = await User.findOne({ email: studentEmail });
+          
+          if (student) {
+            // Student exists, just assign to class
+            if (!classDoc.students.includes(student._id)) {
+              classDoc.students.push(student._id);
+              await classDoc.save();
+            }
+            
+            student.class = className;
+            student.gradeLevel = classDoc.grade;
+            await student.save();
+            
+            entities.push({
+              entityType: 'student',
+              entityId: student._id,
+              name: studentName,
+              email: studentEmail,
+              className: className
+            });
+            
+            successCount++;
+          } else {
+            // Check license before creating new student
+            if (!licenseCheck.available) {
+              errors.push({
+                row: i + 1,
+                field: 'License',
+                message: licenseCheck.error,
+                data: row
+              });
+              continue;
+            }
+            
+            // Create new student with temp password
+            const tempPassword = generateTempPassword();
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+            
+            student = new User({
+              name: studentName,
+              email: studentEmail,
+              password: hashedPassword,
+              role: 'Student',
+              schoolId: schoolId,
+              class: className,
+              gradeLevel: classDoc.grade,
+              tempPassword: tempPassword,
+              requirePasswordChange: true,
+              credentialsSent: false
+            });
+            
+            await student.save();
+            createdUsers.push(student._id);
+            
+            // Update school student count
+            const school = await School.findById(schoolId);
+            school.current_students = (school.current_students || 0) + 1;
+            await school.save();
+            
+            // Assign student to class
+            classDoc.students.push(student._id);
+            await classDoc.save();
+            
+            // Create pending credential
+            const pendingCred = new PendingCredential({
+              userId: student._id,
+              email: studentEmail,
+              tempPassword: tempPassword,
+              role: 'Student',
+              name: studentName,
+              schoolId: schoolId,
+              classAssigned: className,
+              linkedParentEmail: parentEmail || null
+            });
+            
+            await pendingCred.save();
+            
+            entities.push({
+              entityType: 'student',
+              entityId: student._id,
+              name: studentName,
+              email: studentEmail,
+              className: className
+            });
+            
+            // Handle parent creation if provided
+            if (parentEmail) {
+              let parent = await User.findOne({ email: parentEmail });
+              
+              if (!parent) {
+                // Create new parent
+                const parentTempPassword = generateTempPassword();
+                const parentHashedPassword = await bcrypt.hash(parentTempPassword, 10);
+                
+                parent = new User({
+                  name: `Parent of ${studentName}`,
+                  email: parentEmail,
+                  password: parentHashedPassword,
+                  role: 'Parent',
+                  schoolId: schoolId,
+                  linkedStudents: [{
+                    studentId: student._id,
+                    relationship: 'Parent'
+                  }],
+                  tempPassword: parentTempPassword,
+                  requirePasswordChange: true,
+                  credentialsSent: false
+                });
+                
+                await parent.save();
+                createdUsers.push(parent._id);
+                
+                // Create pending credential for parent
+                const parentPendingCred = new PendingCredential({
+                  userId: parent._id,
+                  email: parentEmail,
+                  tempPassword: parentTempPassword,
+                  role: 'Parent',
+                  name: parent.name,
+                  schoolId: schoolId
+                });
+                
+                await parentPendingCred.save();
+                
+                entities.push({
+                  entityType: 'parent',
+                  entityId: parent._id,
+                  name: parent.name,
+                  email: parentEmail
+                });
+              } else {
+                // Parent exists, just link to student
+                const alreadyLinked = parent.linkedStudents.some(
+                  ls => ls.studentId.toString() === student._id.toString()
+                );
+                
+                if (!alreadyLinked) {
+                  parent.linkedStudents.push({
+                    studentId: student._id,
+                    relationship: 'Parent'
+                  });
+                  await parent.save();
+                }
+              }
+            }
+            
+            successCount++;
+          }
+        } catch (error) {
+          errors.push({
+            row: i + 1,
+            field: 'General',
+            message: error.message,
+            data: row
+          });
+        }
+      }
+    }
+    
+    // Update session with results
+    uploadSession.status = errors.length === 0 ? 'completed' : (successCount > 0 ? 'partial' : 'failed');
+    uploadSession.successfulRows = successCount;
+    uploadSession.failedRows = errors.length;
+    uploadSession.createdEntities = entities;
+    uploadSession.errors = errors;
+    uploadSession.completedAt = new Date();
+    
+    await uploadSession.save();
+    
+    return res.json({
+      success: true,
+      sessionId: sessionId,
+      csvType: csvType,
+      totalRows: csvData.length,
+      successfulRows: successCount,
+      failedRows: errors.length,
+      status: uploadSession.status,
+      createdEntities: entities,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Successfully processed ${successCount} out of ${csvData.length} rows`
+    });
+    
+  } catch (error) {
+    console.error('CSV bulk upload error:', error);
+    
+    // Rollback created entities on error
+    try {
+      if (createdUsers.length > 0) {
+        await User.deleteMany({ _id: { $in: createdUsers } });
+      }
+      if (createdClasses.length > 0) {
+        await Class.deleteMany({ _id: { $in: createdClasses } });
+      }
+      
+      // Update session status
+      if (uploadSession) {
+        uploadSession.status = 'failed';
+        uploadSession.errors = [{
+          row: 0,
+          field: 'System',
+          message: error.message
+        }];
+        await uploadSession.save();
+      }
+    } catch (rollbackError) {
+      console.error('Rollback error:', rollbackError);
+    }
+    
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process CSV upload: ' + error.message 
+    });
+  }
+});
+
+/**
+ * GET /pending-credentials
+ * Get all pending credentials for the school
+ */
+router.get('/pending-credentials', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    const pendingCredentials = await PendingCredential.find({
+      schoolId: schoolId,
+      sent: false
+    })
+      .populate('userId', 'name email role class')
+      .sort({ createdAt: -1 })
+      .limit(100);
+    
+    return res.json({
+      success: true,
+      credentials: pendingCredentials,
+      count: pendingCredentials.length
+    });
+  } catch (error) {
+    console.error('Get pending credentials error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch pending credentials' 
+    });
+  }
+});
+
+/**
+ * POST /send-credentials
+ * Send credentials to users via email
+ */
+router.post('/send-credentials', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const { credentialIds } = req.body; // Array of PendingCredential IDs
+    
+    if (!credentialIds || !Array.isArray(credentialIds) || credentialIds.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No credentials selected for sending' 
+      });
+    }
+    
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    // Get school info for email
+    const school = await School.findById(schoolAdmin.schoolId);
+    const schoolName = school ? school.name : 'Your School';
+    
+    for (const credId of credentialIds) {
+      try {
+        const credential = await PendingCredential.findById(credId).populate('userId');
+        
+        if (!credential || credential.sent) {
+          results.failed++;
+          results.errors.push({
+            credentialId: credId,
+            error: 'Credential not found or already sent'
+          });
+          continue;
+        }
+        
+        const user = credential.userId;
+        const tempPassword = credential.tempPassword;
+        
+        // Send email based on role
+        let emailResult;
+        
+        if (user.role === 'Teacher') {
+          emailResult = await sendTeacherWelcomeEmail(user, tempPassword, schoolName);
+        } else if (user.role === 'Student' && credential.linkedParentEmail) {
+          emailResult = await sendStudentCredentialsToParent(user, tempPassword, credential.linkedParentEmail, schoolName);
+        } else if (user.role === 'Student') {
+          // Send to student's email if no parent email
+          emailResult = await sendStudentCredentialsToParent(user, tempPassword, user.email, schoolName);
+        } else if (user.role === 'Parent') {
+          emailResult = await sendParentWelcomeEmail(user, tempPassword, schoolName);
+        } else {
+          results.failed++;
+          results.errors.push({
+            credentialId: credId,
+            error: 'Unsupported role for email sending'
+          });
+          continue;
+        }
+        
+        if (emailResult && emailResult.success) {
+          // Mark as sent
+          credential.sent = true;
+          credential.sentAt = new Date();
+          credential.sentBy = schoolAdmin._id;
+          await credential.save();
+          
+          // Update user
+          user.credentialsSent = true;
+          user.credentialsSentAt = new Date();
+          await user.save();
+          
+          results.success++;
+        } else {
+          results.failed++;
+          results.errors.push({
+            credentialId: credId,
+            error: emailResult ? emailResult.error : 'Email sending failed'
+          });
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          credentialId: credId,
+          error: error.message
+        });
+      }
+    }
+    
+    return res.json({
+      success: true,
+      message: `Sent ${results.success} credentials, ${results.failed} failed`,
+      results: results
+    });
+  } catch (error) {
+    console.error('Send credentials error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send credentials' 
+    });
+  }
+});
+
+/**
+ * GET /bulk-upload/sessions
+ * Get upload session history
+ */
+router.get('/bulk-upload/sessions', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = req.schoolAdmin;
+    const schoolId = schoolAdmin.schoolId;
+    
+    const sessions = await BulkUploadSession.find({
+      schoolId: schoolId
+    })
+      .populate('uploadedBy', 'name email')
+      .sort({ timestamp: -1 })
+      .limit(20);
+    
+    return res.json({
+      success: true,
+      sessions: sessions
+    });
+  } catch (error) {
+    console.error('Get upload sessions error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch upload sessions' 
+    });
   }
 });
 

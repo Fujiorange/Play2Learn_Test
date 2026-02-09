@@ -14,9 +14,17 @@ const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
 const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
+const QuizGenerationTracking = require('../models/QuizGenerationTracking');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
-const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
+const { 
+  generateQuiz, 
+  checkGenerationAvailability, 
+  generateQuizByGradeSubject,
+  checkAllCombinationsForGeneration,
+  autoGenerateQuizzes
+} = require('../services/quizGenerationService');
+const { getJobStatus } = require('../services/autoGenerationJob');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -2580,6 +2588,175 @@ router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update skill points configuration' 
+    });
+  }
+});
+
+// ==================== AUTOMATIC QUIZ GENERATION ENDPOINTS ====================
+
+/**
+ * GET /quizzes/generation-status
+ * Check status of quiz generation for all combinations
+ */
+router.get('/quizzes/generation-status', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const combinations = await checkAllCombinationsForGeneration();
+    const jobStatus = getJobStatus();
+    
+    // Summary statistics
+    const summary = {
+      totalCombinations: combinations.length,
+      canGenerate: combinations.filter(c => c.canGenerate).length,
+      autoEnabled: combinations.filter(c => c.autoGenerationEnabled).length,
+      needsQuestions: combinations.filter(c => !c.canGenerate).length
+    };
+    
+    return res.json({
+      success: true,
+      summary,
+      combinations,
+      jobStatus
+    });
+  } catch (error) {
+    console.error('Get generation status error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get generation status'
+    });
+  }
+});
+
+/**
+ * POST /quizzes/auto-generate
+ * Manually trigger automatic quiz generation
+ */
+router.post('/quizzes/auto-generate', authenticateP2LAdmin, async (req, res) => {
+  try {
+    console.log('🎲 Manual trigger: Auto-generating quizzes');
+    
+    const results = await autoGenerateQuizzes();
+    
+    return res.json({
+      success: true,
+      message: `Generated ${results.generated} quizzes, skipped ${results.skipped}, checked ${results.checked} combinations`,
+      results
+    });
+  } catch (error) {
+    console.error('Auto-generate quizzes error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to auto-generate quizzes: ' + error.message
+    });
+  }
+});
+
+/**
+ * POST /quizzes/generate-by-criteria
+ * Generate quiz for specific Grade/Subject/QuizLevel combination
+ */
+router.post('/quizzes/generate-by-criteria', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { grade, subject, quizLevel } = req.body;
+    
+    if (!grade || !subject || !quizLevel) {
+      return res.status(400).json({
+        success: false,
+        error: 'Grade, subject, and quizLevel are required'
+      });
+    }
+    
+    // Check if enough questions exist
+    const questionCount = await Question.countDocuments({
+      grade,
+      subject,
+      quiz_level: quizLevel,
+      is_active: true
+    });
+    
+    if (questionCount < 40) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient questions. Found ${questionCount}/40 for Grade: ${grade}, Subject: ${subject}, Level: ${quizLevel}`
+      });
+    }
+    
+    console.log(`🎲 Generating quiz for Grade: ${grade}, Subject: ${subject}, Level: ${quizLevel}`);
+    
+    const quiz = await generateQuizByGradeSubject(grade, subject, quizLevel, 'manual_admin');
+    
+    // Update tracking
+    const tracking = await QuizGenerationTracking.findOneAndUpdate(
+      { grade, subject, quizLevel },
+      {
+        $set: { 
+          lastGenerated: new Date(),
+          questionCount
+        },
+        $push: {
+          generatedQuizzes: {
+            quizId: quiz._id,
+            generatedAt: new Date(),
+            questionCount: 20
+          }
+        }
+      },
+      { upsert: true, new: true }
+    );
+    
+    return res.json({
+      success: true,
+      message: `Quiz generated successfully: ${quiz.title}`,
+      quiz: {
+        id: quiz._id,
+        title: quiz.title,
+        description: quiz.description,
+        questionCount: quiz.questions.length,
+        grade,
+        subject,
+        quizLevel
+      }
+    });
+  } catch (error) {
+    console.error('Generate quiz by criteria error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to generate quiz: ' + error.message
+    });
+  }
+});
+
+/**
+ * PUT /quizzes/generation-tracking/:id/toggle
+ * Enable/disable auto-generation for a specific combination
+ */
+router.put('/quizzes/generation-tracking/:id/toggle', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { autoGenerationEnabled } = req.body;
+    
+    const tracking = await QuizGenerationTracking.findByIdAndUpdate(
+      id,
+      { $set: { autoGenerationEnabled } },
+      { new: true }
+    );
+    
+    if (!tracking) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tracking record not found'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      message: `Auto-generation ${autoGenerationEnabled ? 'enabled' : 'disabled'} for ${tracking.grade}/${tracking.subject}/Level ${tracking.quizLevel}`,
+      tracking
+    });
+  } catch (error) {
+    console.error('Toggle auto-generation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to toggle auto-generation'
     });
   }
 });
