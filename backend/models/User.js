@@ -43,6 +43,12 @@ const userSchema = new mongoose.Schema({
     },
   ],
 
+  // ✅ Placement Quiz Tracking (NEW)
+  placementQuizCompleted: { type: Boolean, default: false },
+  placementQuizScore: { type: Number, default: null },
+  placementQuizDate: { type: Date, default: null },
+  placementQuizAttemptId: { type: mongoose.Schema.Types.ObjectId, default: null },
+
   emailVerified: { type: Boolean, default: false },
   verificationToken: { type: String, default: null },
   accountActive: { type: Boolean, default: true },
