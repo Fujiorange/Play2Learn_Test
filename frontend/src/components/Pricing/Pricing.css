@@ -1,0 +1,154 @@
+.pricing {
+  background: #f8f9fa;
+}
+
+.pricing-subtitle {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 3rem;
+}
+
+.billing-toggle {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 3rem;
+  background: white;
+  padding: 0.5rem;
+  border-radius: 50px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.toggle-btn {
+  padding: 0.8rem 1.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.toggle-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.pricing-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.pricing-card:hover {
+  transform: translateY(-5px);
+}
+
+.pricing-card.popular {
+  border: 2px solid #3498db;
+  transform: scale(1.05);
+}
+
+.popular-badge {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #3498db;
+  color: white;
+  padding: 0.5rem 1.5rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.plan-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.plan-header h3 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.plan-price {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.currency {
+  font-size: 1.5rem;
+  color: #666;
+}
+
+.amount {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0 0.2rem;
+}
+
+.period {
+  color: #666;
+  font-size: 1rem;
+}
+
+.license-info {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.license-info p {
+  margin: 0.5rem 0;
+}
+
+.plan-features {
+  list-style: none;
+  margin-bottom: 2rem;
+}
+
+.plan-features li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.plan-features li:last-child {
+  border-bottom: none;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.pricing-footer {
+  text-align: center;
+  color: #666;
+}
+
+.pricing-footer a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .pricing-card.popular {
+    transform: none;
+  }
+}

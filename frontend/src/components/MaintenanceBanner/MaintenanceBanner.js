@@ -1,0 +1,108 @@
+// Maintenance Broadcast Banner Component
+import React, { useState, useEffect } from 'react';
+import { getUserId, getDismissedBroadcasts, saveDismissedBroadcasts } from '../../utils/userUtils';
+import './MaintenanceBanner.css';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
+function MaintenanceBanner({ userRole }) {
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [dismissedIds, setDismissedIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBroadcasts();
+    // Load dismissed broadcasts from localStorage with user-specific key
+    const dismissed = getDismissedBroadcasts();
+    setDismissedIds(dismissed);
+  }, []);
+
+  const fetchBroadcasts = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/public/maintenance`);
+      
+      if (!response.ok) {
+        console.error('Maintenance broadcast fetch failed:', response.status, response.statusText);
+        setLoading(false);
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setBroadcasts(data.broadcasts || []);
+      } else {
+        console.error('Maintenance broadcast fetch unsuccessful:', data.error);
+      }
+    } catch (error) {
+      console.error('Failed to fetch maintenance broadcasts:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDismiss = (broadcastId) => {
+    const newDismissed = [...dismissedIds, broadcastId];
+    setDismissedIds(newDismissed);
+    saveDismissedBroadcasts(newDismissed);
+  };
+
+  if (loading || broadcasts.length === 0) {
+    return null;
+  }
+
+  // Filter broadcasts based on user role and dismissal status
+  const visibleBroadcasts = broadcasts.filter(broadcast => {
+    // Check if already dismissed
+    if (dismissedIds.includes(broadcast._id)) return false;
+    
+    // Check if broadcast targets this user role
+    // Show broadcasts targeted to 'all' regardless of user login status
+    if (broadcast.target_roles && broadcast.target_roles.includes('all')) return true;
+    
+    // If user is logged in, check if their role is targeted
+    if (userRole && broadcast.target_roles && broadcast.target_roles.includes(userRole)) return true;
+    
+    return false;
+  });
+
+  if (visibleBroadcasts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="maintenance-banner-container">
+      {visibleBroadcasts.map(broadcast => (
+        <div key={broadcast._id} className={`maintenance-banner ${broadcast.type}`}>
+          <div className="banner-content">
+            <div className="banner-icon">
+              {broadcast.type === 'info' && '📢'}
+              {broadcast.type === 'warning' && '⚠️'}
+              {broadcast.type === 'critical' && '🚨'}
+              {broadcast.type === 'maintenance' && '🔧'}
+            </div>
+            <div className="banner-text">
+              <h4>{broadcast.title}</h4>
+              <p>{broadcast.message}</p>
+              {broadcast.end_date && (
+                <small>
+                  Until: {new Date(broadcast.end_date).toLocaleString()}
+                </small>
+              )}
+            </div>
+          </div>
+          <button 
+            className="banner-dismiss" 
+            onClick={() => handleDismiss(broadcast._id)}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default MaintenanceBanner;

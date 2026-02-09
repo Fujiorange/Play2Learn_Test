@@ -1,0 +1,80 @@
+.roadmap {
+  background: #f8f9fa;
+}
+
+.roadmap-timeline {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.roadmap-timeline:before {
+  content: '';
+  position: absolute;
+  left: 30px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #3498db;
+}
+
+.timeline-item {
+  display: flex;
+  margin-bottom: 3rem;
+  position: relative;
+}
+
+.timeline-marker {
+  width: 60px;
+  height: 60px;
+  background: #3498db;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.timeline-content {
+  background: white;
+  padding: 1.5rem;
+  margin-left: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  flex: 1;
+}
+
+.timeline-content h3 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.timeline-duration {
+  display: inline-block;
+  background: #e74c3c;
+  color: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .roadmap-timeline:before {
+    left: 20px;
+  }
+  
+  .timeline-marker {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+  
+  .timeline-content {
+    margin-left: 1rem;
+  }
+}
