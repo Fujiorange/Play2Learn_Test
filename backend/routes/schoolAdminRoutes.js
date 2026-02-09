@@ -4105,7 +4105,8 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     // Handle year: assume 2000s for years 00-99
     // For production, consider cards typically expire within 10-20 years from now
     const yearNum = parseInt(year, 10);
-    const currentYear = new Date().getFullYear();
+    const now = new Date();
+    const currentYear = now.getFullYear();
     const currentCentury = Math.floor(currentYear / 100) * 100;
     const fullYear = currentCentury + yearNum;
     
@@ -4116,8 +4117,6 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
       });
     }
 
-    const now = new Date();
-    const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     
     if (fullYear < currentYear || (fullYear === currentYear && monthNum < currentMonth)) {
