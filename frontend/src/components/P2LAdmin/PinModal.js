@@ -9,11 +9,11 @@ function PinModal({ isOpen, onConfirm, onCancel, message }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     onConfirm(pin);
-    setPin(''); // Clear pin after submission
+    setPin(''); // Clear PIN after submission
   };
 
   const handleCancel = () => {
-    setPin(''); // Clear pin on cancel
+    setPin(''); // Clear PIN on cancel
     onCancel();
   };
 
