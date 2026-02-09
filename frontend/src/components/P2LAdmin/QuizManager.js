@@ -95,14 +95,6 @@ function QuizManager() {
   };
 
   const handleDelete = async (id) => {
-    // Fetch quiz to check if it's auto-generated
-    const quiz = quizzes.find(q => q._id === id);
-    
-    if (quiz && quiz.is_auto_generated) {
-      alert('Deleting auto-generated quizzes is not allowed. Quizzes are managed by the system.');
-      return;
-    }
-    
     if (!window.confirm('Are you sure you want to delete this quiz?')) {
       return;
     }
@@ -288,9 +280,7 @@ function QuizManager() {
                 </button>
                 <button 
                   onClick={() => handleDelete(quiz._id)} 
-                  className="btn-delete" 
-                  disabled={quiz.is_auto_generated}
-                  title={quiz.is_auto_generated ? 'Auto-generated quizzes cannot be deleted' : 'Delete quiz'}
+                  className="btn-delete"
                 >
                   Delete
                 </button>

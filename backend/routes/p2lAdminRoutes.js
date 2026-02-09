@@ -1312,7 +1312,7 @@ router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
 // Generate quiz automatically
 router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { quiz_level, student_id, trigger_reason } = req.body;
+    const { quiz_level, student_id, trigger_reason, force } = req.body;
     
     // Validate quiz_level
     if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
@@ -1332,11 +1332,12 @@ router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
       });
     }
     
-    // Generate the quiz
+    // Generate the quiz (skipDuplicateCheck if force=true)
     const quiz = await generateQuiz(
       quiz_level,
       student_id || null,
-      trigger_reason || 'manual'
+      trigger_reason || 'manual',
+      force || false
     );
     
     res.status(201).json({
@@ -1425,14 +1426,6 @@ router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz not found' 
-      });
-    }
-    
-    // Block deletion of auto-generated quizzes
-    if (quiz.is_auto_generated) {
-      return res.status(403).json({
-        success: false,
-        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
       });
     }
     
