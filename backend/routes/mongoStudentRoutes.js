@@ -842,8 +842,20 @@ router.get("/math-progress", async (req, res) => {
       await mathProfile.save();
     }
 
-    const quizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({
       completed_at: -1,
+    });
+
+    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
+    const quizzes = allQuizzes.filter(q => {
+      // Include quiz if it has student answers in questions
+      if (q.questions && q.questions.length > 0) {
+        return q.questions.some(question => 
+          question.student_answer !== null && question.student_answer !== undefined
+        );
+      }
+      // Also include if score > 0 or percentage > 0 (submitted)
+      return q.score > 0 || q.percentage > 0;
     });
 
     const totalQuizzes = quizzes.length;
@@ -882,11 +894,23 @@ router.get("/math-progress", async (req, res) => {
 router.get("/quiz-results", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    const quizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
+
+    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
+    const completedQuizzes = allQuizzes.filter(q => {
+      // Include quiz if it has student answers in questions
+      if (q.questions && q.questions.length > 0) {
+        return q.questions.some(question => 
+          question.student_answer !== null && question.student_answer !== undefined
+        );
+      }
+      // Also include if score > 0 or percentage > 0 (submitted)
+      return q.score > 0 || q.percentage > 0;
+    });
 
     res.json({
       success: true,
-      results: quizzes.map((q) => ({
+      results: completedQuizzes.map((q) => ({
         id: q._id,
         profile: q.profile_level,
         date: q.completed_at.toLocaleDateString(),
@@ -906,11 +930,23 @@ router.get("/quiz-results", async (req, res) => {
 router.get("/quiz-history", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    const quizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
+    const allQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" }).sort({ completed_at: -1 });
+
+    // ✅ FIX: Filter out unsubmitted quizzes (score 0, percentage 0, no student answers)
+    const completedQuizzes = allQuizzes.filter(q => {
+      // Include quiz if it has student answers in questions
+      if (q.questions && q.questions.length > 0) {
+        return q.questions.some(question => 
+          question.student_answer !== null && question.student_answer !== undefined
+        );
+      }
+      // Also include if score > 0 or percentage > 0 (submitted)
+      return q.score > 0 || q.percentage > 0;
+    });
 
     res.json({
       success: true,
-      history: quizzes.map((q) => ({
+      history: completedQuizzes.map((q) => ({
         id: q._id,
         profile: q.profile_level,
         profile_level: q.profile_level,
