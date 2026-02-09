@@ -24,10 +24,12 @@ export default function ManageClasses() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCSVUploadModal, setShowCSVUploadModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
+  const csvFileInputRef = React.useRef(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -36,6 +38,11 @@ export default function ManageClasses() {
     teachers: [],
     students: []
   });
+
+  // CSV upload state
+  const [csvFile, setCsvFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -203,6 +210,126 @@ export default function ManageClasses() {
     setShowDeleteModal(true);
   };
 
+  const handleTeacherSelection = (teacherId) => {
+    setFormData(prev => ({
+      ...prev,
+      teachers: prev.teachers.includes(teacherId)
+        ? prev.teachers.filter(id => id !== teacherId)
+        : [...prev.teachers, teacherId]
+    }));
+  };
+
+  const handleStudentSelection = (studentId) => {
+    setFormData(prev => ({
+      ...prev,
+      students: prev.students.includes(studentId)
+        ? prev.students.filter(id => id !== studentId)
+        : [...prev.students, studentId]
+    }));
+  };
+
+  const handleSubjectSelection = (subject) => {
+    // Only allow Mathematics for now
+    if (subject !== 'Mathematics') {
+      setMessage({ type: 'error', text: 'Only Mathematics is enabled for now' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 2000);
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      subjects: prev.subjects.includes(subject)
+        ? prev.subjects.filter(s => s !== subject)
+        : [...prev.subjects, subject]
+    }));
+  };
+
+  const downloadCSVTemplate = () => {
+    // CSV Template with class metadata in first row and users in subsequent rows
+    const csvTemplate = `ClassName,Grade,Subject,Name,Email,Role,Gender,LinkedStudentEmail
+Primary 1A,Primary 1,Mathematics,,,,,
+,,,John Teacher,john.teacher@school.com,Teacher,male,
+,,,Mary Student,mary.student@school.com,Student,female,
+,,,Jane Parent,jane.parent@email.com,Parent,female,mary.student@school.com`;
+
+    const blob = new Blob([csvTemplate], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'class_creation_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleCSVFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      if (!selectedFile.name.endsWith('.csv')) {
+        setMessage({ type: 'error', text: 'Please upload a CSV file' });
+        setCsvFile(null);
+        return;
+      }
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        setMessage({ type: 'error', text: 'File size must be less than 5MB' });
+        setCsvFile(null);
+        return;
+      }
+      setCsvFile(selectedFile);
+      setMessage({ type: '', text: '' });
+      setUploadResult(null);
+    }
+  };
+
+  const handleCSVUpload = async () => {
+    if (!csvFile) {
+      setMessage({ type: 'error', text: 'Please select a CSV file' });
+      return;
+    }
+
+    setUploading(true);
+    setMessage({ type: '', text: '' });
+    setUploadResult(null);
+
+    try {
+      const response = await schoolAdminService.bulkUploadClass(csvFile);
+
+      if (response.success) {
+        setUploadResult(response);
+        const totalCreated = response.usersCreated.teachers + response.usersCreated.students + response.usersCreated.parents;
+        const totalAssigned = response.usersAssigned.teachers + response.usersAssigned.parents;
+        let message = `Class "${response.className}" created successfully! ${totalCreated} new users created`;
+        if (totalAssigned > 0) {
+          message += ` and ${totalAssigned} existing users assigned`;
+        }
+        message += '.';
+        setMessage({ type: 'success', text: message });
+        setCsvFile(null);
+        // Reset file input using ref
+        if (csvFileInputRef.current) {
+          csvFileInputRef.current.value = '';
+        }
+        
+        // Reload classes and users
+        loadClasses();
+        loadTeachersAndStudents();
+        
+        // Close modal after 3 seconds
+        setTimeout(() => {
+          setShowCSVUploadModal(false);
+          setUploadResult(null);
+        }, 3000);
+      } else {
+        setMessage({ type: 'error', text: response.error || 'Upload failed' });
+      }
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      setMessage({ type: 'error', text: 'Upload failed. Please try again.' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
     header: { background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 0' },
@@ -256,6 +383,18 @@ export default function ManageClasses() {
     checkboxItemAvailable: { display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: '#ffffff', marginBottom: '4px', border: '1px solid #e5e7eb' },
     removeIcon: { marginLeft: 'auto', color: '#dc2626', fontWeight: 'bold', fontSize: '12px' },
     addIcon: { marginLeft: 'auto', color: '#10b981', fontWeight: 'bold', fontSize: '16px' },
+    // CSV Upload Modal Styles
+    infoBox: { background: '#f0f9ff', border: '2px solid #bfdbfe', borderRadius: '8px', padding: '16px', marginBottom: '24px', fontSize: '14px', color: '#1e40af' },
+    infoTitle: { fontWeight: '700', marginBottom: '8px' },
+    infoList: { margin: '8px 0 0 20px', paddingLeft: '0' },
+    fileInput: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' },
+    fileInfo: { marginTop: '12px', padding: '12px 16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a', fontSize: '14px', fontWeight: '500' },
+    templateButton: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', marginBottom: '24px' },
+    successBox: { marginTop: '20px', padding: '16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a' },
+    successTitle: { fontSize: '16px', fontWeight: '700', marginBottom: '12px' },
+    successStats: { fontSize: '14px', marginBottom: '4px' },
+    errorList: { fontSize: '13px', marginTop: '8px', maxHeight: '150px', overflowY: 'auto' },
+    errorItem: { padding: '4px 0', borderBottom: '1px solid #fecaca' },
   };
 
   const renderModal = (isEdit = false) => (
@@ -460,6 +599,103 @@ export default function ManageClasses() {
     );
   }
 
+  const renderCSVUploadModal = () => (
+    <div style={styles.modal} onClick={() => setShowCSVUploadModal(false)}>
+      <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <h2 style={styles.modalTitle}>📤 Create Class via CSV Upload</h2>
+        
+        <div style={styles.infoBox}>
+          <div style={styles.infoTitle}>📋 CSV Format Requirements:</div>
+          <ul style={styles.infoList}>
+            <li><strong>First Row:</strong> Class metadata (ClassName, Grade, Subject)</li>
+            <li><strong>Subsequent Rows:</strong> Users (Name, Email, Role, Gender, LinkedStudentEmail)</li>
+            <li><strong>Grade:</strong> Only "Primary 1" is enabled</li>
+            <li><strong>Subject:</strong> Only "Mathematics" is enabled</li>
+            <li><strong>Roles:</strong> Teacher, Student, Parent</li>
+            <li><strong>Teachers:</strong> Will be auto-assigned to class (can teach multiple classes)</li>
+            <li><strong>Students:</strong> Must have unique email, assigned to single class only</li>
+            <li><strong>Parents:</strong> Require LinkedStudentEmail to link with student</li>
+          </ul>
+        </div>
+
+        <button
+          style={styles.templateButton}
+          onClick={downloadCSVTemplate}
+          onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
+          onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
+        >
+          📥 Download CSV Template
+        </button>
+
+        <label style={styles.label}>Select CSV File</label>
+        <input
+          ref={csvFileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleCSVFileChange}
+          style={styles.fileInput}
+          disabled={uploading}
+        />
+        {csvFile && (
+          <div style={styles.fileInfo}>
+            ✅ {csvFile.name} ({(csvFile.size / 1024).toFixed(2)} KB)
+          </div>
+        )}
+
+        {uploadResult && uploadResult.success && (
+          <div style={styles.successBox}>
+            <div style={styles.successTitle}>✅ Upload Complete!</div>
+            <div style={styles.successStats}>🏫 Class: {uploadResult.className}</div>
+            <div style={styles.successStats}>👨‍🏫 Teachers Created: {uploadResult.usersCreated.teachers}</div>
+            <div style={styles.successStats}>👩‍🎓 Students Created: {uploadResult.usersCreated.students}</div>
+            <div style={styles.successStats}>👪 Parents Created: {uploadResult.usersCreated.parents}</div>
+            {uploadResult.usersAssigned.teachers > 0 && (
+              <div style={styles.successStats}>🔗 Existing Teachers Assigned: {uploadResult.usersAssigned.teachers}</div>
+            )}
+            {uploadResult.usersAssigned.parents > 0 && (
+              <div style={styles.successStats}>🔗 Existing Parents Linked: {uploadResult.usersAssigned.parents}</div>
+            )}
+            {uploadResult.errors && uploadResult.errors.length > 0 && (
+              <div style={styles.errorList}>
+                <strong>⚠️ Errors:</strong>
+                {uploadResult.errors.map((err, idx) => (
+                  <div key={idx} style={styles.errorItem}>
+                    Row {err.row}: {err.email} - {err.error}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={styles.modalButtons}>
+          <button 
+            style={styles.cancelButton} 
+            onClick={() => {
+              setShowCSVUploadModal(false);
+              setCsvFile(null);
+              setUploadResult(null);
+            }}
+            disabled={uploading}
+          >
+            Cancel
+          </button>
+          <button 
+            style={{
+              ...styles.saveButton,
+              opacity: uploading || !csvFile ? 0.7 : 1,
+              cursor: uploading || !csvFile ? 'not-allowed' : 'pointer'
+            }}
+            onClick={handleCSVUpload}
+            disabled={uploading || !csvFile}
+          >
+            {uploading ? 'Uploading...' : 'Upload & Create Class'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={styles.container}>
       <div style={styles.content}>
@@ -532,43 +768,83 @@ export default function ManageClasses() {
                 <button style={styles.submitBtn} onClick={handleAddClass}>Create Class</button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Edit Modal */}
-        {showEditModal && (
-          <div style={styles.modal}>
-            <div style={styles.modalContent}>
-              <h2 style={styles.modalTitle}>Edit Class</h2>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Class Name *</label>
-                <input style={styles.input} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Grade</label>
-                <select style={{...styles.input}} value={formData.grade} onChange={e => setFormData({...formData, grade: e.target.value})}>
-                  {GRADES.map(g => <option key={g.value} value={g.value} disabled={!g.enabled}>{g.value}{!g.enabled ? ' (Coming Soon)' : ''}</option>)}
-                </select>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Assign Teachers</label>
-                <select multiple style={styles.select} value={formData.teachers} onChange={e => setFormData({...formData, teachers: Array.from(e.target.selectedOptions, o => o.value)})}>
-                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.email})</option>)}
-                </select>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Assign Students</label>
-                <select multiple style={styles.select} value={formData.students} onChange={e => setFormData({...formData, students: Array.from(e.target.selectedOptions, o => o.value)})}>
-                  {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.email}){s.currentClass ? ` - Currently: ${s.currentClass}` : ''}</option>)}
-                </select>
-              </div>
-              <div style={styles.btnGroup}>
-                <button style={styles.cancelBtn} onClick={() => setShowEditModal(false)}>Cancel</button>
-                <button style={styles.submitBtn} onClick={handleEditClass}>Save Changes</button>
-              </div>
+          <div style={styles.headerRow}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+              All Classes ({classes.length})
+            </h3>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                style={{ ...styles.addButton, background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' }} 
+                onClick={() => setShowCSVUploadModal(true)}
+              >
+                📤 Upload CSV
+              </button>
+              <button style={styles.addButton} onClick={() => { resetForm(); setShowAddModal(true); }}>
+                + Add New Class
+              </button>
             </div>
           </div>
         )}
+
+          {loading ? (
+            <div style={styles.loadingSpinner}>Loading classes...</div>
+          ) : (
+            <>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Class Name</th>
+                    <th style={styles.th}>Grade</th>
+                    <th style={styles.th}>Subject</th>
+                    <th style={styles.th}>Students</th>
+                    <th style={styles.th}>Teacher(s)</th>
+                    <th style={styles.th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {classes.map((cls) => (
+                    <tr key={cls.id}>
+                      <td style={styles.td}><strong>{cls.name}</strong></td>
+                      <td style={styles.td}>
+                        <span style={styles.badge}>{cls.grade}</span>
+                      </td>
+                      <td style={styles.td}>{cls.subject}</td>
+                      <td style={styles.td}>{cls.students}</td>
+                      <td style={styles.td}>{cls.teacher}</td>
+                      <td style={styles.td}>
+                        <button 
+                          style={{ ...styles.actionButton, ...styles.editButton }}
+                          onClick={() => openEditModal(cls)}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          style={{ ...styles.actionButton, ...styles.deleteButton }}
+                          onClick={() => openDeleteModal(cls)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {classes.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                  No classes found. Click "Add New Class" to create one.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </main>
+
+      {showAddModal && renderModal(false)}
+      {showEditModal && renderModal(true)}
+      {showCSVUploadModal && renderCSVUploadModal()}
 
         {/* Delete Modal */}
         {showDeleteModal && (

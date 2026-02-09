@@ -1,7 +1,7 @@
 // Question Bank Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, bulkDeleteQuestions } from '../../services/p2lAdminService';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, getQuestionQuizLevels, bulkDeleteQuestions } from '../../services/p2lAdminService';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -9,10 +9,11 @@ function QuestionBank() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '' });
+  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '', quiz_level: '' });
   const [subjects, setSubjects] = useState([]);
   const [topics, setTopics] = useState([]);
   const [grades, setGrades] = useState([]);
+  const [quizLevels, setQuizLevels] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
@@ -38,6 +39,7 @@ function QuestionBank() {
     fetchSubjects();
     fetchTopics();
     fetchGrades();
+    fetchQuizLevels();
   }, []);
 
   const fetchQuestions = async () => {
@@ -78,6 +80,15 @@ function QuestionBank() {
       setGrades(response.data || []);
     } catch (error) {
       console.error('Failed to fetch grades:', error);
+    }
+  };
+
+  const fetchQuizLevels = async () => {
+    try {
+      const response = await getQuestionQuizLevels();
+      setQuizLevels(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch quiz levels:', error);
     }
   };
 
@@ -363,7 +374,22 @@ function QuestionBank() {
           </select>
         </div>
 
-        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '' })} className="btn-clear">
+        <div className="filter-group">
+          <label>Quiz Level:</label>
+          <select 
+            value={filters.quiz_level}
+            onChange={(e) => setFilters({ ...filters, quiz_level: e.target.value })}
+          >
+            <option value="">All</option>
+            {quizLevels.map((level) => (
+              <option key={level} value={level}>
+                Quiz Level {level}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '', quiz_level: '' })} className="btn-clear">
           Clear Filters
         </button>
         
@@ -670,6 +696,8 @@ function QuestionBank() {
                 </span>
                 <span className="subject-badge">{question.subject}</span>
                 {question.grade && <span className="grade-badge">{question.grade}</span>}
+                {question.quiz_level && <span className="quiz-level-badge">Quiz Level {question.quiz_level}</span>}
+                {question.topic && <span className="topic-badge">{question.topic}</span>}
               </div>
               
               <p className="question-text">{question.text}</p>
@@ -686,8 +714,6 @@ function QuestionBank() {
               )}
               
               <p className="answer"><strong>Answer:</strong> {question.answer}</p>
-              
-              {question.topic && <p className="topic"><strong>Topic:</strong> {question.topic}</p>}
               
               <div className="card-actions">
                 <button onClick={() => handleEdit(question)} className="btn-edit">

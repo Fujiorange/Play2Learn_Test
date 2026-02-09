@@ -537,7 +537,11 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
           schoolId: schoolId,
           emailVerified: true,
           accountActive: true,
-          requirePasswordChange: true
+          requirePasswordChange: true,
+          // SECURITY NOTE: tempPassword stored temporarily for one-time viewing by P2L admin
+          // This is cleared when: (1) viewed by admin, or (2) user changes password
+          // Used as fallback if email delivery fails
+          tempPassword: tempPassword
         });
 
         await admin.save();
@@ -734,6 +738,10 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
     // Update admin with new password and require password change
     admin.password = hashedPassword;
     admin.requirePasswordChange = true;
+    // SECURITY NOTE: tempPassword stored temporarily for one-time viewing by P2L admin
+    // This is cleared when: (1) viewed by admin, or (2) user changes password
+    // Used as fallback if email delivery fails
+    admin.tempPassword = tempPassword;
     await admin.save();
     
     // Send email with new credentials
@@ -769,13 +777,14 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
 // Get all questions
 router.get('/questions', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { subject, topic, difficulty, grade, is_active } = req.query;
+    const { subject, topic, difficulty, grade, quiz_level, is_active } = req.query;
     
     const filter = {};
     if (subject) filter.subject = subject;
     if (topic) filter.topic = topic;
     if (difficulty) filter.difficulty = parseInt(difficulty);
     if (grade) filter.grade = grade;
+    if (quiz_level) filter.quiz_level = parseInt(quiz_level);
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
     const questions = await Question.find(filter)
@@ -864,6 +873,29 @@ router.get('/questions-grades', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch grades' 
+    });
+  }
+});
+
+// Get unique quiz levels
+router.get('/questions-quiz-levels', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quizLevels = await Question.distinct('quiz_level');
+    
+    // Sort quiz levels numerically
+    const sortedQuizLevels = quizLevels
+      .filter(level => level !== null && level !== undefined)
+      .sort((a, b) => a - b);
+    
+    res.json({
+      success: true,
+      data: sortedQuizLevels
+    });
+  } catch (error) {
+    console.error('Get quiz levels error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch quiz levels' 
     });
   }
 });

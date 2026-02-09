@@ -228,6 +228,22 @@ textarea:focus {
   color: #155724;
 }
 
+.quiz-level-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  background: #cfe2ff;
+  color: #084298;
+}
+
+.topic-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  background: #fff3cd;
+  color: #664d03;
+}
+
 .question-text {
   font-size: 1.1rem;
   color: #333;
