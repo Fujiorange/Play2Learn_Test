@@ -108,7 +108,7 @@ export default function AttemptQuiz() {
       );
       return;
     }
-    navigate("/student/quiz/take");
+    navigate("/student/adaptive-quizzes");
   };
 
   const handleStartPlacement = () => {
@@ -364,3 +364,4 @@ export default function AttemptQuiz() {
     </div>
   );
 }
+

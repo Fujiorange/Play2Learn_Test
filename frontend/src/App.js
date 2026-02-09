@@ -20,10 +20,6 @@ import StudentList from './components/Teacher/StudentList';
 import StudentPerformance from './components/Teacher/StudentPerformance';
 import StudentLeaderboard from './components/Teacher/StudentLeaderboard';
 import StudentMatrix from './components/Teacher/StudentMatrix';
-import CreateAssignment from './components/Teacher/CreateAssignment';
-import ModifyAssignment from './components/Teacher/ModifyAssignment';
-import ViewSubmissions from './components/Teacher/ViewSubmissions';
-import TrackCompletion from './components/Teacher/TrackCompletion';
 import CreateFeedback from './components/Teacher/CreateFeedback';
 import ViewFeedback from './components/Teacher/ViewFeedback';
 import Chat from './components/Teacher/Chat';
@@ -49,7 +45,6 @@ import DisplaySkillMatrix from './components/Student/DisplaySkillMatrix';
 import ViewDetailedSubjectInfo from './components/Student/ViewDetailedSubjectInfo';
 import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
-import TakeQuiz from './components/Student/TakeQuiz';
 import QuizResult from './components/Student/QuizResult';
 import AttemptAssignment from './components/Student/AttemptAssignment';
 import ViewResultHistory from './components/Student/ViewResultHistory';
@@ -120,7 +115,6 @@ import TeacherViewAnnouncements from './components/Teacher/ViewAnnouncements';
 import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
 import SchoolManagement from './components/P2LAdmin/SchoolManagement';
 import SchoolAdminManagement from './components/P2LAdmin/SchoolAdminManagement';
-import ManualAddSchoolAdmin from './components/P2LAdmin/ManualAddSchoolAdmin';
 import QuestionBank from './components/P2LAdmin/QuestionBank';
 import QuizManager from './components/P2LAdmin/QuizManager';
 import AdaptiveQuizCreator from './components/P2LAdmin/AdaptiveQuizCreator';
@@ -177,10 +171,6 @@ function App() {
           <Route path="/teacher/students/performance" element={<StudentPerformance />} />
           <Route path="/teacher/students/leaderboard" element={<StudentLeaderboard />} />
           <Route path="/teacher/students/matrix" element={<StudentMatrix />} />
-          <Route path="/teacher/assignment/create" element={<CreateAssignment />} />
-          <Route path="/teacher/assignment/modify" element={<ModifyAssignment />} />
-          <Route path="/teacher/submissions" element={<ViewSubmissions />} />
-          <Route path="/teacher/completion" element={<TrackCompletion />} />
           <Route path="/teacher/feedback/create" element={<CreateFeedback />} />
           <Route path="/teacher/feedback/view" element={<ViewFeedback />} />
           <Route path="/teacher/chat" element={<Chat />} />
@@ -190,9 +180,6 @@ function App() {
           
           {/* ⭐ NEW ROUTE - Teacher News & Updates */}
           <Route path="/teacher/news" element={<TeacherViewNewsUpdates />} />
-          
-          {/* ⭐ NEW ROUTE - Teacher Announcements */}
-          <Route path="/teacher/announcements" element={<TeacherViewAnnouncements />} />
           
           {/* ⭐ NEW ROUTE - Teacher Quiz Assignment */}
           <Route path="/teacher/quiz-assignment" element={<TeacherQuizAssignment />} />
@@ -221,8 +208,7 @@ function App() {
           {/* ========== QUIZ ROUTES ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
-          <Route path="/student/quiz/take" element={<TakeQuiz />} />
-          <Route path="/student/quiz/result" element={<QuizResult />} />
+                    <Route path="/student/quiz/result" element={<QuizResult />} />
 
           {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
           <Route path="/student/adaptive-quizzes" element={<AdaptiveQuizzes />} />
@@ -310,3 +296,4 @@ function App() {
 }
 
 export default App;
+
