@@ -538,7 +538,10 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
           emailVerified: true,
           accountActive: true,
           requirePasswordChange: true,
-          tempPassword: tempPassword // Store for credential management
+          // SECURITY NOTE: tempPassword stored temporarily for one-time viewing by P2L admin
+          // This is cleared when: (1) viewed by admin, or (2) user changes password
+          // Used as fallback if email delivery fails
+          tempPassword: tempPassword
         });
 
         await admin.save();
@@ -735,7 +738,10 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
     // Update admin with new password and require password change
     admin.password = hashedPassword;
     admin.requirePasswordChange = true;
-    admin.tempPassword = tempPassword; // Store for one-time viewing
+    // SECURITY NOTE: tempPassword stored temporarily for one-time viewing by P2L admin
+    // This is cleared when: (1) viewed by admin, or (2) user changes password
+    // Used as fallback if email delivery fails
+    admin.tempPassword = tempPassword;
     await admin.save();
     
     // Send email with new credentials
