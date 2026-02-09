@@ -4720,7 +4720,7 @@ router.post('/classes/bulk-upload', authenticateSchoolAdmin, upload.single('csvF
     uploadSession.successfulRows = successCount;
     uploadSession.failedRows = errors.length;
     uploadSession.createdEntities = entities;
-    uploadSession.errors = errors;
+    uploadSession.uploadErrors = errors;
     uploadSession.completedAt = new Date();
     
     await uploadSession.save();
@@ -4753,7 +4753,7 @@ router.post('/classes/bulk-upload', authenticateSchoolAdmin, upload.single('csvF
       // Update session status
       if (uploadSession) {
         uploadSession.status = 'failed';
-        uploadSession.errors = [{
+        uploadSession.uploadErrors = [{
           row: 0,
           field: 'System',
           message: error.message

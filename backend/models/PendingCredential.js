@@ -62,7 +62,7 @@ const pendingCredentialSchema = new mongoose.Schema({
 
 // Add indexes for performance
 pendingCredentialSchema.index({ schoolId: 1, sent: 1 });
-pendingCredentialSchema.index({ userId: 1 });
+// userId already indexed via unique: true
 pendingCredentialSchema.index({ expiresAt: 1 });
 
 module.exports = mongoose.model('PendingCredential', pendingCredentialSchema);

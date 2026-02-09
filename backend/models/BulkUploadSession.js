@@ -54,7 +54,7 @@ const bulkUploadSessionSchema = new mongoose.Schema({
     email: String,
     className: String
   }],
-  errors: [{
+  uploadErrors: [{
     row: Number,
     field: String,
     message: String,
@@ -68,11 +68,11 @@ const bulkUploadSessionSchema = new mongoose.Schema({
     type: Date, 
     default: null 
   }
-});
+}, { suppressReservedKeysWarning: true });
 
 // Add indexes for performance
 bulkUploadSessionSchema.index({ schoolId: 1, timestamp: -1 });
-bulkUploadSessionSchema.index({ sessionId: 1 });
+// sessionId already indexed via unique: true
 bulkUploadSessionSchema.index({ uploadedBy: 1 });
 
 module.exports = mongoose.model('BulkUploadSession', bulkUploadSessionSchema);
