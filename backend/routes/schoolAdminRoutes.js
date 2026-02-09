@@ -4646,7 +4646,9 @@ router.post('/classes/bulk-upload', authenticateSchoolAdmin, upload.single('csvF
               let parent = await User.findOne({ email: parentEmail });
               
               if (!parent) {
-                // Create new parent
+                // Create new parent account
+                // Note: Parent name is set to "Parent of [Student]" as CSV only contains email
+                // Parents can update their name after first login
                 const parentTempPassword = generateTempPassword();
                 const parentHashedPassword = await bcrypt.hash(parentTempPassword, 10);
                 

@@ -355,7 +355,7 @@ async function generateQuizByGradeSubject(grade, subject, quizLevel, triggerReas
   // Step 6: Create quiz record with naming convention
   const timestamp = new Date();
   const uniqueHash = generateUniqueHash(null, quizLevel, timestamp);
-  const quizTitle = `Grade_${grade}_QuizLevel_${quizLevel}`;
+  const quizTitle = `Grade_${grade}_${subject}_QuizLevel_${quizLevel}`;
   
   const quiz = new Quiz({
     title: quizTitle,

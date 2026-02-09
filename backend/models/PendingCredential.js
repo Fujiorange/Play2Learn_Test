@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+// Configuration
+const CREDENTIAL_EXPIRY_DAYS = parseInt(process.env.CREDENTIAL_EXPIRY_DAYS || '30', 10);
+
 const pendingCredentialSchema = new mongoose.Schema({
   userId: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -55,8 +58,8 @@ const pendingCredentialSchema = new mongoose.Schema({
   },
   expiresAt: { 
     type: Date, 
-    // Credentials expire after 30 days if not sent
-    default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    // Credentials expire after configured days if not sent
+    default: () => new Date(Date.now() + CREDENTIAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
   }
 });
 
