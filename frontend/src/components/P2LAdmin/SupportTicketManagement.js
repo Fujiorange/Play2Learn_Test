@@ -6,6 +6,7 @@ import {
   getSupportTicket,
   replySupportTicket,
   closeSupportTicket,
+  deleteSupportTicket,
   getSupportTicketStats
 } from '../../services/p2lAdminService';
 import './SupportTicketManagement.css';
@@ -116,6 +117,34 @@ function SupportTicketManagement() {
     } catch (error) {
       console.error('Failed to close ticket:', error);
       setMessage({ type: 'error', text: 'Failed to close ticket' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteTicket = async () => {
+    if (selectedTicket.status !== 'closed') {
+      setMessage({ type: 'error', text: 'Only closed tickets can be deleted' });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this ticket?\n\nThis action cannot be undone.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setSubmitting(true);
+      const response = await deleteSupportTicket(selectedTicket._id);
+      if (response.success) {
+        setMessage({ type: 'success', text: 'Ticket deleted successfully' });
+        setSelectedTicket(null);
+        loadTickets();
+      }
+    } catch (error) {
+      console.error('Failed to delete ticket:', error);
+      setMessage({ type: 'error', text: error.message || 'Failed to delete ticket' });
     } finally {
       setSubmitting(false);
     }
@@ -349,6 +378,15 @@ function SupportTicketManagement() {
                     disabled={submitting}
                   >
                     {submitting ? 'Closing...' : '✓ Close Ticket'}
+                  </button>
+                )}
+                {selectedTicket.status === 'closed' && (
+                  <button
+                    className="btn-delete-ticket"
+                    onClick={handleDeleteTicket}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Deleting...' : '🗑️ Delete Ticket'}
                   </button>
                 )}
               </div>

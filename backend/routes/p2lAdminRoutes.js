@@ -2232,12 +2232,20 @@ router.get('/users/schools', authenticateP2LAdmin, async (req, res) => {
 // should be handled separately or through a scheduled cleanup job if needed.
 router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { ids } = req.body;
+    const { ids, pin } = req.body;
     
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ 
         success: false, 
         error: 'User IDs array is required' 
+      });
+    }
+
+    // Validate PIN
+    if (pin !== '1234') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid PIN. Please enter the correct PIN to delete users.' 
       });
     }
 
@@ -2250,7 +2258,22 @@ router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Check if any of the users to delete are p2ladmin
+    const usersToDelete = await User.find({ _id: { $in: ids } });
+    const p2ladminUsers = usersToDelete.filter(user => user.role === 'p2ladmin');
+    
+    if (p2ladminUsers.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cannot delete p2ladmin accounts. Please remove them from selection.' 
+      });
+    }
+
+    // Delete users
     const result = await User.deleteMany({ _id: { $in: ids } });
+
+    // Delete associated support tickets for deleted users
+    await SupportTicket.deleteMany({ user_id: { $in: ids } });
 
     res.json({
       success: true,
@@ -2468,6 +2491,41 @@ router.post('/support-tickets/:id/close', authenticateP2LAdmin, async (req, res)
     res.status(500).json({ 
       success: false, 
       error: 'Failed to close ticket' 
+    });
+  }
+});
+
+// Delete a support ticket
+router.delete('/support-tickets/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // Only allow deletion of closed tickets
+    if (ticket.status !== 'closed') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Only closed tickets can be deleted' 
+      });
+    }
+    
+    await SupportTicket.findByIdAndDelete(req.params.id);
+    
+    res.json({
+      success: true,
+      message: 'Ticket deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete ticket' 
     });
   }
 });
