@@ -1,0 +1,5 @@
+Class Name,Grade,Subject,Teacher Name,Teacher Email,Teacher Role,Student Name,Student Email,Student Role,Linked Parent Email
+Primary 3 Mathematics Test Class,Primary 3,Mathematics,Ms. Test Teacher,test.teacher@play2learn.test,Teacher,,,,
+,,,,,Test Student One,test.student1@play2learn.test,Student,test.parent1@play2learn.test
+,,,,,Test Student Two,test.student2@play2learn.test,Student,test.parent2@play2learn.test
+,,,,,Test Student Three,test.student3@play2learn.test,Student,test.parent3@play2learn.test
