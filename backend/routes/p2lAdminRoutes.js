@@ -2584,5 +2584,109 @@ router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
+// ==================== DATABASE MIGRATION ROUTES ====================
+
+// Drop unique index on license type field
+router.post('/migrations/drop-license-type-index', authenticateP2LAdmin, async (req, res) => {
+  try {
+    console.log('🔗 Starting migration: Drop license type_1 index...');
+    
+    const db = mongoose.connection.db;
+    const collection = db.collection('licenses');
+
+    // Get all indexes
+    console.log('📋 Checking existing indexes on licenses collection...');
+    const indexes = await collection.indexes();
+    
+    // Check if type_1 index exists
+    const typeIndexExists = indexes.some(index => index.name === 'type_1');
+    
+    if (typeIndexExists) {
+      console.log('🗑️  Dropping type_1 unique index...');
+      await collection.dropIndex('type_1');
+      console.log('✅ Successfully dropped type_1 index');
+      
+      // Verify indexes after drop
+      const finalIndexes = await collection.indexes();
+      
+      return res.json({
+        success: true,
+        message: 'Successfully dropped type_1 unique index',
+        details: {
+          indexDropped: 'type_1',
+          remainingIndexes: finalIndexes.map(idx => ({
+            name: idx.name,
+            keys: idx.key,
+            unique: idx.unique || false
+          }))
+        },
+        note: 'Multiple licenses with the same type (free/paid) can now be created.'
+      });
+    } else {
+      console.log('ℹ️  type_1 index does not exist. No action needed.');
+      const currentIndexes = await collection.indexes();
+      
+      return res.json({
+        success: true,
+        message: 'type_1 index does not exist. No action needed.',
+        details: {
+          currentIndexes: currentIndexes.map(idx => ({
+            name: idx.name,
+            keys: idx.key,
+            unique: idx.unique || false
+          }))
+        }
+      });
+    }
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to drop license type index',
+      details: error.message
+    });
+  }
+});
+
+// Get database migration status
+router.get('/migrations/status', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const collection = db.collection('licenses');
+    
+    // Get all indexes
+    const indexes = await collection.indexes();
+    
+    // Check if type_1 index exists
+    const typeIndexExists = indexes.some(index => index.name === 'type_1');
+    
+    res.json({
+      success: true,
+      data: {
+        licenseTypeIndexExists: typeIndexExists,
+        migrationNeeded: typeIndexExists,
+        allIndexes: indexes.map(idx => ({
+          name: idx.name,
+          keys: idx.key,
+          unique: idx.unique || false
+        })),
+        recommendations: typeIndexExists ? [
+          'The type_1 unique index should be dropped to allow multiple licenses with the same type',
+          'Use POST /api/p2ladmin/migrations/drop-license-type-index to run the migration'
+        ] : [
+          'No migration needed - database schema is up to date'
+        ]
+      }
+    });
+  } catch (error) {
+    console.error('Get migration status error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get migration status',
+      details: error.message
+    });
+  }
+});
+
 // Other Admin Functions...
 module.exports = router;
