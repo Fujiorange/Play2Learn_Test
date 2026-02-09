@@ -2722,37 +2722,37 @@ router.post('/classes/bulk-create', authenticateSchoolAdmin, upload.single('file
                 row: rowNumber,
                 message: `Parent limit reached (${currentParentCount}/${parentLimit}). Parent not created for ${parentEmailClean}`
               });
-              continue;
+              // Don't skip student processing - just skip parent creation
+            } else {
+              // Create new parent
+              const tempPassword = generateTempPassword('Parent');
+              const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+              // Use student name to derive parent name if not provided
+              const parentName = `Parent of ${studentName}`;
+
+              parent = await User.create({
+                name: parentName,
+                email: parentEmailClean,
+                password: hashedPassword,
+                role: 'Parent',
+                schoolId: schoolAdmin.schoolId,
+                linkedStudents: [{
+                  studentId: student._id,
+                  relationship: 'Parent'
+                }],
+                emailVerified: true,
+                requirePasswordChange: true,
+                tempPassword: tempPassword,
+                credentialsSent: false,
+                createdBy: schoolAdmin._id.toString()
+              });
+
+              results.parentsCreated++;
+              currentParentCount++;
+
+              console.log(`✅ New parent created: ${parentEmailClean}`);
             }
-
-            // Create new parent
-            const tempPassword = generateTempPassword('Parent');
-            const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-            // Use student name to derive parent name if not provided
-            const parentName = `Parent of ${studentName}`;
-
-            parent = await User.create({
-              name: parentName,
-              email: parentEmailClean,
-              password: hashedPassword,
-              role: 'Parent',
-              schoolId: schoolAdmin.schoolId,
-              linkedStudents: [{
-                studentId: student._id,
-                relationship: 'Parent'
-              }],
-              emailVerified: true,
-              requirePasswordChange: true,
-              tempPassword: tempPassword,
-              credentialsSent: false,
-              createdBy: schoolAdmin._id.toString()
-            });
-
-            results.parentsCreated++;
-            currentParentCount++;
-
-            console.log(`✅ New parent created: ${parentEmailClean}`);
           }
         }
       }

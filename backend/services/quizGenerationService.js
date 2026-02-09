@@ -124,9 +124,15 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
     throw new Error(`Insufficient questions for quiz level ${quizLevel}. Need at least 40, found ${questionsPool.length}`);
   }
   
-  // Get grade and subject from first question if not specified
-  const grade = options.grade || (questionsPool.length > 0 ? questionsPool[0].grade : 'General');
-  const subject = options.subject || (questionsPool.length > 0 ? questionsPool[0].subject : 'General');
+  // Get grade and subject from first question
+  // These should be consistent since we filtered by them in the query
+  const grade = options.grade || (questionsPool.length > 0 ? questionsPool[0].grade : null);
+  const subject = options.subject || (questionsPool.length > 0 ? questionsPool[0].subject : null);
+  
+  // Validate that we have grade and subject
+  if (!grade || !subject) {
+    throw new Error('Grade and subject must be specified or derivable from questions');
+  }
   
   // Step 2: Calculate max time gap for freshness weighting
   const now = Date.now();
@@ -327,11 +333,15 @@ async function autoGenerateQuizzes() {
       const { grade, subject, quiz_level } = combo._id;
       
       try {
+        // Escape special regex characters in grade name for safe matching
+        const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedGrade = escapeRegex(grade);
+        
         // Check if a quiz already exists for this combination
         const existingQuiz = await Quiz.findOne({
           quiz_level,
           is_auto_generated: true,
-          title: { $regex: new RegExp(`^${grade}'s.*Level ${quiz_level}`, 'i') }
+          title: { $regex: new RegExp(`^${escapedGrade}'s.*Level ${quiz_level}`, 'i') }
         }).sort({ createdAt: -1 });
         
         // Skip if a quiz was already generated recently (within last 24 hours)

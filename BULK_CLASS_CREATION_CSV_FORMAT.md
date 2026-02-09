@@ -69,7 +69,8 @@ Primary 3 Mathematics A,Primary 3,Mathematics,Ms. Sarah Johnson,sarah.johnson@sc
 - One parent can be linked to multiple students
 - If parent email already exists, the student will be linked to that existing parent account
 - If parent is new, a temporary password will be generated
-- Parent name will be automatically generated as "Parent of [Student Name]" if creating a new parent
+- **Parent name will be automatically generated** as "Parent of [Student Name]"
+  - Note: This is a simplified implementation. If you need custom parent names, they can be updated manually after creation via the user management interface.
 
 ### Existing Users
 - If an email already exists in the system:
