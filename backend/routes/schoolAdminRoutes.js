@@ -4060,15 +4060,77 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
   }
 });
 
-// POST /api/mongo/school-admin/upgrade-license - Request license upgrade
+// POST /api/mongo/school-admin/upgrade-license - Process license upgrade with payment
 router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { licenseType, billingCycle } = req.body;
+    const { licenseId, billingCycle, paymentInfo } = req.body;
 
-    if (!licenseType || !billingCycle) {
-      return res.status(400).json({ success: false, error: 'License type and billing cycle are required' });
+    // Validate required fields
+    if (!licenseId || !billingCycle || !paymentInfo) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'License ID, billing cycle, and payment information are required' 
+      });
     }
 
+    // Validate billing cycle
+    if (!['monthly', 'yearly'].includes(billingCycle)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid billing cycle. Must be "monthly" or "yearly"' 
+      });
+    }
+
+    // Validate payment information
+    const { cardNumber, expiryDate, cvv } = paymentInfo;
+    
+    // Card number validation (16 digits)
+    if (!cardNumber || !/^\d{16}$/.test(cardNumber)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid card number. Must be 16 digits' 
+      });
+    }
+
+    // Expiry date validation (MM/YY format and not expired)
+    if (!expiryDate || !/^\d{2}\/\d{2}$/.test(expiryDate)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid expiry date. Must be in MM/YY format' 
+      });
+    }
+
+    const [month, year] = expiryDate.split('/');
+    const monthNum = parseInt(month, 10);
+    const yearNum = parseInt('20' + year, 10);
+    
+    if (monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid month in expiry date' 
+      });
+    }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    if (yearNum < currentYear || (yearNum === currentYear && monthNum < currentMonth)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Card has expired' 
+      });
+    }
+
+    // CVV validation (3 digits)
+    if (!cvv || !/^\d{3}$/.test(cvv)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid CVV. Must be 3 digits' 
+      });
+    }
+
+    // Get user and school
     const user = await User.findById(req.user.userId);
     if (!user || !user.schoolId) {
       return res.status(404).json({ success: false, error: 'School not found' });
@@ -4084,26 +4146,58 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     }
 
     // Get the new license
-    const newLicense = await License.findOne({ type: licenseType });
+    const newLicense = await License.findById(licenseId);
     if (!newLicense) {
-      return res.status(404).json({ success: false, error: 'License type not found' });
+      return res.status(404).json({ success: false, error: 'License not found' });
     }
 
-    // For now, we'll just prepare the upgrade request
-    // In a real scenario, this would integrate with a payment processor
+    // Validate the new license is active and paid
+    if (!newLicense.isActive) {
+      return res.status(400).json({ success: false, error: 'Selected license is not active' });
+    }
+
+    if (newLicense.type !== 'paid') {
+      return res.status(400).json({ success: false, error: 'Selected license must be a paid plan' });
+    }
+
+    // Simulate payment processing (in production, this would call a payment gateway)
+    console.log('🔒 Processing simulated payment...');
+    console.log('Card ending in:', cardNumber.slice(-4));
+    console.log('Amount:', billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly);
+    
+    // Simulate a small delay for payment processing
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Payment successful - Update school's license
+    school.licenseId = newLicense._id;
+    
+    // For paid licenses, we don't set an expiry date (or set it far in the future)
+    // Remove expiry date for paid licenses
+    school.licenseExpiresAt = null;
+    
+    await school.save();
+
+    console.log('✅ License upgraded successfully');
+    console.log(`School ${school.name} upgraded to ${newLicense.name}`);
+
     return res.json({
       success: true,
-      message: 'Upgrade request received. Please contact support to complete the upgrade.',
+      message: 'Payment successful! Your license has been upgraded.',
       upgradeDetails: {
-        currentPlan: school.licenseId.name,
-        newPlan: licenseType,
+        previousPlan: school.licenseId ? school.licenseId.name : 'Unknown',
+        newPlan: newLicense.name,
         billingCycle,
-        price: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly
+        amountPaid: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly,
+        newLimits: {
+          maxTeachers: newLicense.maxTeachers,
+          maxStudents: newLicense.maxStudents,
+          maxClasses: newLicense.maxClasses
+        }
       }
     });
   } catch (error) {
     console.error('Error processing license upgrade:', error);
-    return res.status(500).json({ success: false, error: 'Failed to process upgrade request' });
+    return res.status(500).json({ success: false, error: 'Failed to process payment. Please try again.' });
   }
 });
 
