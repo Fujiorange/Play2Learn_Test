@@ -16,7 +16,7 @@ const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
-const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
+const { generateQuiz, checkGenerationAvailability, autoGenerateQuizzes, checkAllEligibleCombinations } = require('../services/quizGenerationService');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -1415,6 +1415,46 @@ router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete quiz' 
+    });
+  }
+});
+
+// Auto-generate quizzes for all eligible combinations
+router.post('/quizzes/auto-generate', authenticateP2LAdmin, async (req, res) => {
+  try {
+    console.log('🤖 Starting automatic quiz generation...');
+    
+    const results = await autoGenerateQuizzes();
+    
+    res.status(200).json({
+      success: true,
+      message: `Auto-generation complete. Generated ${results.generated} new quizzes, skipped ${results.skipped} recent quizzes`,
+      data: results
+    });
+  } catch (error) {
+    console.error('Auto-generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to auto-generate quizzes'
+    });
+  }
+});
+
+// Check all eligible combinations for quiz generation
+router.get('/quizzes/eligible-combinations', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const combinations = await checkAllEligibleCombinations();
+    
+    res.json({
+      success: true,
+      count: combinations.length,
+      data: combinations
+    });
+  } catch (error) {
+    console.error('Check eligible combinations error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check eligible combinations'
     });
   }
 });

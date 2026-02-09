@@ -99,19 +99,34 @@ function generateUniqueHash(studentId, quizLevel, timestamp) {
  * Main quiz generation function
  * @param {Number} quizLevel - Quiz level (1-10)
  * @param {String} studentId - Optional student ID for personalization
- * @param {String} triggerReason - Reason for generation (e.g., 'manual', 'enrollment', 'completion')
+ * @param {String} triggerReason - Reason for generation (e.g., 'manual', 'enrollment', 'completion', 'automatic')
+ * @param {Object} options - Additional options (grade, subject, etc.)
  * @returns {Object} - Generated quiz
  */
-async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual') {
-  // Step 1: Verify criteria - need at least 40 questions in quiz_level
-  const questionsPool = await Question.find({
+async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual', options = {}) {
+  // Step 1: Build query for questions - need at least 40 questions in quiz_level
+  const query = {
     quiz_level: quizLevel,
     is_active: true
-  });
+  };
+  
+  // Add optional filters for grade and subject
+  if (options.grade) {
+    query.grade = options.grade;
+  }
+  if (options.subject) {
+    query.subject = options.subject;
+  }
+  
+  const questionsPool = await Question.find(query);
   
   if (questionsPool.length < 40) {
     throw new Error(`Insufficient questions for quiz level ${quizLevel}. Need at least 40, found ${questionsPool.length}`);
   }
+  
+  // Get grade and subject from first question if not specified
+  const grade = options.grade || (questionsPool.length > 0 ? questionsPool[0].grade : 'General');
+  const subject = options.subject || (questionsPool.length > 0 ? questionsPool[0].subject : 'General');
   
   // Step 2: Calculate max time gap for freshness weighting
   const now = Date.now();
@@ -201,9 +216,13 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
   const timestamp = new Date();
   const uniqueHash = generateUniqueHash(studentId, quizLevel, timestamp);
   
+  // Format quiz title according to requirement: Grade's Quiz Level _
+  const quizLevelName = `Level ${quizLevel}`;
+  const quizTitle = `${grade}'s ${quizLevelName}`;
+  
   const quiz = new Quiz({
-    title: `Quiz Level ${quizLevel} - ${timestamp.toLocaleDateString()}`,
-    description: `Auto-generated quiz for level ${quizLevel}. Trigger: ${triggerReason}`,
+    title: quizTitle,
+    description: `Auto-generated quiz for ${grade}, ${subject}, ${quizLevelName}. Trigger: ${triggerReason}`,
     quiz_level: quizLevel,
     quiz_type: 'adaptive',
     questions: shuffledQuestions,
@@ -228,13 +247,23 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
 /**
  * Check if quiz generation is possible for a given quiz level
  * @param {Number} quizLevel - Quiz level to check
+ * @param {Object} options - Optional filters (grade, subject)
  * @returns {Object} - Status object with availability info
  */
-async function checkGenerationAvailability(quizLevel) {
-  const questionCount = await Question.countDocuments({
+async function checkGenerationAvailability(quizLevel, options = {}) {
+  const query = {
     quiz_level: quizLevel,
     is_active: true
-  });
+  };
+  
+  if (options.grade) {
+    query.grade = options.grade;
+  }
+  if (options.subject) {
+    query.subject = options.subject;
+  }
+  
+  const questionCount = await Question.countDocuments(query);
   
   return {
     available: questionCount >= 40,
@@ -246,9 +275,157 @@ async function checkGenerationAvailability(quizLevel) {
   };
 }
 
+/**
+ * Check and auto-generate quizzes for all eligible combinations
+ * Finds all grade/subject/quiz_level combinations with 40+ questions
+ * and generates quizzes for those that don't already exist
+ * @returns {Object} - Summary of generation results
+ */
+async function autoGenerateQuizzes() {
+  try {
+    // Step 1: Aggregate to find all grade/subject/quiz_level combinations with 40+ questions
+    const eligibleCombinations = await Question.aggregate([
+      {
+        $match: {
+          is_active: true
+        }
+      },
+      {
+        $group: {
+          _id: {
+            grade: '$grade',
+            subject: '$subject',
+            quiz_level: '$quiz_level'
+          },
+          questionCount: { $sum: 1 }
+        }
+      },
+      {
+        $match: {
+          questionCount: { $gte: 40 }
+        }
+      },
+      {
+        $sort: {
+          '_id.grade': 1,
+          '_id.subject': 1,
+          '_id.quiz_level': 1
+        }
+      }
+    ]);
+    
+    const results = {
+      checked: eligibleCombinations.length,
+      generated: 0,
+      skipped: 0,
+      errors: [],
+      quizzes: []
+    };
+    
+    // Step 2: For each eligible combination, check if quiz already exists
+    for (const combo of eligibleCombinations) {
+      const { grade, subject, quiz_level } = combo._id;
+      
+      try {
+        // Check if a quiz already exists for this combination
+        const existingQuiz = await Quiz.findOne({
+          quiz_level,
+          is_auto_generated: true,
+          title: { $regex: new RegExp(`^${grade}'s.*Level ${quiz_level}`, 'i') }
+        }).sort({ createdAt: -1 });
+        
+        // Skip if a quiz was already generated recently (within last 24 hours)
+        if (existingQuiz) {
+          const hoursSinceGeneration = (Date.now() - existingQuiz.createdAt.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceGeneration < 24) {
+            results.skipped++;
+            continue;
+          }
+        }
+        
+        // Generate new quiz
+        const quiz = await generateQuiz(
+          quiz_level,
+          null,
+          'automatic',
+          { grade, subject }
+        );
+        
+        results.generated++;
+        results.quizzes.push({
+          title: quiz.title,
+          quiz_level,
+          grade,
+          subject,
+          questionCount: combo.questionCount
+        });
+        
+      } catch (error) {
+        results.errors.push({
+          grade,
+          subject,
+          quiz_level,
+          error: error.message
+        });
+      }
+    }
+    
+    return results;
+    
+  } catch (error) {
+    throw new Error(`Auto-generation failed: ${error.message}`);
+  }
+}
+
+/**
+ * Check all possible combinations and return which ones are eligible for generation
+ * @returns {Array} - List of eligible combinations
+ */
+async function checkAllEligibleCombinations() {
+  const eligibleCombinations = await Question.aggregate([
+    {
+      $match: {
+        is_active: true
+      }
+    },
+    {
+      $group: {
+        _id: {
+          grade: '$grade',
+          subject: '$subject',
+          quiz_level: '$quiz_level'
+        },
+        questionCount: { $sum: 1 }
+      }
+    },
+    {
+      $match: {
+        questionCount: { $gte: 40 }
+      }
+    },
+    {
+      $sort: {
+        '_id.grade': 1,
+        '_id.subject': 1,
+        '_id.quiz_level': 1
+      }
+    }
+  ]);
+  
+  return eligibleCombinations.map(combo => ({
+    grade: combo._id.grade,
+    subject: combo._id.subject,
+    quiz_level: combo._id.quiz_level,
+    questionCount: combo.questionCount,
+    eligible: true
+  }));
+}
+
 module.exports = {
   generateQuiz,
   checkGenerationAvailability,
+  autoGenerateQuizzes,
+  checkAllEligibleCombinations,
   calculateQuestionWeight,
   weightedRandomSelect,
   calculateNextDifficulty,
