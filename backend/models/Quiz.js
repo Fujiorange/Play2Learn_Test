@@ -4,6 +4,7 @@ const quizSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, default: '' },
   quiz_type: { type: String, enum: ['placement', 'adaptive'], default: 'adaptive' },
+  quiz_level: { type: Number, min: 1, max: 10, default: null },
   questions: [{
     question_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
     text: { type: String },
@@ -13,6 +14,9 @@ const quizSchema = new mongoose.Schema({
   }],
   is_adaptive: { type: Boolean, default: true },
   is_active: { type: Boolean, default: true },
+  is_auto_generated: { type: Boolean, default: false },
+  generation_criteria: { type: String, default: null },
+  unique_hash: { type: String, default: null },
   adaptive_config: {
     target_correct_answers: { type: Number, default: 10 },
     difficulty_progression: { type: String, enum: ['gradual', 'immediate', 'ml-based'], default: 'gradual' },
@@ -39,5 +43,7 @@ quizSchema.pre('save', function() {
 // Add indexes for performance on frequently queried fields
 quizSchema.index({ quiz_type: 1, is_active: 1 });
 quizSchema.index({ is_launched: 1, is_active: 1 });
+quizSchema.index({ quiz_level: 1, is_active: 1 });
+quizSchema.index({ is_auto_generated: 1 });
 
 module.exports = mongoose.model('Quiz', quizSchema);

@@ -206,6 +206,62 @@
   background: #c82333;
 }
 
+.btn-delete:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.quiz-header-badges {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.auto-generated-badge {
+  background: #28a745 !important;
+  color: white !important;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.level-badge {
+  background: #667eea !important;
+  color: white !important;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.info-box {
+  background: #e7f3ff;
+  border-left: 4px solid #667eea;
+  padding: 1rem;
+  border-radius: 5px;
+  margin: 1rem 0;
+}
+
+.info-box h4 {
+  margin-top: 0;
+  color: #004085;
+}
+
+.info-box ul {
+  margin: 0.5rem 0 0 1.5rem;
+  color: #004085;
+}
+
+.info-box p {
+  margin: 0.5rem 0;
+  color: #004085;
+}
+
 @media (max-width: 768px) {
   .quizzes-grid {
     grid-template-columns: 1fr;
