@@ -20,9 +20,6 @@ import StudentList from './components/Teacher/StudentList';
 import StudentPerformance from './components/Teacher/StudentPerformance';
 import StudentLeaderboard from './components/Teacher/StudentLeaderboard';
 import StudentMatrix from './components/Teacher/StudentMatrix';
-import CreateFeedback from './components/Teacher/CreateFeedback';
-import ViewFeedback from './components/Teacher/ViewFeedback';
-import Chat from './components/Teacher/Chat';
 import WriteTestimonial from './components/Teacher/WriteTestimonial';
 import TeacherCreateTicket from './components/Teacher/CreateTicket';
 import TeacherTrackTicket from './components/Teacher/TrackTicket';
@@ -171,9 +168,6 @@ function App() {
           <Route path="/teacher/students/performance" element={<StudentPerformance />} />
           <Route path="/teacher/students/leaderboard" element={<StudentLeaderboard />} />
           <Route path="/teacher/students/matrix" element={<StudentMatrix />} />
-          <Route path="/teacher/feedback/create" element={<CreateFeedback />} />
-          <Route path="/teacher/feedback/view" element={<ViewFeedback />} />
-          <Route path="/teacher/chat" element={<Chat />} />
           <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
           <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
           <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
