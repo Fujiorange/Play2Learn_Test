@@ -281,6 +281,7 @@ function QuizManager() {
                 <button 
                   onClick={() => handleDelete(quiz._id)} 
                   className="btn-delete"
+                  title="Delete quiz"
                 >
                   Delete
                 </button>

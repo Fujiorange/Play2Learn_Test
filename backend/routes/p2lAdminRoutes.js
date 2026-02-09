@@ -1337,7 +1337,7 @@ router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
       quiz_level,
       student_id || null,
       trigger_reason || 'manual',
-      force || false
+      !!force
     );
     
     res.status(201).json({
