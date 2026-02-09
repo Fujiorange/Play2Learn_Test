@@ -512,42 +512,6 @@ export default function TeacherDashboard() {
               <li
                 style={{
                   ...styles.menuItem,
-                  ...(hoveredItem === 'create-feedback' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('create-feedback')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('communication', 'create-feedback')}
-              >
-                <span>Create Feedback</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'view-feedback' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('view-feedback')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('communication', 'view-feedback')}
-              >
-                <span>View Feedback Received</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'chat-parents' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('chat-parents')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('communication', 'chat')}
-              >
-                <span>Chat with Parents</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
                   ...(hoveredItem === 'testimonial' ? styles.menuItemHover : {}),
                 }}
                 onMouseEnter={() => setHoveredItem('testimonial')}
