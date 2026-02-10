@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import './PinConfirmationModal.css';
 
+// NOTE: PIN is hardcoded to '1234' as per business requirements (Task 4)
+// For production, consider implementing a more robust authentication system
 const CORRECT_PIN = '1234';
 
 function PinConfirmationModal({ isOpen, onConfirm, onCancel, title = 'Confirm Delete Action' }) {
