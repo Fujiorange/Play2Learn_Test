@@ -11,6 +11,7 @@ const StudentProfile = require('../models/StudentProfile');
 const quizGenerationService = require('../services/quizGenerationService');
 const {
   calculatePerformanceScore,
+  calculatePerformanceScoreLegacy,
   determineNextLevel,
   calculateAverageTime,
   calculateTotalTime,
@@ -276,11 +277,20 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
 // Helper function to calculate performance and update student progress
 async function finalizeQuizCompletion(userId, attempt, quizLevel) {
   try {
-    // Calculate performance score
-    const performanceScore = calculatePerformanceScore(attempt.answers, quizLevel);
+    // Get user for character type
+    const user = await User.findById(userId);
+    const characterType = user?.gender === 'male' ? 'male' : 
+                          user?.gender === 'female' ? 'female' : 'neutral';
     
-    // Determine next level
-    const nextLevel = determineNextLevel(performanceScore, quizLevel);
+    // Calculate performance score using legacy function for backward compatibility
+    const performanceScore = calculatePerformanceScoreLegacy(attempt.answers, quizLevel);
+    
+    // Get current level from student profile
+    let studentProfile = await StudentProfile.findOne({ userId });
+    const currentLevel = studentProfile?.currentLevel || quizLevel;
+    
+    // Determine next level with 2-level skip cap
+    const nextLevel = determineNextLevel(performanceScore, currentLevel);
     
     // Calculate time metrics
     const totalTime = calculateTotalTime(attempt.answers);
@@ -291,31 +301,59 @@ async function finalizeQuizCompletion(userId, attempt, quizLevel) {
     attempt.nextLevel = nextLevel;
     attempt.timeSpent = totalTime;
     
-    // Update or create student profile with new level
-    let studentProfile = await StudentProfile.findOne({ userId });
-    
+    // Update or create student profile with new level and gameboard data
     if (!studentProfile) {
       studentProfile = new StudentProfile({
         userId,
         currentLevel: nextLevel,
+        gameboard_position: nextLevel,
+        character_type: characterType,
         lastQuizTaken: new Date(),
         performanceHistory: [{
           quizLevel,
           performanceScore,
           completedAt: new Date()
+        }],
+        quiz_history: [{
+          level_attempted: quizLevel,
+          P_score: performanceScore,
+          next_level: nextLevel,
+          timestamp: new Date()
         }]
       });
     } else {
+      // Set character type if not already set
+      if (!studentProfile.character_type) {
+        studentProfile.character_type = characterType;
+      }
+      
       studentProfile.currentLevel = nextLevel;
+      studentProfile.gameboard_position = nextLevel;
       studentProfile.lastQuizTaken = new Date();
+      
+      // Add to performance history
       studentProfile.performanceHistory.push({
         quizLevel,
         performanceScore,
         completedAt: new Date()
       });
+      
+      // Add to quiz history for gameboard tracking
+      studentProfile.quiz_history.push({
+        level_attempted: quizLevel,
+        P_score: performanceScore,
+        next_level: nextLevel,
+        timestamp: new Date()
+      });
+      
       // Keep only last MAX_PERFORMANCE_HISTORY_LENGTH performance records
       if (studentProfile.performanceHistory.length > MAX_PERFORMANCE_HISTORY_LENGTH) {
         studentProfile.performanceHistory = studentProfile.performanceHistory.slice(-MAX_PERFORMANCE_HISTORY_LENGTH);
+      }
+      
+      // Keep only last 50 quiz history records
+      if (studentProfile.quiz_history.length > 50) {
+        studentProfile.quiz_history = studentProfile.quiz_history.slice(-50);
       }
     }
     
@@ -1037,14 +1075,25 @@ router.get('/student/level', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     
+    // Get user for character type
+    const user = await User.findById(userId);
+    const characterType = user?.gender === 'male' ? 'male' : 
+                          user?.gender === 'female' ? 'female' : 'neutral';
+    
     let studentProfile = await StudentProfile.findOne({ userId });
     
     if (!studentProfile) {
       // Create default profile if it doesn't exist
       studentProfile = new StudentProfile({
         userId,
-        currentLevel: 1
+        currentLevel: 1,
+        gameboard_position: 1,
+        character_type: characterType
       });
+      await studentProfile.save();
+    } else if (!studentProfile.character_type) {
+      // Update character type if not set
+      studentProfile.character_type = characterType;
       await studentProfile.save();
     }
     
@@ -1052,9 +1101,12 @@ router.get('/student/level', authenticateToken, async (req, res) => {
       success: true,
       data: {
         currentLevel: studentProfile.currentLevel,
+        gameboard_position: studentProfile.gameboard_position || studentProfile.currentLevel,
+        character_type: studentProfile.character_type || characterType,
         totalPoints: studentProfile.totalPoints,
         lastQuizTaken: studentProfile.lastQuizTaken,
-        performanceHistory: studentProfile.performanceHistory || []
+        performanceHistory: studentProfile.performanceHistory || [],
+        quiz_history: studentProfile.quiz_history || []
       }
     });
   } catch (error) {

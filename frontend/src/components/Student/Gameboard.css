@@ -1,0 +1,240 @@
+.gameboard-container {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+
+.gameboard-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.gameboard-header h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.gameboard-header p {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.gameboard-track {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-radius: 12px;
+}
+
+@media (max-width: 768px) {
+  .gameboard-track {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .gameboard-track {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+}
+
+.gameboard-space {
+  position: relative;
+  aspect-ratio: 1;
+  border: 3px solid #9ca3af;
+  border-radius: 12px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  transition: all 0.3s ease;
+}
+
+.gameboard-space.current {
+  border-width: 4px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transform: scale(1.05);
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+}
+
+.gameboard-space.completed {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+}
+
+.gameboard-space:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.level-number {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.level-badge {
+  font-size: 32px;
+  margin: 8px 0;
+}
+
+@media (max-width: 480px) {
+  .level-badge {
+    font-size: 24px;
+    margin: 4px 0;
+  }
+}
+
+.character-avatar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  z-index: 10;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@media (max-width: 480px) {
+  .character-avatar {
+    font-size: 36px;
+  }
+}
+
+.character-avatar.bouncing {
+  animation: bounce 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-10px);
+  }
+}
+
+.level-label {
+  position: absolute;
+  bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  text-align: center;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .level-label {
+    font-size: 8px;
+    bottom: 2px;
+  }
+}
+
+.animation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animation-message {
+  background: white;
+  padding: 32px 48px;
+  border-radius: 16px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease-in-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.gameboard-legend {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding-top: 16px;
+  border-top: 2px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.legend-icon {
+  font-size: 20px;
+}
+
+/* Celebratory effects for level ups */
+@keyframes celebrate {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-10deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+.gameboard-space.current.level-up {
+  animation: celebrate 0.5s ease-in-out 3;
+}
