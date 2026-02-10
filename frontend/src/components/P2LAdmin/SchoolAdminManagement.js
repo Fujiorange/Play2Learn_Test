@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSchools, getSchoolAdmins, updateSchoolAdmin, deleteSchoolAdmin, resetSchoolAdminPassword } from '../../services/p2lAdminService';
+import PinConfirmationModal from '../common/PinConfirmationModal';
 import './SchoolAdminManagement.css';
 
 function SchoolAdminManagement() {
@@ -11,6 +12,8 @@ function SchoolAdminManagement() {
   const [loading, setLoading] = useState(true);
   const [editingAdmin, setEditingAdmin] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', contact: '' });
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [adminToDelete, setAdminToDelete] = useState(null);
   // Store temp passwords for recently created admins (persists in session)
   const [tempPasswords, setTempPasswords] = useState({});
 
@@ -109,18 +112,23 @@ function SchoolAdminManagement() {
     }
   };
 
-  const handleDeleteAdmin = async (admin) => {
-    if (!window.confirm(`Are you sure you want to delete admin ${admin.name}? This action cannot be undone.`)) {
-      return;
-    }
-    
+  const handleDeleteAdmin = (admin) => {
+    setAdminToDelete(admin);
+    setShowPinModal(true);
+  };
+
+  const confirmDeleteAdmin = async () => {
     try {
-      await deleteSchoolAdmin(admin._id);
+      await deleteSchoolAdmin(adminToDelete._id);
       alert('Admin deleted successfully');
+      setShowPinModal(false);
+      setAdminToDelete(null);
       fetchSchoolAdmins(selectedSchool);
     } catch (error) {
       console.error('Failed to delete admin:', error);
       alert(error.message || 'Failed to delete admin');
+      setShowPinModal(false);
+      setAdminToDelete(null);
     }
   };
 
@@ -312,6 +320,17 @@ function SchoolAdminManagement() {
           </div>
         </div>
       )}
+
+      {/* PIN Confirmation Modal */}
+      <PinConfirmationModal
+        isOpen={showPinModal}
+        onConfirm={confirmDeleteAdmin}
+        onCancel={() => {
+          setShowPinModal(false);
+          setAdminToDelete(null);
+        }}
+        title="Confirm School Admin Deletion"
+      />
     </div>
   );
 }
