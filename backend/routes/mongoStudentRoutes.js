@@ -698,12 +698,14 @@ router.post("/placement-quiz/generate", async (req, res) => {
       });
     }
 
-    if (mathProfile.placement_completed) {
-      return res.status(400).json({
-        success: false,
-        error: "Placement quiz already completed",
-      });
-    }
+    // REMOVED: No longer block placement quiz if already completed
+    // Students can retake placement quiz multiple times
+    // if (mathProfile.placement_completed) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     error: "Placement quiz already completed",
+    //   });
+    // }
 
     // Get an active placement quiz from P2L Admin created quizzes
     const placementQuiz = await Quiz.findOne({
