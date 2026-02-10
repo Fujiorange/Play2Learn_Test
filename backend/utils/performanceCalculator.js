@@ -2,16 +2,21 @@
  * Performance Calculator for Adaptive Quiz System
  * 
  * Calculates performance scores and determines next quiz level based on:
- * - Correctness of answers
+ * - Accuracy (correct answers ratio)
  * - Speed of answering (time bonus)
  * - Quiz difficulty level
  * 
- * Formula:
- * P = (Average of [correct? × (1 + speed_factor × (1 - time/max_time))]) × (1 + 0.2 × (difficulty - 1))
+ * New Formula:
+ * accuracy = correct_answers / total_questions
+ * time_factor = max(0, 1 - (time / max_time))
+ * speed_bonus = speed_factor × time_factor
+ * base_score = accuracy × (1 + speed_bonus)
+ * difficulty_multiplier = 1 + 0.2 × (difficulty - 1)
+ * P = base_score × difficulty_multiplier
  */
 
 // Configuration constants
-const SPEED_FACTOR = 1.0; // Adjustable speed bonus multiplier
+const SPEED_FACTOR = 0.5; // Adjustable coefficient for speed bonus
 const MAX_TIME_PER_QUESTION = 90; // Maximum time per question in seconds
 const MIN_QUIZ_LEVEL = 1;
 const MAX_QUIZ_LEVEL = 10;
@@ -19,83 +24,99 @@ const MAX_QUIZ_LEVEL = 10;
 /**
  * Calculate performance score for a quiz attempt
  * 
- * @param {Array} answers - Array of answer objects with: { isCorrect, timeSpent, difficulty }
+ * @param {Array} correct - Array of booleans indicating correct answers
+ * @param {Number} time - Total time taken in seconds
+ * @param {Number} max_time - Maximum allowed time for quiz
+ * @param {Number} difficulty - Quiz difficulty level (1-10)
+ * @returns {Number} - Performance score (P)
+ */
+function calculatePerformanceScore(correct, time, max_time, difficulty) {
+  if (!correct || correct.length === 0) {
+    return 0;
+  }
+
+  // Calculate accuracy
+  const correctAnswers = correct.filter(Boolean).length;
+  const totalQuestions = correct.length;
+  const accuracy = correctAnswers / totalQuestions;
+
+  // Calculate time factor and speed bonus
+  const time_factor = Math.max(0, 1 - (time / max_time));
+  const speed_bonus = SPEED_FACTOR * time_factor;
+
+  // Calculate base score
+  const base_score = accuracy * (1 + speed_bonus);
+
+  // Apply difficulty multiplier
+  const difficulty_multiplier = 1 + 0.2 * (difficulty - 1);
+
+  // Calculate final performance score
+  const P = base_score * difficulty_multiplier;
+
+  return P;
+}
+
+/**
+ * Legacy function for backward compatibility
+ * Converts old answer format to new format
+ * 
+ * @param {Array} answers - Array of answer objects with: { isCorrect, timeSpent }
  * @param {Number} quizLevel - The difficulty level of the quiz (1-10)
  * @returns {Number} - Performance score (P)
  */
-function calculatePerformanceScore(answers, quizLevel = 1) {
+function calculatePerformanceScoreLegacy(answers, quizLevel = 1) {
   if (!answers || answers.length === 0) {
     return 0;
   }
 
-  // Calculate score for each question
-  const questionScores = answers.map(answer => {
-    // If answer is incorrect, score is 0
-    if (!answer.isCorrect) {
-      return 0;
-    }
+  // Convert to new format
+  const correct = answers.map(a => a.isCorrect);
+  const totalTime = answers.reduce((sum, a) => sum + (a.timeSpent || 0), 0);
+  const max_time = answers.length * MAX_TIME_PER_QUESTION;
 
-    // Base score for correct answer
-    let score = 1;
-
-    // Add speed bonus if timeSpent is provided
-    if (answer.timeSpent !== undefined && answer.timeSpent !== null) {
-      const timeRatio = Math.min(answer.timeSpent / MAX_TIME_PER_QUESTION, 1);
-      const speedBonus = SPEED_FACTOR * (1 - timeRatio);
-      score = score + speedBonus;
-    }
-
-    return score;
-  });
-
-  // Calculate average score
-  const averageScore = questionScores.reduce((sum, score) => sum + score, 0) / questionScores.length;
-
-  // Apply difficulty multiplier based on quiz level
-  // Map quiz level (1-10) to difficulty (1-5) for the formula
-  // Mapping: Level 1→Diff 1, Levels 2-3→Diff 2, Levels 4-5→Diff 3, Levels 6-7→Diff 4, Levels 8-10→Diff 5
-  const difficulty = Math.min(5, Math.ceil(quizLevel / 2));
-  const difficultyMultiplier = 1 + 0.2 * (difficulty - 1);
-
-  // Calculate final performance score
-  const performanceScore = averageScore * difficultyMultiplier;
-
-  return performanceScore;
+  return calculatePerformanceScore(correct, totalTime, max_time, quizLevel);
 }
 
 /**
  * Determine the next quiz level based on performance score
  * 
- * Logic:
- * - If P ≤ 1.0 → go down 1 level (or repeat level 1)
+ * Logic with 2-level skip cap enforcement:
+ * - If P ≤ 1.0 → go down 1 level (minimum level 1)
  * - If 1.0 < P ≤ 1.7 → stay at current level
  * - If 1.7 < P ≤ 2.4 → go up 1 level
- * - If P > 2.4 → skip levels: next_level = current_level + 1 + floor((P - 2.4)/0.2)
- * - Cap levels between 1-10
+ * - If P > 2.4 → skip levels with MAX 2-level cap
+ * 
+ * CRITICAL: Student cannot jump more than 2 levels from current position
+ * Example: Level 1 → Max Level 3, Level 2 → Max Level 4, etc.
  * 
  * @param {Number} performanceScore - Calculated performance score (P)
  * @param {Number} currentLevel - Current quiz level (1-10)
  * @returns {Number} - Next quiz level (1-10)
  */
 function determineNextLevel(performanceScore, currentLevel) {
-  let nextLevel;
+  let nextLevel = currentLevel;
 
   if (performanceScore <= 1.0) {
-    // Go down 1 level, or stay at level 1
+    // Go down 1 level (minimum level 1)
     nextLevel = Math.max(MIN_QUIZ_LEVEL, currentLevel - 1);
   } else if (performanceScore <= 1.7) {
     // Stay at current level
     nextLevel = currentLevel;
   } else if (performanceScore <= 2.4) {
     // Go up 1 level
-    nextLevel = currentLevel + 1;
+    nextLevel = Math.min(MAX_QUIZ_LEVEL, currentLevel + 1);
   } else {
-    // Skip levels based on performance
-    const skipAmount = Math.floor((performanceScore - 2.4) / 0.2);
-    nextLevel = currentLevel + 1 + skipAmount;
+    // Skip levels with MAX 2-level skip cap
+    const extra_levels = Math.floor((performanceScore - 2.4) / 0.2);
+    const skip_amount = Math.min(2, extra_levels + 1); // Cap at 2 levels maximum
+    nextLevel = Math.min(MAX_QUIZ_LEVEL, currentLevel + skip_amount);
   }
 
-  // Cap between min and max levels
+  // ENSURE: Student cannot jump more than 2 levels from their current position
+  const maxAllowedLevel = Math.min(MAX_QUIZ_LEVEL, currentLevel + 2);
+  nextLevel = Math.min(nextLevel, maxAllowedLevel);
+
+  // Final boundary check
   nextLevel = Math.min(MAX_QUIZ_LEVEL, Math.max(MIN_QUIZ_LEVEL, nextLevel));
 
   return nextLevel;
@@ -161,6 +182,7 @@ function getPerformanceRating(performanceScore) {
 
 module.exports = {
   calculatePerformanceScore,
+  calculatePerformanceScoreLegacy,
   determineNextLevel,
   calculateAverageTime,
   calculateTotalTime,

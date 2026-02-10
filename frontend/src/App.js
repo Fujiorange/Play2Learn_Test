@@ -135,10 +135,6 @@ import LicenseManagement from './components/P2LAdmin/LicenseManagement';
 // Maintenance Banner
 import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner';
 
-// Student Adaptive Quiz Components
-import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
-import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
-
 function App() {
   // Get user role from localStorage for maintenance banner
   const getUserRole = () => {
@@ -223,10 +219,6 @@ function App() {
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
           <Route path="/student/quiz/take" element={<TakeQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
-
-          {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
-          <Route path="/student/adaptive-quizzes" element={<AdaptiveQuizzes />} />
-          <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
 
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
