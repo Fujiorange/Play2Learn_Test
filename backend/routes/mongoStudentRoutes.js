@@ -706,13 +706,17 @@ router.post("/placement-quiz/submit", async (req, res) => {
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
 
     let startingProfile = 1;
-    if (quiz.percentage >= 90) startingProfile = 7;
-    else if (quiz.percentage >= 80) startingProfile = 6;
-    else if (quiz.percentage >= 70) startingProfile = 5;
-    else if (quiz.percentage >= 60) startingProfile = 4;
-    else if (quiz.percentage >= 50) startingProfile = 3;
-    else if (quiz.percentage >= 40) startingProfile = 2;
-    else startingProfile = 1;
+    // Map percentage score to profile level (1-10)
+    if (quiz.percentage >= 90) startingProfile = 10;      // 90-100% → Level 10
+    else if (quiz.percentage >= 80) startingProfile = 9;  // 80-89% → Level 9
+    else if (quiz.percentage >= 70) startingProfile = 8;  // 70-79% → Level 8
+    else if (quiz.percentage >= 60) startingProfile = 7;  // 60-69% → Level 7
+    else if (quiz.percentage >= 50) startingProfile = 6;  // 50-59% → Level 6
+    else if (quiz.percentage >= 40) startingProfile = 5;  // 40-49% → Level 5
+    else if (quiz.percentage >= 30) startingProfile = 4;  // 30-39% → Level 4
+    else if (quiz.percentage >= 20) startingProfile = 3;  // 20-29% → Level 3
+    else if (quiz.percentage >= 10) startingProfile = 2;  // 10-19% → Level 2
+    else startingProfile = 1;                             // 0-9% → Level 1
 
     mathProfile.current_profile = startingProfile;
     mathProfile.placement_completed = true;
