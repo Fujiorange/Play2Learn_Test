@@ -223,13 +223,49 @@ async function updateSkillsFromAdaptiveQuiz(userId, answers) {
   }
 }
 
+// Helper function to calculate points for a question based on quiz level and difficulty
+function calculateQuestionPoints(quizLevel, difficulty, isCorrect) {
+  if (!isCorrect) return 0;
+  
+  // Base points per correct answer
+  const basePoints = 10;
+  
+  // Level factor: scales from 0.1 to 1.0 (for levels 1-10)
+  const levelFactor = quizLevel / 10;
+  
+  // Difficulty factor: scales from 0.2 to 1.0 (for difficulty 1-5)
+  const difficultyFactor = difficulty / 5;
+  
+  // Final formula: base × (1 + level_factor × difficulty_factor)
+  // This means:
+  // - Level 1, Difficulty 1: 10 × (1 + 0.1 × 0.2) = 10.2 points
+  // - Level 5, Difficulty 3: 10 × (1 + 0.5 × 0.6) = 13 points  
+  // - Level 10, Difficulty 5: 10 × (1 + 1.0 × 1.0) = 20 points
+  const points = basePoints * (1 + (levelFactor * difficultyFactor));
+  
+  return Math.round(points);
+}
+
 // Helper function to update streak and points when adaptive quiz is completed
-async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, totalAnswered) {
+async function updateStreakAndPointsOnQuizCompletion(userId, answers, quizLevel) {
   try {
     const mathProfile = await MathProfile.findOne({ student_id: userId });
     
-    // Calculate points: 10 points per correct answer
-    const pointsEarned = Math.max(0, correctCount * 10);
+    // Calculate points based on quiz level and difficulty
+    let pointsEarned = 0;
+    answers.forEach(answer => {
+      const difficulty = answer.difficulty || 3; // Default to medium difficulty
+      const isCorrect = answer.isCorrect || false;
+      pointsEarned += calculateQuestionPoints(quizLevel, difficulty, isCorrect);
+    });
+    
+    pointsEarned = Math.max(0, Math.round(pointsEarned));
+    
+    console.log(`📊 Points calculation for quiz level ${quizLevel}:`, {
+      totalAnswers: answers.length,
+      correctAnswers: answers.filter(a => a.isCorrect).length,
+      pointsEarned
+    });
     
     if (!mathProfile) {
       // Create profile if doesn't exist
@@ -240,7 +276,7 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
         total_points: pointsEarned
       });
       await newProfile.save();
-      return;
+      return pointsEarned;
     }
 
     // Check if last quiz was yesterday or today
@@ -269,8 +305,11 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
     mathProfile.last_mid = now;
     mathProfile.total_points = (mathProfile.total_points || 0) + pointsEarned;
     await mathProfile.save();
+    
+    return pointsEarned;
   } catch (error) {
     console.error("Error updating streak and points:", error);
+    return 0;
   }
 }
 
@@ -429,7 +468,7 @@ const isQuizAvailableForStudent = async (quiz, userId) => {
     return { available: false, reason: 'Quiz has ended' };
   }
   
-  // Get user's class
+  // Get user's class and current level
   const user = await User.findById(userId);
   if (!user) {
     return { available: false, reason: 'User not found' };
@@ -442,6 +481,19 @@ const isQuizAvailableForStudent = async (quiz, userId) => {
     }
   }
   
+  // NEW: Check if student's current level allows access to this quiz
+  // Students can attempt any quiz at or below their current level
+  const StudentProfile = require('../models/StudentProfile');
+  const studentProfile = await StudentProfile.findOne({ userId });
+  const currentLevel = studentProfile?.currentLevel || 1;
+  
+  if (quiz.quiz_level && quiz.quiz_level > currentLevel) {
+    return { 
+      available: false, 
+      reason: `This is a Level ${quiz.quiz_level} quiz. You must reach Level ${quiz.quiz_level} to unlock it. (Current Level: ${currentLevel})` 
+    };
+  }
+  
   return { available: true };
 };
 
@@ -451,6 +503,11 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     // Use lean() for read-only query to improve performance
     const user = await User.findById(userId).lean();
+    
+    // NEW: Get student's current level to filter available quizzes
+    const StudentProfile = require('../models/StudentProfile');
+    const studentProfile = await StudentProfile.findOne({ userId });
+    const currentLevel = studentProfile?.currentLevel || 1;
     
     // Build query - show only launched quizzes for the student's class
     const now = new Date();
@@ -484,10 +541,18 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
       });
     }
     
+    // NEW: Filter by quiz level - only show quizzes at or below student's current level
+    query.$and.push({
+      $or: [
+        { quiz_level: null }, // Quizzes without level restriction
+        { quiz_level: { $lte: currentLevel } } // Or quizzes at/below student's level
+      ]
+    });
+    
     // Use lean() for read-only query to improve performance
     const quizzes = await Quiz.find(query)
-    .select('title description adaptive_config questions createdAt quiz_type is_launched launched_at launch_start_date launch_end_date launched_for_classes')
-    .sort({ launched_at: -1 })
+    .select('title description adaptive_config questions createdAt quiz_type quiz_level is_launched launched_at launch_start_date launch_end_date launched_for_classes')
+    .sort({ quiz_level: 1, launched_at: -1 }) // Sort by level first, then by launch date
     .lean();
 
     // Count questions by difficulty for each quiz
@@ -502,21 +567,24 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
         _id: quiz._id,
         title: quiz.title,
         description: quiz.description,
+        quiz_level: quiz.quiz_level || 1,
         total_questions: quiz.questions.length,
         difficulty_distribution: difficultyCount,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
+        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 20,
         difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'gradual',
         createdAt: quiz.createdAt,
         is_launched: quiz.is_launched,
         launched_at: quiz.launched_at,
         launch_start_date: quiz.launch_start_date,
-        launch_end_date: quiz.launch_end_date
+        launch_end_date: quiz.launch_end_date,
+        is_unlocked: true // All returned quizzes are unlocked for this student
       };
     });
 
     res.json({
       success: true,
-      data: quizzesWithStats
+      data: quizzesWithStats,
+      studentLevel: currentLevel
     });
   } catch (error) {
     console.error('Get adaptive quizzes error:', error);
@@ -602,7 +670,7 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
         attemptId: attempt._id,
         quizTitle: quiz.title,
         quizLevel: quiz.quiz_level,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
+        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 20,
         current_difficulty: attempt.current_difficulty,
         correct_count: attempt.correct_count
       }
@@ -650,7 +718,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
     }
 
     // Check if target is reached
-    const targetCorrect = quiz.adaptive_config?.target_correct_answers || 10;
+    const targetCorrect = quiz.adaptive_config?.target_correct_answers || 20;
     if (attempt.correct_count >= targetCorrect) {
       attempt.is_completed = true;
       attempt.completedAt = new Date();
@@ -664,7 +732,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       
       // Update streak and award points when quiz is completed
-      await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
+      await updateStreakAndPointsOnQuizCompletion(userId, attempt.answers, attempt.quizLevel || quiz.quiz_level || 1);
 
       return res.json({
         success: true,
@@ -731,7 +799,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       
       // Update streak and award points when quiz is completed
-      await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
+      await updateStreakAndPointsOnQuizCompletion(userId, attempt.answers, attempt.quizLevel || quiz.quiz_level || 1);
 
       return res.json({
         success: true,
@@ -934,7 +1002,7 @@ router.get('/attempts/:attemptId/results', authenticateToken, async (req, res) =
       });
     }
 
-    const targetCorrect = attempt.quizId.adaptive_config?.target_correct_answers || 10;
+    const targetCorrect = attempt.quizId.adaptive_config?.target_correct_answers || 20;
     const accuracy = attempt.total_answered > 0 
       ? Math.round((attempt.correct_count / attempt.total_answered) * 100) 
       : 0;
@@ -1007,7 +1075,7 @@ router.get('/my-attempts', authenticateToken, async (req, res) => {
       quizTitle: attempt.quizId.title,
       correct_count: attempt.correct_count,
       total_answered: attempt.total_answered,
-      target_correct_answers: attempt.quizId.adaptive_config?.target_correct_answers || 10,
+      target_correct_answers: attempt.quizId.adaptive_config?.target_correct_answers || 20,
       accuracy: attempt.total_answered > 0 
         ? Math.round((attempt.correct_count / attempt.total_answered) * 100) 
         : 0,
@@ -1173,7 +1241,7 @@ router.get('/quizzes/level/:level', authenticateToken, async (req, res) => {
         description: quiz.description,
         quiz_level: quiz.quiz_level,
         total_questions: quiz.questions.length,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
+        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 20,
         difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'gradual'
       }
     });
