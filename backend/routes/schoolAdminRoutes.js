@@ -4143,7 +4143,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     }
 
     // Validate payment information
-    const { cardNumber, expiryDate, cvv } = paymentInfo;
+    const { cardNumber, expiryDate: cardExpiryDate, cvv } = paymentInfo;
     
     // Card number validation (16 digits)
     if (!cardNumber || !/^\d{16}$/.test(cardNumber)) {
@@ -4154,14 +4154,14 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     }
 
     // Expiry date validation (MM/YY format and not expired)
-    if (!expiryDate || !/^\d{2}\/\d{2}$/.test(expiryDate)) {
+    if (!cardExpiryDate || !/^\d{2}\/\d{2}$/.test(cardExpiryDate)) {
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid expiry date. Must be in MM/YY format' 
       });
     }
 
-    const [month, year] = expiryDate.split('/');
+    const [month, year] = cardExpiryDate.split('/');
     const monthNum = parseInt(month, 10);
     // Handle year: assume 2000s for years 00-99
     // For production, consider cards typically expire within 10-20 years from now
