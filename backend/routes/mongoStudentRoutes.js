@@ -611,45 +611,45 @@ router.post("/placement-quiz/generate", async (req, res) => {
     //   });
     // }
 
-    // Get an active placement quiz from P2L Admin created quizzes
-    const placementQuiz = await Quiz.findOne({
-      quiz_type: 'placement',
-      is_active: true
-    }).sort({ createdAt: -1 }); // Get most recent placement quiz
+    // Pull 20 random questions from the shared question bank
+    const Question = mongoose.model('Question');
+    const randomQuestions = await Question.aggregate([
+      { $match: { is_active: true } },
+      { $sample: { size: 20 } }
+    ]);
 
-    if (!placementQuiz || !placementQuiz.questions || placementQuiz.questions.length === 0) {
+    if (!randomQuestions || randomQuestions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "No active placement quiz found. Please contact your administrator.",
+        error: "No active questions found. Please contact your administrator.",
       });
     }
 
-    // Create a student quiz attempt record using the P2L Admin quiz
+    // Create a student quiz attempt record using random questions
     const quiz = await StudentQuiz.create({
       student_id: studentId,
       quiz_type: "placement",
-      quiz_id: placementQuiz._id,
       profile_level: 5,
-      questions: placementQuiz.questions.map(q => ({
-        question_text: q.text,
+      questions: randomQuestions.map(q => ({
+        question_text: q.text || q.question_text,
         operation: 'general',
-        correct_answer: q.answer,
+        correct_answer: q.answer || q.correct_answer,
         student_answer: null,
         is_correct: false,
       })),
       score: 0,
-      total_questions: placementQuiz.questions.length,
+      total_questions: randomQuestions.length,
     });
 
     res.json({
       success: true,
       quiz_id: quiz._id,
-      questions: placementQuiz.questions.map((q) => ({ 
-        question_text: q.text, 
+      questions: randomQuestions.map((q) => ({ 
+        question_text: q.text || q.question_text, 
         choices: q.choices,
         operation: 'general' 
       })),
-      total_questions: placementQuiz.questions.length,
+      total_questions: randomQuestions.length,
     });
   } catch (error) {
     console.error("❌ Generate placement quiz error:", error);
