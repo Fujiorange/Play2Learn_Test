@@ -2684,8 +2684,17 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
 router.get('/announcements', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to view announcements' 
+      });
+    }
+    
     const announcements = await db.collection('announcements')
-      .find({})
+      .find({ school_id: req.user.schoolId })
       .sort({ pinned: -1, createdAt: -1 })
       .toArray();
     
@@ -2698,17 +2707,26 @@ router.get('/announcements', authenticateToken, async (req, res) => {
 });
 
 // ==================== GET PUBLIC ANNOUNCEMENTS (For Students/Parents) ====================
-router.get('/announcements/public', async (req, res) => {
+router.get('/announcements/public', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
     const { audience } = req.query;
     
     console.log('📢 Fetching public announcements for:', audience);
     
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to view announcements' 
+      });
+    }
+    
     const now = new Date();
     
-    // Base filter: not expired
+    // Base filter: not expired AND belongs to user's school
     let filter = {
+      school_id: req.user.schoolId,
       $or: [
         { expiresAt: { $gt: now } },
         { expiresAt: null },
@@ -2733,6 +2751,7 @@ router.get('/announcements/public', async (req, res) => {
       
       filter = {
         $and: [
+          { school_id: req.user.schoolId },
           { $or: [
             { expiresAt: { $gt: now } },
             { expiresAt: null },
@@ -2773,6 +2792,14 @@ router.post('/announcements', authenticateToken, async (req, res) => {
       });
     }
     
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to create announcements' 
+      });
+    }
+    
     const newAnnouncement = {
       title,
       content,
@@ -2780,6 +2807,7 @@ router.post('/announcements', authenticateToken, async (req, res) => {
       audience: audience || 'all',
       pinned: pinned || false,
       author: req.user.name || req.user.email,
+      school_id: req.user.schoolId,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -2802,20 +2830,33 @@ router.post('/announcements', authenticateToken, async (req, res) => {
 router.put('/announcements/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to update announcements' 
+      });
+    }
+    
     const updates = { ...req.body, updatedAt: new Date() };
     delete updates._id;
+    delete updates.school_id; // Prevent changing school_id
     
     if (updates.expiresAt) {
       updates.expiresAt = new Date(updates.expiresAt);
     }
     
     const result = await db.collection('announcements').updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { 
+        _id: new mongoose.Types.ObjectId(req.params.id),
+        school_id: req.user.schoolId // Only update announcements from user's school
+      },
       { $set: updates }
     );
     
     if (result.matchedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Announcement not found' });
+      return res.status(404).json({ success: false, error: 'Announcement not found or access denied' });
     }
     
     console.log(`📢 Announcement updated: ${req.params.id}`);
@@ -2830,12 +2871,24 @@ router.put('/announcements/:id', authenticateToken, async (req, res) => {
 router.delete('/announcements/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to delete announcements' 
+      });
+    }
+    
     const result = await db.collection('announcements').deleteOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) }
+      { 
+        _id: new mongoose.Types.ObjectId(req.params.id),
+        school_id: req.user.schoolId // Only delete announcements from user's school
+      }
     );
     
     if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Announcement not found' });
+      return res.status(404).json({ success: false, error: 'Announcement not found or access denied' });
     }
     
     console.log(`📢 Announcement deleted: ${req.params.id}`);

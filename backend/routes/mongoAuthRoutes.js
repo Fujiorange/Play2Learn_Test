@@ -214,7 +214,7 @@ router.post('/login', async (req, res) => {
 
     // Role is automatically determined from the database, not from user input
     // This improves security by preventing role spoofing attempts
-    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role, schoolId: user.schoolId }, JWT_SECRET, { expiresIn: '7d' });
 
     return res.json({
       success: true,
