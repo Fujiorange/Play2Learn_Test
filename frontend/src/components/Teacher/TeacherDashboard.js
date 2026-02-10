@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import teacherService from '../../services/teacherService';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
@@ -33,21 +34,29 @@ export default function TeacherDashboard() {
   }, [navigate]);
 
   const loadDashboard = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/dashboard`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setDashboardData(data);
+  try {
+    // ✅ USE THE SERVICE METHOD (it has correct URLs)
+    const data = await teacherService.getDashboard();
+    
+    console.log('📊 Dashboard API Response:', data); // For debugging
+    
+    if (data.success) {
+      setDashboardData(data.data); // Note: data.data because service returns {success, data: {...}}
+    } else {
+      console.error('Dashboard API failed:', data.error);
+      
+      // Auto-logout if token is invalid
+      if (data.error.includes('token') || data.error.includes('authenticated')) {
+        authService.logout();
+        navigate('/login');
       }
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('Error loading dashboard:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleLogout = () => {
     authService.logout();

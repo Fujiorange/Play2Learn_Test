@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import teacherService from '../../services/teacherService';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
@@ -32,63 +33,55 @@ export default function CreateTicket() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
+  e.preventDefault();
+  
+  if (!authService.isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
 
-    if (!formData.subject.trim() || !formData.description.trim()) {
-      setMessage({ type: 'error', text: 'Please fill in subject and description' });
-      return;
-    }
+  if (!formData.subject.trim() || !formData.description.trim()) {
+    setMessage({ type: 'error', text: 'Please fill in subject and description' });
+    return;
+  }
 
-    setSubmitting(true);
-    setMessage({ type: '', text: '' });
+  setSubmitting(true);
+  setMessage({ type: '', text: '' });
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          subject: formData.subject,
-          description: formData.description,  // Backend maps this to 'message'
-          category: formData.category,
-          priority: formData.priority
-        })
+  try {
+    // ✅ USE THE SERVICE INSTEAD OF DIRECT FETCH
+    const result = await teacherService.createSupportTicket({
+      subject: formData.subject,
+      description: formData.description,
+      category: formData.category,
+      priority: formData.priority
+    });
+
+    if (result.success) {
+      setMessage({ 
+        type: 'success', 
+        text: `Support ticket created successfully! Your ticket ID: ${result.ticketId || 'Submitted'}` 
       });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ 
-          type: 'success', 
-          text: `Support ticket created successfully! Your ticket ID: ${data.ticketId || 'Submitted'}` 
+      
+      setTimeout(() => {
+        setFormData({ 
+          category: 'school', 
+          priority: 'normal', 
+          subject: '', 
+          description: '' 
         });
-        
-        setTimeout(() => {
-          setFormData({ 
-            category: 'school', 
-            priority: 'normal', 
-            subject: '', 
-            description: '' 
-          });
-          setMessage({ type: '', text: '' });
-        }, 3000);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to create support ticket' });
-      }
-    } catch (error) {
-      console.error('Create ticket error:', error);
-      setMessage({ type: 'error', text: 'Failed to create support ticket.' });
-    } finally {
-      setSubmitting(false);
+        setMessage({ type: '', text: '' });
+      }, 3000);
+    } else {
+      setMessage({ type: 'error', text: result.error || 'Failed to create support ticket' });
     }
-  };
+  } catch (error) {
+    console.error('Create ticket error:', error);
+    setMessage({ type: 'error', text: 'Failed to create support ticket.' });
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
