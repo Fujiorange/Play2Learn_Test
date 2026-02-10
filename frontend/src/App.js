@@ -115,6 +115,7 @@ import TeacherViewAnnouncements from './components/Teacher/ViewAnnouncements';
 import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
 import SchoolManagement from './components/P2LAdmin/SchoolManagement';
 import SchoolAdminManagement from './components/P2LAdmin/SchoolAdminManagement';
+import ManualAddSchoolAdmin from './components/P2LAdmin/ManualAddSchoolAdmin'; // ⭐ ADDED - Missing import
 import QuestionBank from './components/P2LAdmin/QuestionBank';
 import QuizManager from './components/P2LAdmin/QuizManager';
 import AdaptiveQuizCreator from './components/P2LAdmin/AdaptiveQuizCreator';
@@ -134,36 +135,22 @@ import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 
 function App() {
-  // Get user role from localStorage for maintenance banner
-  const getUserRole = () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      return user.role || null;
-    } catch {
-      return null;
-    }
-  };
-
   return (
     <Router>
       <div className="App">
-        {/* Show maintenance banner on all pages except landing */}
-        <MaintenanceBanner userRole={getUserRole()} />
-        
-        <Routes>
-          {/* ========== LANDING PAGE ========== */}
-          <Route
-            path="/"
-            element={<DynamicLandingPage />}
-          />
+        {/* Maintenance Banner */}
+        <MaintenanceBanner />
 
-          {/* ========== AUTHENTICATION ========== */}
+        <Routes>
+          {/* ========== PUBLIC ROUTES ========== */}
+          <Route path="/" element={<DynamicLandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/register_admin" element={<RegisterAdminPage />} />
+          <Route path="/register-admin" element={<RegisterAdminPage />} />
 
           {/* ========== TEACHER ROUTES ========== */}
           <Route path="/teacher" element={<TeacherDashboard />} />
+          <Route path="/teacher/announcements" element={<TeacherViewAnnouncements />} />
           <Route path="/teacher/profile" element={<TeacherViewProfile />} />
           <Route path="/teacher/profile/edit" element={<TeacherEditProfile />} />
           <Route path="/teacher/profile/picture" element={<TeacherUpdatePicture />} />
@@ -201,14 +188,14 @@ function App() {
           {/* ⭐ NEW ROUTE - Student News & Updates */}
           <Route path="/student/news" element={<StudentViewNewsUpdates />} />
 
-          {/* â­ NEW ROUTES - Student Rewards System */}
+          {/* ⭐ NEW ROUTES - Student Rewards System */}
           <Route path="/student/shop" element={<StudentViewRewardShop />} />
           <Route path="/student/badges" element={<StudentViewBadges />} />
 
           {/* ========== QUIZ ROUTES ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
-                    <Route path="/student/quiz/result" element={<QuizResult />} />
+          <Route path="/student/quiz/result" element={<QuizResult />} />
 
           {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
           <Route path="/student/adaptive-quizzes" element={<AdaptiveQuizzes />} />
@@ -296,4 +283,3 @@ function App() {
 }
 
 export default App;
-
