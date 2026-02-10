@@ -51,6 +51,7 @@ import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
 import TakeQuiz from './components/Student/TakeQuiz';
 import QuizResult from './components/Student/QuizResult';
+import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 import AttemptAssignment from './components/Student/AttemptAssignment';
 import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
@@ -219,6 +220,7 @@ function App() {
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
           <Route path="/student/quiz/take" element={<TakeQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
+          <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
 
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />

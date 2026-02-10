@@ -71,8 +71,8 @@ export default function AttemptQuiz() {
       const data = await response.json();
       
       if (data.success && data.data?._id) {
-        // Navigate to quiz taking interface with quizId
-        navigate(`/student/quiz/take?quizId=${data.data._id}&level=${currentLevel}`);
+        // Navigate to adaptive quiz taking interface with quizId
+        navigate(`/student/adaptive-quiz/${data.data._id}`);
       } else {
         setError(data.error || "No quiz available for your level");
       }
