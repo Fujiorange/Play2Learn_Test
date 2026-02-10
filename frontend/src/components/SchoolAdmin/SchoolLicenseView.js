@@ -23,6 +23,8 @@ function SchoolLicenseView() {
   });
   const [paymentErrors, setPaymentErrors] = useState({});
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [processingAction, setProcessingAction] = useState(false);
 
   useEffect(() => {
     fetchLicenseInfo();
@@ -252,6 +254,80 @@ function SchoolLicenseView() {
     setError('');
   };
 
+  const handleToggleAutoRenewal = async () => {
+    if (processingAction) return;
+    
+    setProcessingAction(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/mongo/school-admin/toggle-auto-renewal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          autoRenew: !licenseInfo.autoRenew
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update license info with new auto-renewal status
+        setLicenseInfo(prev => ({
+          ...prev,
+          autoRenew: data.autoRenew
+        }));
+        
+        alert(`Auto-renewal ${data.autoRenew ? 'enabled' : 'disabled'} successfully!`);
+      } else {
+        setError(data.error || 'Failed to update auto-renewal setting');
+      }
+    } catch (error) {
+      console.error('Auto-renewal toggle error:', error);
+      setError('Failed to update auto-renewal setting. Please try again.');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setProcessingAction(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/mongo/school-admin/cancel-subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setShowCancelModal(false);
+        
+        // Refresh license info
+        await fetchLicenseInfo();
+        
+        alert('Subscription cancelled successfully. Your license will remain active until the end of the current billing period.');
+      } else {
+        setError(data.error || 'Failed to cancel subscription');
+      }
+    } catch (error) {
+      console.error('Subscription cancellation error:', error);
+      setError('Failed to cancel subscription. Please try again.');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="school-license-view loading">
@@ -345,6 +421,111 @@ function SchoolLicenseView() {
       {licenseInfo.description && (
         <div className="license-description">
           <p>{licenseInfo.description}</p>
+        </div>
+      )}
+
+      {/* Subscription Information for Paid Licenses */}
+      {licenseInfo.type === 'paid' && (
+        <div className="subscription-info-card">
+          <h3>Subscription Details</h3>
+          
+          <div className="subscription-details">
+            <div className="detail-row">
+              <span className="detail-label">📅 Billing Cycle:</span>
+              <span className="detail-value">
+                {licenseInfo.billingCycle ? 
+                  (licenseInfo.billingCycle === 'monthly' ? 'Monthly' : 'Yearly') 
+                  : 'N/A'}
+              </span>
+            </div>
+            
+            {licenseInfo.nextBillingDate && (
+              <div className="detail-row">
+                <span className="detail-label">🔄 {licenseInfo.subscriptionStatus === 'cancelled' ? 'Expires On:' : 'Next Renewal:'}</span>
+                <span className="detail-value">
+                  {new Date(licenseInfo.nextBillingDate).toLocaleDateString('en-SG', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                  {licenseInfo.daysRemaining !== null && licenseInfo.daysRemaining > 0 && (
+                    <span style={{ marginLeft: '8px', color: '#6b7280', fontSize: '14px' }}>
+                      ({licenseInfo.daysRemaining} day{licenseInfo.daysRemaining !== 1 ? 's' : ''} remaining)
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            
+            <div className="detail-row">
+              <span className="detail-label">🔁 Auto-Renewal:</span>
+              <span className="detail-value">
+                <button
+                  className={`toggle-button ${licenseInfo.autoRenew ? 'active' : ''}`}
+                  onClick={handleToggleAutoRenewal}
+                  disabled={processingAction || licenseInfo.subscriptionStatus === 'cancelled'}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: licenseInfo.subscriptionStatus === 'cancelled' ? 'not-allowed' : 'pointer',
+                    backgroundColor: licenseInfo.autoRenew ? '#10b981' : '#6b7280',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  {licenseInfo.autoRenew ? 'Enabled ✓' : 'Disabled'}
+                </button>
+              </span>
+            </div>
+            
+            <div className="detail-row">
+              <span className="detail-label">📊 Status:</span>
+              <span className="detail-value">
+                <span className={`status-badge ${licenseInfo.subscriptionStatus}`}>
+                  {licenseInfo.subscriptionStatus === 'active' ? '✓ Active' : 
+                   licenseInfo.subscriptionStatus === 'cancelled' ? '⚠️ Cancelled' : 
+                   '❌ Expired'}
+                </span>
+              </span>
+            </div>
+            
+            {licenseInfo.subscriptionStatus === 'cancelled' && licenseInfo.cancelledAt && (
+              <div className="detail-row">
+                <span className="detail-label">🚫 Cancelled On:</span>
+                <span className="detail-value">
+                  {new Date(licenseInfo.cancelledAt).toLocaleDateString('en-SG', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+          
+          {licenseInfo.subscriptionStatus === 'active' && (
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <button
+                className="btn-cancel-subscription"
+                onClick={() => setShowCancelModal(true)}
+                disabled={processingAction}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Cancel Subscription
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -625,6 +806,40 @@ function SchoolLicenseView() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Subscription Confirmation Modal */}
+      {showCancelModal && (
+        <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <h3>Cancel Subscription</h3>
+            <p style={{ color: '#6b7280', lineHeight: '1.6' }}>
+              Are you sure you want to cancel your subscription? 
+            </p>
+            <p style={{ color: '#6b7280', lineHeight: '1.6', marginTop: '12px' }}>
+              Your license will remain active until <strong>{licenseInfo.nextBillingDate ? new Date(licenseInfo.nextBillingDate).toLocaleDateString('en-SG') : 'the end of the billing period'}</strong>, 
+              but it will not automatically renew.
+            </p>
+            
+            <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <button 
+                className="btn-secondary" 
+                onClick={() => setShowCancelModal(false)}
+                disabled={processingAction}
+              >
+                Keep Subscription
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={handleCancelSubscription}
+                disabled={processingAction}
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                {processingAction ? 'Cancelling...' : 'Yes, Cancel Subscription'}
+              </button>
+            </div>
           </div>
         </div>
       )}

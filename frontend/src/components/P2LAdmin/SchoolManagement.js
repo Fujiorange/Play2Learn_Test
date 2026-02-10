@@ -242,6 +242,45 @@ function SchoolManagement() {
                       <p><strong>Students:</strong> {school.current_students || 0} / {license.maxStudents === -1 ? 'Unlimited' : license.maxStudents}</p>
                       <p><strong>Classes:</strong> {school.current_classes || 0} / {license.maxClasses === -1 ? 'Unlimited' : license.maxClasses}</p>
                       <p><strong>Price:</strong> ${license.priceMonthly.toLocaleString()}/month, ${license.priceYearly.toLocaleString()}/year</p>
+                      
+                      {/* Subscription & Renewal Information */}
+                      {school.billingCycle && (
+                        <p><strong>Billing Cycle:</strong> {school.billingCycle === 'monthly' ? 'Monthly' : 'Yearly'}</p>
+                      )}
+                      {school.licenseExpiresAt && (
+                        <p>
+                          <strong>{school.subscriptionStatus === 'cancelled' ? 'Expires On:' : 'Renews On:'}</strong>{' '}
+                          {new Date(school.licenseExpiresAt).toLocaleDateString('en-SG', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      )}
+                      {school.subscriptionStatus && (
+                        <p>
+                          <strong>Status:</strong>{' '}
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            backgroundColor: 
+                              school.subscriptionStatus === 'active' ? '#d1fae5' :
+                              school.subscriptionStatus === 'cancelled' ? '#fed7aa' : '#fee2e2',
+                            color:
+                              school.subscriptionStatus === 'active' ? '#065f46' :
+                              school.subscriptionStatus === 'cancelled' ? '#92400e' : '#991b1b'
+                          }}>
+                            {school.subscriptionStatus}
+                          </span>
+                          {school.autoRenew !== undefined && school.subscriptionStatus === 'active' && (
+                            <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
+                              (Auto-renew: {school.autoRenew ? 'ON' : 'OFF'})
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </>
                   ) : (
                     <p style={{ color: 'red' }}>⚠️ No license assigned</p>

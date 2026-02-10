@@ -13,6 +13,29 @@ const schoolSchema = new mongoose.Schema({
     type: Date, 
     default: null 
   },
+  // Subscription management fields
+  billingCycle: {
+    type: String,
+    enum: ['monthly', 'yearly'],
+    default: null
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['active', 'cancelled', 'expired'],
+    default: 'active'
+  },
+  autoRenew: {
+    type: Boolean,
+    default: false
+  },
+  nextBillingDate: {
+    type: Date,
+    default: null
+  },
+  cancelledAt: {
+    type: Date,
+    default: null
+  },
   contact: { type: String, default: '' },
   is_active: { type: Boolean, default: true },
   current_teachers: { type: Number, default: 0 },

@@ -4093,6 +4093,12 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
         description: license.description,
         expiresAt: school.licenseExpiresAt,
         daysRemaining,
+        // Subscription details
+        billingCycle: school.billingCycle,
+        subscriptionStatus: school.subscriptionStatus,
+        autoRenew: school.autoRenew,
+        nextBillingDate: school.nextBillingDate,
+        cancelledAt: school.cancelledAt,
         limits: {
           maxTeachers: license.maxTeachers,
           maxStudents: license.maxStudents,
@@ -4228,12 +4234,26 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     // Save previous plan name before updating
     const previousPlanName = school.licenseId ? school.licenseId.name : 'Unknown';
 
-    // Payment successful - Update school's license
-    school.licenseId = newLicense._id;
+    // Calculate license expiry/renewal date based on billing cycle
+    const currentDate = new Date();
+    let expiryDate;
     
-    // For paid licenses, we don't set an expiry date (or set it far in the future)
-    // Remove expiry date for paid licenses
-    school.licenseExpiresAt = null;
+    if (billingCycle === 'monthly') {
+      expiryDate = new Date(currentDate);
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+    } else { // yearly
+      expiryDate = new Date(currentDate);
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    }
+
+    // Payment successful - Update school's license and subscription details
+    school.licenseId = newLicense._id;
+    school.licenseExpiresAt = expiryDate;
+    school.nextBillingDate = expiryDate;
+    school.billingCycle = billingCycle;
+    school.subscriptionStatus = 'active';
+    school.autoRenew = true; // Default to auto-renew enabled
+    school.cancelledAt = null; // Clear any previous cancellation
     
     await school.save();
 
@@ -4248,6 +4268,9 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
         newPlan: newLicense.name,
         billingCycle,
         amountPaid: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly,
+        expiresAt: expiryDate,
+        nextBillingDate: expiryDate,
+        autoRenew: true,
         newLimits: {
           maxTeachers: newLicense.maxTeachers,
           maxStudents: newLicense.maxStudents,
@@ -4258,6 +4281,89 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error processing license upgrade:', error);
     return res.status(500).json({ success: false, error: 'Failed to process payment. Please try again.' });
+  }
+});
+
+// POST /api/mongo/school-admin/toggle-auto-renewal - Toggle auto-renewal setting
+router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { autoRenew } = req.body;
+
+    if (typeof autoRenew !== 'boolean') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'autoRenew must be a boolean value' 
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId);
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    school.autoRenew = autoRenew;
+    await school.save();
+
+    console.log(`✅ Auto-renewal ${autoRenew ? 'enabled' : 'disabled'} for school ${school.organization_name}`);
+
+    return res.json({
+      success: true,
+      message: `Auto-renewal ${autoRenew ? 'enabled' : 'disabled'} successfully`,
+      autoRenew: school.autoRenew
+    });
+  } catch (error) {
+    console.error('Error toggling auto-renewal:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update auto-renewal setting' });
+  }
+});
+
+// POST /api/mongo/school-admin/cancel-subscription - Cancel subscription
+router.post('/cancel-subscription', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    // Check if school has a paid license
+    if (!school.licenseId || school.licenseId.type !== 'paid') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No active paid subscription to cancel' 
+      });
+    }
+
+    // Cancel subscription - disable auto-renewal and mark as cancelled
+    school.autoRenew = false;
+    school.subscriptionStatus = 'cancelled';
+    school.cancelledAt = new Date();
+    
+    await school.save();
+
+    console.log(`✅ Subscription cancelled for school ${school.organization_name}`);
+    console.log(`License will remain active until ${school.licenseExpiresAt}`);
+
+    return res.json({
+      success: true,
+      message: 'Subscription cancelled successfully. Your license will remain active until the end of the current billing period.',
+      details: {
+        cancelledAt: school.cancelledAt,
+        remainsActiveUntil: school.licenseExpiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Error cancelling subscription:', error);
+    return res.status(500).json({ success: false, error: 'Failed to cancel subscription' });
   }
 });
 
