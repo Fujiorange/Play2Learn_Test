@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import './AdaptiveQuizzes.css';
 
 const API_BASE_URL =
@@ -8,18 +8,47 @@ const API_BASE_URL =
 
 function AdaptiveQuizzes() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedLevel = searchParams.get('level');
+  
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [studentLevel, setStudentLevel] = useState(null);
+  const [selectedLevel, setSelectedLevel] = useState(null);
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    // If a level is requested via URL parameter and we have loaded the student level
+    if (requestedLevel && studentLevel !== null) {
+      const level = parseInt(requestedLevel);
+      if (level >= 1 && level <= 10) {
+        setSelectedLevel(level);
+        fetchQuizForLevel(level);
+      }
+    } else if (studentLevel !== null && selectedLevel === null) {
+      // Auto-select student's current level
+      setSelectedLevel(studentLevel);
+    }
+  }, [requestedLevel, studentLevel]);
+
   const getToken = () => localStorage.getItem('token');
 
   const fetchData = async () => {
     try {
+      // Fetch student's current level
+      const levelRes = await fetch(`${API_BASE_URL}/api/adaptive-quiz/student/level`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const levelData = await levelRes.json();
+      if (levelData.success) {
+        setStudentLevel(levelData.data.currentLevel || 1);
+      }
+
+      // Fetch all available quizzes
       const quizzesRes = await fetch(`${API_BASE_URL}/api/adaptive-quiz/quizzes`, {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
@@ -38,8 +67,38 @@ function AdaptiveQuizzes() {
     }
   };
 
+  const fetchQuizForLevel = async (level) => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_BASE_URL}/api/adaptive-quiz/quizzes/level/${level}`,
+        {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        // Start the quiz directly
+        startQuiz(data.data._id);
+      } else {
+        setError(data.error || `No quiz available for level ${level}`);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Failed to fetch quiz for level:', error);
+      setError('Failed to load quiz for the requested level');
+      setLoading(false);
+    }
+  };
+
   const startQuiz = (quizId) => {
     navigate(`/student/adaptive-quiz/${quizId}`);
+  };
+
+  const handleLevelSelect = (level) => {
+    setSelectedLevel(level);
+    fetchQuizForLevel(level);
   };
 
   const formatDate = (dateString) => {
@@ -66,7 +125,12 @@ function AdaptiveQuizzes() {
       <header className="page-header">
         <div>
           <h1>🎯 Adaptive Quizzes</h1>
-          <p className="page-subtitle">Quizzes that adapt to your skill level - launched by your teacher</p>
+          <p className="page-subtitle">Quizzes that adapt to your skill level</p>
+          {studentLevel && (
+            <p className="current-level-info">
+              Your current level: <strong>Level {studentLevel}</strong>
+            </p>
+          )}
         </div>
         <button 
           className="btn-back"
@@ -78,13 +142,36 @@ function AdaptiveQuizzes() {
 
       {error && <div className="error-message">{error}</div>}
 
+      {/* Level Selector */}
+      {studentLevel && (
+        <div className="level-selector">
+          <h3>Select Quiz Level</h3>
+          <div className="level-buttons">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(level => (
+              <button
+                key={level}
+                className={`level-button ${selectedLevel === level ? 'selected' : ''} ${level === studentLevel ? 'current' : ''}`}
+                onClick={() => handleLevelSelect(level)}
+                title={level === studentLevel ? 'Your current level' : `Level ${level}`}
+              >
+                <span className="level-number">Level {level}</span>
+                {level === studentLevel && <span className="current-badge">Current</span>}
+              </button>
+            ))}
+          </div>
+          <p className="level-hint">
+            💡 Start with your current level (Level {studentLevel}) or choose any level to practice
+          </p>
+        </div>
+      )}
+
       <div className="quizzes-grid">
           {quizzes.length === 0 ? (
             <div className="no-data">
               <div className="no-data-icon">📝</div>
-              <p>No adaptive quizzes available yet.</p>
+              <p>No quizzes available in the list view.</p>
               <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
-                Your teacher will launch quizzes when they are ready for you.
+                Use the level selector above to start a quiz at any level.
               </p>
             </div>
           ) : (

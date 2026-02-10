@@ -21,6 +21,20 @@ function AttemptAdaptiveQuiz() {
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
+  const [questionStartTime, setQuestionStartTime] = useState(null);
+  const [timeElapsed, setTimeElapsed] = useState(0);
+
+  // Timer effect to track time spent on current question
+  useEffect(() => {
+    if (currentQuestion && !showFeedback && questionStartTime) {
+      const timer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+        setTimeElapsed(elapsed);
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [currentQuestion, showFeedback, questionStartTime]);
 
   useEffect(() => {
     if (quizId) {
@@ -119,6 +133,9 @@ function AttemptAdaptiveQuiz() {
           setProgress(data.data.progress);
           setAnswer('');
           setShowFeedback(false);
+          // Start timer for the new question
+          setQuestionStartTime(Date.now());
+          setTimeElapsed(0);
         }
       } else {
         setError(data.error || 'Failed to get next question');
@@ -139,6 +156,9 @@ function AttemptAdaptiveQuiz() {
 
     setError('');
 
+    // Calculate time spent on this question
+    const timeSpent = questionStartTime ? Math.floor((Date.now() - questionStartTime) / 1000) : 0;
+
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/adaptive-quiz/attempts/${attemptId}/submit-answer`,
@@ -150,7 +170,8 @@ function AttemptAdaptiveQuiz() {
           },
           body: JSON.stringify({
             questionId: currentQuestion.id,
-            answer: answer.trim()
+            answer: answer.trim(),
+            timeSpent: timeSpent
           })
         }
       );
@@ -219,12 +240,20 @@ function AttemptAdaptiveQuiz() {
   }
 
   if (quizCompleted && results) {
+    const formatTime = (seconds) => {
+      if (!seconds) return '0s';
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    };
+
     return (
       <div className="adaptive-quiz-container">
         <div className="results-container">
           <div className="results-header">
             <h1>🎉 Quiz Completed!</h1>
             <h2>{results.quizTitle}</h2>
+            {results.quizLevel && <p className="quiz-level">Level {results.quizLevel}</p>}
           </div>
 
           <div className="results-stats">
@@ -242,6 +271,56 @@ function AttemptAdaptiveQuiz() {
             </div>
           </div>
 
+          {/* Performance Metrics */}
+          {results.performanceScore !== undefined && results.performanceScore !== null && (
+            <div className="performance-section">
+              <h3>Performance Analysis</h3>
+              <div className="performance-metrics">
+                <div className="metric-card highlight">
+                  <div className="metric-value">{results.performanceScore.toFixed(2)}</div>
+                  <div className="metric-label">Performance Score</div>
+                  <div className="metric-sublabel">{results.rating}</div>
+                </div>
+                {results.averageTime && (
+                  <div className="metric-card">
+                    <div className="metric-value">{formatTime(Math.round(results.averageTime))}</div>
+                    <div className="metric-label">Avg Time/Question</div>
+                  </div>
+                )}
+                {results.totalTime && (
+                  <div className="metric-card">
+                    <div className="metric-value">{formatTime(Math.round(results.totalTime))}</div>
+                    <div className="metric-label">Total Time</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Next Level Recommendation */}
+              {results.nextLevel && (
+                <div className="level-progression">
+                  {results.nextLevel > results.quizLevel && (
+                    <div className="progression-message success">
+                      <span className="icon">🎯</span>
+                      <span>Great job! You're ready for Level {results.nextLevel}!</span>
+                    </div>
+                  )}
+                  {results.nextLevel === results.quizLevel && (
+                    <div className="progression-message neutral">
+                      <span className="icon">💪</span>
+                      <span>Keep practicing at Level {results.quizLevel} to improve!</span>
+                    </div>
+                  )}
+                  {results.nextLevel < results.quizLevel && (
+                    <div className="progression-message review">
+                      <span className="icon">📚</span>
+                      <span>Let's review Level {results.nextLevel} to strengthen your foundation!</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="difficulty-progression">
             <h3>Difficulty Progression</h3>
             <div className="progression-chart">
@@ -249,6 +328,7 @@ function AttemptAdaptiveQuiz() {
                 <div 
                   key={index} 
                   className={`progression-item ${item.isCorrect ? 'correct' : 'incorrect'}`}
+                  title={item.timeSpent ? `Time: ${formatTime(item.timeSpent)}` : ''}
                 >
                   <span className="question-num">Q{item.questionNumber}</span>
                   <span className="difficulty-level">
@@ -257,14 +337,28 @@ function AttemptAdaptiveQuiz() {
                   <span className="result-icon">
                     {item.isCorrect ? '✓' : '✗'}
                   </span>
+                  {item.timeSpent && (
+                    <span className="time-spent">{formatTime(item.timeSpent)}</span>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
           <div className="results-actions">
+            {results.nextLevel && (
+              <button 
+                className="btn-primary"
+                onClick={() => {
+                  // Navigate to the next level quiz
+                  navigate(`/student/adaptive-quizzes?level=${results.nextLevel}`);
+                }}
+              >
+                Continue to Level {results.nextLevel} →
+              </button>
+            )}
             <button 
-              className="btn-primary"
+              className="btn-secondary"
               onClick={() => navigate('/student/adaptive-quizzes')}
             >
               Back to Quizzes
@@ -304,6 +398,16 @@ function AttemptAdaptiveQuiz() {
             Level {progress?.current_difficulty}
           </span>
         </div>
+
+        {/* Timer Display */}
+        {currentQuestion && !showFeedback && (
+          <div className="timer-display">
+            <span className="timer-icon">⏱️</span>
+            <span className="timer-value">
+              {Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+        )}
       </div>
 
       {error && <div className="error-message">{error}</div>}

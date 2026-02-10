@@ -25,6 +25,88 @@
   margin: 0;
 }
 
+.current-level-info {
+  font-size: 14px;
+  color: #3b82f6;
+  margin: 8px 0 0 0;
+  font-weight: 600;
+}
+
+/* Level Selector */
+.level-selector {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 32px;
+}
+
+.level-selector h3 {
+  font-size: 20px;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+}
+
+.level-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.level-button {
+  position: relative;
+  padding: 16px 12px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.level-button:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+}
+
+.level-button.selected {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+  font-weight: 700;
+}
+
+.level-button.current {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+}
+
+.level-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.current-badge {
+  font-size: 10px;
+  background: #10b981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.level-hint {
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+  margin: 0;
+}
+
 .btn-back {
   padding: 12px 24px;
   background: #f3f4f6;
