@@ -18,12 +18,11 @@ export default function StudentMatrix() {
   const getToken = () => localStorage.getItem('token');
   const isObjectId = (str) => str && typeof str === 'string' && /^[a-f\d]{24}$/i.test(str);
   
-  // Get display class name - use assigned classes as reference
-  const getDisplayClass = (studentClass, index) => {
-    if (!studentClass) return 'No class';
+  const getClassDisplayName = (studentClass) => {
+    if (!studentClass) return 'Unassigned';
     if (!isObjectId(studentClass)) return studentClass;
-    if (myClasses.length === 0) return 'Primary 1';
-    return myClasses[index % myClasses.length] || myClasses[0];
+    if (myClasses.length > 0) return myClasses[0];
+    return 'Primary 1';
   };
 
   useEffect(() => {
@@ -57,16 +56,16 @@ export default function StudentMatrix() {
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${getToken()}` } });
       const data = await res.json();
       if (data.success) setStudents(data.students || []);
-      else setError(data.error || 'Failed to load');
+      else setError(data.error || data.message || 'Failed to load');
     } catch (err) {
       console.error('Error:', err);
       setError('Failed to connect');
     } finally { setLoading(false); }
   };
 
-  const loadStudentSkills = async (student, index) => {
-    const studentWithClass = { ...student, displayClass: getDisplayClass(student.class, index) };
-    setSelectedStudent(studentWithClass);
+  const loadStudentSkills = async (student) => {
+    const displayClass = getClassDisplayName(student.class);
+    setSelectedStudent({ ...student, displayClass });
     setLoadingSkills(true);
     setStudentSkills([]);
     try {
@@ -109,7 +108,7 @@ export default function StudentMatrix() {
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backBtn: { padding: '10px 20px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     select: { padding: '10px 16px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', minWidth: '150px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' },
     card: { background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', cursor: 'pointer', border: '2px solid transparent', transition: 'all 0.2s' },
     cardActive: { borderColor: '#10b981', boxShadow: '0 4px 15px rgba(16,185,129,0.3)' },
     studentName: { fontSize: '16px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' },
@@ -126,7 +125,7 @@ export default function StudentMatrix() {
     loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
-  if (loading) return <div style={styles.loading}><div>Loading students...</div></div>;
+  if (loading && students.length === 0) return <div style={styles.loading}><div>Loading students...</div></div>;
 
   return (
     <div style={styles.container}>
@@ -157,14 +156,14 @@ export default function StudentMatrix() {
 
         {!error && students.length > 0 && (
           <div style={styles.grid}>
-            {students.map((student, index) => (
+            {students.map((student) => (
               <div 
                 key={student._id} 
                 style={{ ...styles.card, ...(selectedStudent?._id === student._id ? styles.cardActive : {}) }}
-                onClick={() => loadStudentSkills(student, index)}
+                onClick={() => loadStudentSkills(student)}
               >
                 <div style={styles.studentName}>{student.name}</div>
-                <div style={styles.classBadge}>{getDisplayClass(student.class, index)}</div>
+                <div style={styles.classBadge}>{getClassDisplayName(student.class)}</div>
                 <div style={styles.studentMeta}>
                   <span>⭐ {student.points || 0} pts</span>
                   <span>Lv {student.level || 1}</span>
@@ -176,7 +175,10 @@ export default function StudentMatrix() {
 
         {selectedStudent && (
           <div style={styles.skillsPanel}>
-            <h2 style={styles.skillsTitle}>Math Skills for {selectedStudent.name} ({selectedStudent.displayClass})</h2>
+            <h2 style={styles.skillsTitle}>
+              Math Skills for {selectedStudent.name} 
+              <span style={{ ...styles.classBadge, marginLeft: '12px' }}>{selectedStudent.displayClass}</span>
+            </h2>
             {loadingSkills && <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>Loading skills...</div>}
             {!loadingSkills && studentSkills.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>

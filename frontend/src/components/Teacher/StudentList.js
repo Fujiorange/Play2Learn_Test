@@ -15,21 +15,17 @@ export default function StudentList() {
 
   const getToken = () => localStorage.getItem('token');
   
-  // Check if string is ObjectId hash
+  // Check if string looks like MongoDB ObjectId
   const isObjectId = (str) => str && typeof str === 'string' && /^[a-f\d]{24}$/i.test(str);
   
-  // Map to store student index to class assignment
-  // Since backend query uses assignedClasses, if a student appears in results,
-  // they must belong to one of the teacher's classes
-  const getDisplayClass = (studentClass, studentIndex) => {
-    if (!studentClass) return '-';
-    // If it's already a readable name, use it
+  // Build a mapping from any class identifier to display name
+  const getClassDisplayName = (studentClass) => {
+    if (!studentClass) return 'Unassigned';
+    // If it's already a readable class name, return it
     if (!isObjectId(studentClass)) return studentClass;
-    // If it's a hash, distribute students across assigned classes
-    // This is a workaround - ideally backend should return class name
-    if (myClasses.length === 0) return 'Primary 1';
-    // Use modulo to distribute (or just show first class if only one)
-    return myClasses[studentIndex % myClasses.length] || myClasses[0] || 'Primary 1';
+    // If we have assigned classes, use the first one as fallback for hashes
+    if (myClasses.length > 0) return myClasses[0];
+    return 'Primary 1';
   };
 
   useEffect(() => {
@@ -43,23 +39,26 @@ export default function StudentList() {
   const loadData = async () => {
     try {
       setError('');
-      const [studentsRes, classesRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/mongo/teacher/students`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        }),
-        fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        })
-      ]);
+      
+      // Get classes first
+      const classesRes = await fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const classesData = await classesRes.json();
+      const classes = classesData.success ? (classesData.classes || []) : [];
+      setMyClasses(classes);
+      
+      // Get students
+      const studentsRes = await fetch(`${API_BASE_URL}/api/mongo/teacher/students`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const studentsData = await studentsRes.json();
 
-      const [studentsData, classesData] = await Promise.all([
-        studentsRes.json(),
-        classesRes.json()
-      ]);
-
-      if (classesData.success) setMyClasses(classesData.classes || []);
-      if (studentsData.success) setStudents(studentsData.students || []);
-      else setError(studentsData.error || 'Failed to load students');
+      if (studentsData.success) {
+        setStudents(studentsData.students || []);
+      } else {
+        setError(studentsData.error || studentsData.message || 'Failed to load students');
+      }
     } catch (err) {
       console.error('Error:', err);
       setError('Failed to connect to server');
@@ -70,21 +69,19 @@ export default function StudentList() {
 
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
-      const matchesSearch = !searchQuery || student.name?.toLowerCase().includes(searchQuery.toLowerCase());
-      // For class filter, check if student's class matches OR if using hash, allow all when filter matches any assigned class
-      const studentDisplayClass = getDisplayClass(student.class, students.indexOf(student));
-      const matchesClass = filterClass === 'all' || studentDisplayClass === filterClass;
+      const matchesSearch = !searchQuery || 
+        student.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const displayClass = getClassDisplayName(student.class);
+      const matchesClass = filterClass === 'all' || displayClass === filterClass;
       return matchesSearch && matchesClass;
     });
   }, [students, searchQuery, filterClass, myClasses]);
 
-  const handleViewPerformance = (student, index) => {
-    // Pass the display class name along with student data
-    const studentWithClass = {
-      ...student,
-      displayClass: getDisplayClass(student.class, index)
-    };
-    navigate('/teacher/students/performance', { state: { student: studentWithClass } });
+  const handleViewPerformance = (student) => {
+    const displayClass = getClassDisplayName(student.class);
+    navigate('/teacher/students/performance', { 
+      state: { student: { ...student, displayClass } } 
+    });
   };
 
   const styles = {
@@ -106,10 +103,9 @@ export default function StudentList() {
     th: { textAlign: 'left', padding: '12px', borderBottom: '2px solid #e5e7eb', fontSize: '13px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' },
     td: { padding: '16px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '14px' },
     name: { fontWeight: '600', color: '#1f2937' },
-    badge: { padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' },
-    active: { background: '#d1fae5', color: '#065f46' },
-    inactive: { background: '#fee2e2', color: '#991b1b' },
     classBadge: { padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', background: '#dbeafe', color: '#1e40af' },
+    statusActive: { padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', background: '#d1fae5', color: '#065f46' },
+    statusInactive: { padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', background: '#fee2e2', color: '#991b1b' },
     actionBtn: { padding: '6px 12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' },
     empty: { textAlign: 'center', padding: '60px 20px', color: '#6b7280' },
     error: { textAlign: 'center', padding: '40px', background: '#fee2e2', borderRadius: '12px', color: '#dc2626', marginBottom: '24px' },
@@ -127,7 +123,13 @@ export default function StudentList() {
             <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
           </div>
           <div style={styles.filterRow}>
-            <input type="text" placeholder="Search students..." style={styles.input} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input 
+              type="text" 
+              placeholder="Search by name..." 
+              style={styles.input} 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+            />
             <select style={styles.select} value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
               <option value="all">All Classes</option>
               {myClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
@@ -166,19 +168,21 @@ export default function StudentList() {
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map((student, index) => (
+                {filteredStudents.map((student) => (
                   <tr key={student._id}>
                     <td style={styles.td}><span style={styles.name}>{student.name}</span></td>
-                    <td style={styles.td}><span style={styles.classBadge}>{getDisplayClass(student.class, index)}</span></td>
+                    <td style={styles.td}><span style={styles.classBadge}>{getClassDisplayName(student.class)}</span></td>
                     <td style={styles.td}>{student.points || 0}</td>
                     <td style={styles.td}>Level {student.level || 1}</td>
                     <td style={styles.td}>
-                      <span style={{...styles.badge, ...(student.accountActive !== false ? styles.active : styles.inactive)}}>
+                      <span style={student.accountActive !== false ? styles.statusActive : styles.statusInactive}>
                         {student.accountActive !== false ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td style={styles.td}>
-                      <button style={styles.actionBtn} onClick={() => handleViewPerformance(student, index)}>View Performance</button>
+                      <button style={styles.actionBtn} onClick={() => handleViewPerformance(student)}>
+                        View Performance
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -187,8 +191,10 @@ export default function StudentList() {
           ) : (
             <div style={styles.empty}>
               <p style={{ fontSize: '48px', marginBottom: '16px' }}>👥</p>
-              <p style={{ fontSize: '18px', fontWeight: '500' }}>No students found</p>
-              <p>Students in your assigned classes will appear here</p>
+              <p style={{ fontSize: '18px', fontWeight: '500' }}>
+                {students.length === 0 ? 'No students found' : 'No matching students'}
+              </p>
+              <p>{students.length === 0 ? 'Students in your assigned classes will appear here' : 'Try adjusting your search or filter'}</p>
             </div>
           )}
         </div>

@@ -771,10 +771,33 @@ router.post('/messages', async (req, res) => {
 router.get('/my-classes', async (req, res) => {
   try {
     const teacher = req.teacher;
+    const assignedClassIds = teacher.assignedClasses || [];
+    
+    let classNames = [];
+    
+    if (assignedClassIds.length > 0) {
+      const firstClass = assignedClassIds[0];
+      const isObjectId = typeof firstClass === 'string' && /^[a-f\d]{24}$/i.test(firstClass);
+      
+      if (isObjectId) {
+        const Class = require('../models/Class');
+        const objectIds = assignedClassIds.map(id => {
+          try { return new mongoose.Types.ObjectId(id); } 
+          catch (e) { return null; }
+        }).filter(id => id !== null);
+        
+        const classes = await Class.find({ _id: { $in: objectIds } }).select('class_name');
+        classNames = classes.map(c => c.class_name);
+        console.log('📚 Resolved class names:', classNames);
+      } else {
+        classNames = assignedClassIds;
+      }
+    }
     
     res.json({
       success: true,
-      classes: teacher.assignedClasses || [],
+      classes: classNames,
+      classIds: assignedClassIds,
       subjects: teacher.assignedSubjects || []
     });
   } catch (error) {
@@ -840,53 +863,111 @@ router.post('/feedback', async (req, res) => {
 });
 
 // ==================== SUPPORT TICKETS ====================
+// FIXED: Uses SupportTicket model with correct fields for School Admin visibility
+
+router.post('/support-tickets', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+    const teacher = req.teacher;
+    const { subject, description, category, priority } = req.body;
+    
+    if (!subject || !description) {
+      return res.status(400).json({ success: false, error: 'Subject and description are required' });
+    }
+    
+    const ticket = await SupportTicket.create({
+      user_id: teacherId,
+      user_name: teacher.name || 'Unknown Teacher',
+      user_email: teacher.email || 'unknown@email.com',
+      user_role: 'Teacher',
+      school_id: teacher.schoolId || teacher.school,
+      school_name: teacher.schoolName || '',
+      subject: subject,
+      category: category || 'school',
+      message: description,
+      status: 'open',
+      priority: priority || 'normal'
+    });
+    
+    console.log('✅ Teacher ticket created:', ticket._id);
+    
+    res.status(201).json({ 
+      success: true, 
+      ticketId: ticket._id,
+      ticket: {
+        _id: ticket._id,
+        subject: ticket.subject,
+        category: ticket.category,
+        status: ticket.status,
+        created_at: ticket.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Create support ticket error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create support ticket' });
+  }
+});
+
 router.get('/support-tickets', async (req, res) => {
   try {
     const teacherId = req.user.userId;
-    const db = mongoose.connection.db;
     
-    const tickets = await db.collection('supporttickets')
-      .find({ createdBy: new mongoose.Types.ObjectId(teacherId) })
-      .sort({ createdAt: -1 })
-      .toArray();
+    const tickets = await SupportTicket.find({ user_id: teacherId })
+      .sort({ created_at: -1 })
+      .lean();
     
-    res.json({ success: true, tickets });
+    const formattedTickets = tickets.map(ticket => ({
+      _id: ticket._id,
+      id: `#${ticket._id.toString().slice(-6).toUpperCase()}`,
+      subject: ticket.subject,
+      category: ticket.category,
+      message: ticket.message,
+      status: ticket.status,
+      priority: ticket.priority,
+      created_at: ticket.created_at,
+      admin_response: ticket.admin_response,
+      responded_at: ticket.responded_at,
+      hasReply: !!ticket.admin_response
+    }));
+    
+    res.json({ success: true, tickets: formattedTickets });
   } catch (error) {
     console.error('Get support tickets error:', error);
     res.status(500).json({ success: false, error: 'Failed to load support tickets' });
   }
 });
 
-router.post('/support-tickets', async (req, res) => {
+router.get('/support-tickets/:ticketId', async (req, res) => {
   try {
     const teacherId = req.user.userId;
-    const teacher = req.teacher;
-    const { subject, description, priority } = req.body;
+    const { ticketId } = req.params;
     
-    if (!subject || !description) {
-      return res.status(400).json({ success: false, error: 'Subject and description are required' });
+    const ticket = await SupportTicket.findOne({
+      _id: ticketId,
+      user_id: teacherId
+    }).lean();
+    
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
     }
     
-    const db = mongoose.connection.db;
-    
-    const ticket = {
-      createdBy: new mongoose.Types.ObjectId(teacherId),
-      createdByName: teacher.name,
-      createdByRole: 'Teacher',
-      schoolId: teacher.schoolId,
-      subject,
-      description,
-      priority: priority || 'medium',
-      status: 'open',
-      createdAt: new Date()
-    };
-    
-    const result = await db.collection('supporttickets').insertOne(ticket);
-    
-    res.json({ success: true, ticket: { ...ticket, _id: result.insertedId } });
+    res.json({ 
+      success: true, 
+      ticket: {
+        _id: ticket._id,
+        subject: ticket.subject,
+        category: ticket.category,
+        message: ticket.message,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        admin_response: ticket.admin_response,
+        responded_at: ticket.responded_at
+      }
+    });
   } catch (error) {
-    console.error('Create support ticket error:', error);
-    res.status(500).json({ success: false, error: 'Failed to create support ticket' });
+    console.error('Get ticket error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load ticket' });
   }
 });
 
@@ -922,156 +1003,5 @@ router.post('/testimonials', async (req, res) => {
   }
 });
 
-// ==================== SUPPORT TICKETS ====================
-router.post('/support-tickets', async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { subject, category, message, description, priority } = req.body;
-
-    const finalSubject = subject || 'Support Request';
-    const finalMessage = message || description || '';
-
-    if (!finalMessage) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Message is required" 
-      });
-    }
-
-    // Get teacher info
-    const teacher = await User.findById(userId).lean();
-    
-    if (!teacher) {
-      return res.status(404).json({
-        success: false,
-        error: 'Teacher not found'
-      });
-    }
-    
-    const ticket = await SupportTicket.create({
-      // New unified fields
-      user_id: userId,
-      user_name: teacher.name || 'Unknown',
-      user_email: teacher.email || 'unknown@email.com',
-      user_role: 'Teacher',
-      school_id: teacher.school,
-      school_name: teacher.schoolName || '',
-      subject: finalSubject,
-      category: category || 'general',
-      message: finalMessage,
-      status: 'open',
-      priority: priority || 'normal',
-      // Legacy fields for backward compatibility
-      // NOTE: These student_* fields are maintained for compatibility with older code
-      // that expects these fields. They will be removed in a future update.
-      student_id: userId,
-      student_name: teacher.name || 'Unknown',
-      student_email: teacher.email || 'unknown@email.com',
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Support ticket created successfully",
-      ticketId: ticket._id,
-      ticket: {
-        id: ticket._id,
-        subject: ticket.subject,
-        category: ticket.category,
-        status: ticket.status,
-        created_at: ticket.created_at,
-      }
-    });
-  } catch (error) {
-    console.error("❌ Create support ticket error:", error);
-    res.status(500).json({ success: false, error: "Failed to create support ticket" });
-  }
-});
-
-router.get('/support-tickets', async (req, res) => {
-  try {
-    const teacherId = req.user.userId;
-
-    // Use lean() for read-only query to improve performance
-    const tickets = await SupportTicket.find({ 
-      $or: [{ student_id: teacherId }, { user_id: teacherId }] 
-    })
-      .sort({ created_at: -1 })
-      .lean();
-
-    // Format tickets for frontend
-    const formattedTickets = tickets.map(ticket => ({
-      id: `#${ticket._id.toString().slice(-6).toUpperCase()}`,
-      ticketId: ticket._id,
-      subject: ticket.subject,
-      category: ticket.category === 'website' ? 'Website-Related Problem' : 
-                ticket.category === 'school' ? 'School-Related Problem' : 
-                ticket.category,
-      priority: ticket.priority,
-      status: ticket.status,
-      message: ticket.message,
-      createdOn: new Date(ticket.created_at).toLocaleDateString(),
-      lastUpdate: new Date(ticket.updated_at || ticket.created_at).toLocaleDateString(),
-      created_at: ticket.created_at,
-      updated_at: ticket.updated_at,
-      admin_response: ticket.admin_response,
-      responded_at: ticket.responded_at,
-      hasReply: !!ticket.admin_response,
-    }));
-
-    res.json({
-      success: true,
-      tickets: formattedTickets,
-      totalTickets: formattedTickets.length
-    });
-  } catch (error) {
-    console.error("❌ Get support tickets error:", error);
-    res.status(500).json({ success: false, error: "Failed to load support tickets" });
-  }
-});
-
-// Get single support ticket with details
-router.get('/support-tickets/:ticketId', async (req, res) => {
-  try {
-    const teacherId = req.user.userId;
-    const { ticketId } = req.params;
-
-    const ticket = await SupportTicket.findOne({
-      _id: ticketId,
-      $or: [{ student_id: teacherId }, { user_id: teacherId }]
-    }).lean();
-
-    if (!ticket) {
-      return res.status(404).json({
-        success: false,
-        error: 'Ticket not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      ticket: {
-        id: `#${ticket._id.toString().slice(-6).toUpperCase()}`,
-        ticketId: ticket._id,
-        subject: ticket.subject,
-        category: ticket.category === 'website' ? 'Website-Related Problem' : 
-                  ticket.category === 'school' ? 'School-Related Problem' : 
-                  ticket.category,
-        priority: ticket.priority,
-        status: ticket.status,
-        message: ticket.message,
-        createdOn: new Date(ticket.created_at).toLocaleDateString(),
-        lastUpdate: new Date(ticket.updated_at || ticket.created_at).toLocaleDateString(),
-        created_at: ticket.created_at,
-        updated_at: ticket.updated_at,
-        admin_response: ticket.admin_response,
-        responded_at: ticket.responded_at,
-        hasReply: !!ticket.admin_response,
-      }
-    });
-  } catch (error) {
-    console.error("❌ Get support ticket error:", error);
-    res.status(500).json({ success: false, error: "Failed to load support ticket" });
-  }
-});
 
 module.exports = router;

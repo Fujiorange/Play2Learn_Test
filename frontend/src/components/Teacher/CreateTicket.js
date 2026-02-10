@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
-import teacherService from '../../services/teacherService';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function CreateTicket() {
   const navigate = useNavigate();
@@ -9,12 +10,13 @@ export default function CreateTicket() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
-    category: 'website',
+    category: 'school',  // Default to 'school' so School Admin can see it
     priority: 'normal',
-    routeTo: 'website',
     subject: '',
     description: '',
   });
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -37,34 +39,48 @@ export default function CreateTicket() {
       return;
     }
 
-    // Validate using formData (not separate state variables)
     if (!formData.subject.trim() || !formData.description.trim()) {
       setMessage({ type: 'error', text: 'Please fill in subject and description' });
       return;
     }
 
     setSubmitting(true);
-    try {
-      const result = await teacherService.createSupportTicket(formData);
+    setMessage({ type: '', text: '' });
 
-      if (result.success) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/support-tickets`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          subject: formData.subject,
+          description: formData.description,  // Backend maps this to 'message'
+          category: formData.category,
+          priority: formData.priority
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
         setMessage({ 
           type: 'success', 
-          text: `Support ticket #${result.ticketId} created successfully!` 
+          text: `Support ticket created successfully! Your ticket ID: ${data.ticketId || 'Submitted'}` 
         });
         
         setTimeout(() => {
           setFormData({ 
-            category: 'website', 
+            category: 'school', 
             priority: 'normal', 
-            routeTo: 'website', 
             subject: '', 
             description: '' 
           });
           setMessage({ type: '', text: '' });
         }, 3000);
       } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to create support ticket' });
+        setMessage({ type: 'error', text: data.error || 'Failed to create support ticket' });
       }
     } catch (error) {
       console.error('Create ticket error:', error);
@@ -89,10 +105,11 @@ export default function CreateTicket() {
     select: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' },
     textarea: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', minHeight: '150px', resize: 'vertical', fontFamily: 'inherit' },
     submitBtn: { padding: '14px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' },
-    message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
+    messageBox: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
     success: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
     error: { background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' },
     disabled: { opacity: 0.6, cursor: 'not-allowed' },
+    infoBox: { background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' },
     loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
@@ -106,25 +123,29 @@ export default function CreateTicket() {
             <h1 style={styles.title}>🎫 Create Support Ticket</h1>
             <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
           </div>
-          <p style={{ color: '#6b7280', margin: 0 }}>Submit a ticket for technical support or feedback</p>
+          <p style={{ color: '#6b7280', margin: 0 }}>Submit a ticket for technical support or school-related issues</p>
         </div>
 
         {message.text && (
-          <div style={{ ...styles.message, ...(message.type === 'success' ? styles.success : styles.error) }}>
+          <div style={{ ...styles.messageBox, ...(message.type === 'success' ? styles.success : styles.error) }}>
             {message.text}
           </div>
         )}
 
         <div style={styles.card}>
+          <div style={styles.infoBox}>
+            <p style={{ fontSize: '14px', color: '#1e40af', margin: 0 }}>
+              ℹ️ School-related tickets will be handled by your School Admin. For website issues, select "Website Issue" category.
+            </p>
+          </div>
+
           <form style={styles.form} onSubmit={handleSubmit}>
             <div style={styles.formGroup}>
               <label style={styles.label}>Category</label>
               <select name="category" value={formData.category} onChange={handleChange} style={styles.select}>
+                <option value="school">School Issue</option>
                 <option value="website">Website Issue</option>
-                <option value="technical">Technical Problem</option>
-                <option value="account">Account Issue</option>
-                <option value="feedback">Feedback</option>
-                <option value="other">Other</option>
+                <option value="general">General Inquiry</option>
               </select>
             </div>
 

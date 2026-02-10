@@ -15,11 +15,11 @@ export default function StudentLeaderboard() {
   const getToken = () => localStorage.getItem('token');
   const isObjectId = (str) => str && typeof str === 'string' && /^[a-f\d]{24}$/i.test(str);
   
-  const getDisplayClass = (studentClass, index) => {
-    if (!studentClass) return 'N/A';
+  const getClassDisplayName = (studentClass) => {
+    if (!studentClass) return 'Unassigned';
     if (!isObjectId(studentClass)) return studentClass;
-    if (myClasses.length === 0) return 'Primary 1';
-    return myClasses[index % myClasses.length] || myClasses[0];
+    if (myClasses.length > 0) return myClasses[0];
+    return 'Primary 1';
   };
 
   useEffect(() => {
@@ -31,8 +31,8 @@ export default function StudentLeaderboard() {
   }, [navigate]);
 
   useEffect(() => {
-    loadLeaderboard();
-  }, [selectedClass]);
+    if (myClasses.length >= 0) loadLeaderboard();
+  }, [selectedClass, myClasses]);
 
   const loadClasses = async () => {
     try {
@@ -105,7 +105,7 @@ export default function StudentLeaderboard() {
     loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
-  if (loading) return <div style={styles.loading}><div>Loading leaderboard...</div></div>;
+  if (loading && leaderboard.length === 0) return <div style={styles.loading}><div>Loading leaderboard...</div></div>;
 
   const top3 = leaderboard.slice(0, 3);
 
@@ -142,7 +142,7 @@ export default function StudentLeaderboard() {
               <div style={styles.podiumItem}>
                 <div style={styles.podiumRank}>🥈</div>
                 <div style={styles.podiumName}>{top3[1].name}</div>
-                <div style={styles.podiumClass}>{getDisplayClass(top3[1].class, 1)}</div>
+                <div style={styles.podiumClass}>{getClassDisplayName(top3[1].class)}</div>
                 <div style={styles.podiumPoints}>{top3[1].points || 0} pts</div>
               </div>
             )}
@@ -150,7 +150,7 @@ export default function StudentLeaderboard() {
               <div style={{ ...styles.podiumItem, ...styles.podiumFirst }}>
                 <div style={styles.podiumRank}>🥇</div>
                 <div style={styles.podiumName}>{top3[0].name}</div>
-                <div style={styles.podiumClass}>{getDisplayClass(top3[0].class, 0)}</div>
+                <div style={styles.podiumClass}>{getClassDisplayName(top3[0].class)}</div>
                 <div style={styles.podiumPoints}>{top3[0].points || 0} pts</div>
               </div>
             )}
@@ -158,7 +158,7 @@ export default function StudentLeaderboard() {
               <div style={styles.podiumItem}>
                 <div style={styles.podiumRank}>🥉</div>
                 <div style={styles.podiumName}>{top3[2].name}</div>
-                <div style={styles.podiumClass}>{getDisplayClass(top3[2].class, 2)}</div>
+                <div style={styles.podiumClass}>{getClassDisplayName(top3[2].class)}</div>
                 <div style={styles.podiumPoints}>{top3[2].points || 0} pts</div>
               </div>
             )}
@@ -179,11 +179,11 @@ export default function StudentLeaderboard() {
                 </tr>
               </thead>
               <tbody>
-                {leaderboard.map((s, index) => (
+                {leaderboard.map((s) => (
                   <tr key={s._id}>
                     <td style={styles.td}><span style={{ ...styles.rankBadge, ...getRankStyle(s.rank) }}>{s.rank}</span></td>
                     <td style={styles.td}><strong>{s.name}</strong></td>
-                    <td style={styles.td}><span style={styles.classBadge}>{getDisplayClass(s.class, index)}</span></td>
+                    <td style={styles.td}><span style={styles.classBadge}>{getClassDisplayName(s.class)}</span></td>
                     <td style={styles.td}><span style={styles.points}>{s.points || 0}</span></td>
                     <td style={styles.td}><span style={styles.level}>Lv {s.level || 1}</span></td>
                     <td style={styles.td}><span style={styles.streak}>🔥 {s.streak || 0}</span></td>

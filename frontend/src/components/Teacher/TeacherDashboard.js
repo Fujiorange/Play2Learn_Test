@@ -1,14 +1,21 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [hoveredItem, setHoveredItem] = useState(null);
+
+  // Handle menu clicks
+  const handleMenuClick = (section, item) => {
+    if (section === 'communication' && item === 'testimonial') {
+      navigate('/teacher/testimonial');
+    }
+  };
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -324,7 +331,6 @@ export default function TeacherDashboard() {
               <h2 style={styles.sectionTitle}>Communication</h2>
             </div>
             <ul style={styles.menuList}>
-<<<<<<< HEAD
               <li
                 style={{
                   ...styles.menuItem,
@@ -348,65 +354,6 @@ export default function TeacherDashboard() {
               >
                 <span>📢 School Announcements</span>
                 <span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Quiz Assignment - NEW */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>🎯</span>
-              <h2 style={styles.sectionTitle}>Quiz Assignment</h2>
-            </div>
-            <ul style={styles.menuList}>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'launch-quiz' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('launch-quiz')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/quiz-assignment')}
-              >
-                <span>Launch Adaptive Quiz</span>
-                <span style={styles.arrow}>→</span>
-              </li>
-              <li
-                style={{
-                  ...styles.menuItem,
-                  ...(hoveredItem === 'view-launched' ? styles.menuItemHover : {}),
-                }}
-                onMouseEnter={() => setHoveredItem('view-launched')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/quiz-assignment')}
-              >
-                <span>View Launched Quizzes</span>
-                <span style={styles.arrow}>→</span>
-=======
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'create-feedback' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('create-feedback')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/feedback/create')}>
-                <span>Create Feedback</span><span style={styles.arrow}>→</span>
-              </li>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'view-feedback' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('view-feedback')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/feedback/view')}>
-                <span>View Feedback History</span><span style={styles.arrow}>→</span>
-              </li>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'chat' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('chat')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/chat')}>
-                <span>Chat with Parents</span><span style={styles.arrow}>→</span>
-              </li>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'testimonial' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('testimonial')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/testimonial')}>
-                <span>Write Testimonial</span><span style={styles.arrow}>→</span>
->>>>>>> 128570246e39a9fe6bbf512692c860248d8a5e51
               </li>
             </ul>
           </div>

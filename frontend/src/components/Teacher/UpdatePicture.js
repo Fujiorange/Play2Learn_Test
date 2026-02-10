@@ -29,23 +29,30 @@ export default function UpdatePicture() {
     const file = e.target.files[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        setMessage({ type: 'error', text: 'Please select an image file' });
+        setMessage({ type: 'error', text: 'Please select an image file (JPG, PNG, GIF)' });
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        setMessage({ type: 'error', text: 'File size must be less than 5MB' });
+      // Limit to 2MB to avoid base64 issues
+      if (file.size > 2 * 1024 * 1024) {
+        setMessage({ type: 'error', text: 'File size must be less than 2MB' });
         return;
       }
       setSelectedFile(file);
       setMessage({ type: '', text: '' });
+      
       const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result);
+      reader.onloadend = () => {
+        setPreview(reader.result);
+      };
+      reader.onerror = () => {
+        setMessage({ type: 'error', text: 'Failed to read file' });
+      };
       reader.readAsDataURL(file);
     }
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
+    if (!selectedFile || !preview) {
       setMessage({ type: 'error', text: 'Please select a file first' });
       return;
     }
@@ -54,6 +61,8 @@ export default function UpdatePicture() {
     setMessage({ type: '', text: '' });
 
     try {
+      console.log('Uploading picture, preview length:', preview.length);
+      
       const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile/picture`, {
         method: 'PUT',
         headers: {
@@ -63,31 +72,40 @@ export default function UpdatePicture() {
         body: JSON.stringify({ profile_picture: preview })
       });
 
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const data = await response.json();
+      console.log('Upload response:', data);
 
       if (data.success) {
         const currentUser = authService.getCurrentUser();
         const updatedUser = { ...currentUser, profile_picture: preview };
         localStorage.setItem('user', JSON.stringify(updatedUser));
-        setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
+        setMessage({ type: 'success', text: 'Profile picture updated!' });
         setCurrentPicture(preview);
         setTimeout(() => {
           setSelectedFile(null);
           setPreview(null);
-        }, 2000);
+        }, 1500);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to upload picture.' });
+        setMessage({ type: 'error', text: data.error || 'Failed to upload' });
       }
     } catch (error) {
-      console.error('Error:', error);
-      setMessage({ type: 'error', text: 'Failed to upload picture.' });
+      console.error('Upload error:', error);
+      setMessage({ type: 'error', text: `Upload failed: ${error.message}` });
     } finally {
       setUploading(false);
     }
   };
 
   const handleRemove = async () => {
-    if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+    if (!window.confirm('Remove your profile picture?')) return;
 
     setUploading(true);
     try {
@@ -109,12 +127,13 @@ export default function UpdatePicture() {
         setCurrentPicture(null);
         setPreview(null);
         setSelectedFile(null);
-        setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
+        setMessage({ type: 'success', text: 'Picture removed!' });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to remove picture.' });
+        setMessage({ type: 'error', text: data.error || 'Failed to remove' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to remove picture.' });
+      console.error('Error:', error);
+      setMessage({ type: 'error', text: 'Failed to remove picture' });
     } finally {
       setUploading(false);
     }
@@ -122,27 +141,25 @@ export default function UpdatePicture() {
 
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
-    content: { maxWidth: '600px', margin: '0 auto', background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
-    title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
+    content: { maxWidth: '500px', margin: '0 auto', background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
+    title: { fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backBtn: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    pictureContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', marginBottom: '32px' },
-    pictureWrapper: { width: '200px', height: '200px', borderRadius: '50%', overflow: 'hidden', border: '4px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' },
+    pictureSection: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', marginBottom: '24px' },
+    pictureWrapper: { width: '150px', height: '150px', borderRadius: '50%', overflow: 'hidden', border: '4px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' },
     picture: { width: '100%', height: '100%', objectFit: 'cover' },
-    placeholder: { fontSize: '80px', color: '#9ca3af' },
-    uploadSection: { width: '100%', padding: '32px', border: '2px dashed #d1d5db', borderRadius: '12px', textAlign: 'center', background: '#f9fafb', marginBottom: '24px' },
-    uploadIcon: { fontSize: '48px', marginBottom: '16px' },
-    uploadText: { fontSize: '16px', color: '#4b5563', marginBottom: '8px' },
-    uploadHint: { fontSize: '13px', color: '#6b7280', marginBottom: '16px' },
+    placeholder: { fontSize: '60px', color: '#9ca3af' },
+    uploadBox: { width: '100%', padding: '24px', border: '2px dashed #d1d5db', borderRadius: '12px', textAlign: 'center', background: '#f9fafb', marginBottom: '20px' },
     fileInput: { display: 'none' },
-    selectBtn: { padding: '10px 24px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    selectBtn: { padding: '10px 24px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     buttonGroup: { display: 'flex', gap: '12px' },
-    uploadBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
-    removeBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
-    message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
-    success: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
-    error: { background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' },
+    uploadBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    removeBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px', wordBreak: 'break-word' },
+    success: { background: '#d1fae5', color: '#065f46' },
+    error: { background: '#fee2e2', color: '#991b1b' },
     disabled: { opacity: 0.6, cursor: 'not-allowed' },
+    hint: { fontSize: '13px', color: '#6b7280', marginTop: '8px' },
     loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
@@ -152,8 +169,8 @@ export default function UpdatePicture() {
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Update Profile Picture</h1>
-          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back to Profile</button>
+          <h1 style={styles.title}>📸 Update Picture</h1>
+          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back</button>
         </div>
 
         {message.text && (
@@ -162,7 +179,7 @@ export default function UpdatePicture() {
           </div>
         )}
 
-        <div style={styles.pictureContainer}>
+        <div style={styles.pictureSection}>
           <div style={styles.pictureWrapper}>
             {(preview || currentPicture) ? (
               <img src={preview || currentPicture} alt="Profile" style={styles.picture} />
@@ -170,26 +187,27 @@ export default function UpdatePicture() {
               <div style={styles.placeholder}>👤</div>
             )}
           </div>
-          {preview && <p style={{ color: '#10b981', fontSize: '14px', fontWeight: '500' }}>✓ New picture selected</p>}
+          {preview && <p style={{ color: '#10b981', fontSize: '14px', fontWeight: '500', margin: 0 }}>✓ New picture selected</p>}
         </div>
 
-        <div style={styles.uploadSection}>
-          <div style={styles.uploadIcon}>📸</div>
-          <p style={styles.uploadText}>{selectedFile ? selectedFile.name : 'Choose a profile picture'}</p>
-          <p style={styles.uploadHint}>JPG, PNG or GIF (Max size: 5MB)</p>
+        <div style={styles.uploadBox}>
+          <p style={{ fontSize: '15px', color: '#4b5563', marginBottom: '12px' }}>
+            {selectedFile ? `Selected: ${selectedFile.name}` : 'Choose a profile picture'}
+          </p>
           <input type="file" id="fileInput" accept="image/*" onChange={handleFileSelect} style={styles.fileInput} disabled={uploading} />
           <button type="button" onClick={() => document.getElementById('fileInput').click()} disabled={uploading} style={{ ...styles.selectBtn, ...(uploading ? styles.disabled : {}) }}>
             📁 Select File
           </button>
+          <p style={styles.hint}>JPG, PNG or GIF • Max 2MB</p>
         </div>
 
         <div style={styles.buttonGroup}>
           <button onClick={handleUpload} disabled={!selectedFile || uploading} style={{ ...styles.uploadBtn, ...(!selectedFile || uploading ? styles.disabled : {}) }}>
-            {uploading ? '⏳ Uploading...' : '📤 Upload Picture'}
+            {uploading ? '⏳ Uploading...' : '📤 Upload'}
           </button>
           {currentPicture && (
             <button onClick={handleRemove} disabled={uploading} style={{ ...styles.removeBtn, ...(uploading ? styles.disabled : {}) }}>
-              🗑️ Remove Picture
+              🗑️ Remove
             </button>
           )}
         </div>

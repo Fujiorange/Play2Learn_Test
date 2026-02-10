@@ -25,7 +25,6 @@ export default function EditProfile() {
         navigate('/login');
         return;
       }
-
       try {
         const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile`, {
           headers: { 'Authorization': `Bearer ${getToken()}` }
@@ -68,7 +67,6 @@ export default function EditProfile() {
         setLoading(false);
       }
     };
-
     loadProfile();
   }, [navigate]);
 
@@ -84,22 +82,19 @@ export default function EditProfile() {
           'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: formData.name,
-          contact: formData.contact,
-        })
+        body: JSON.stringify({ contact: formData.contact })
       });
 
       const data = await response.json();
 
       if (data.success) {
         const currentUser = authService.getCurrentUser();
-        const updatedUser = { ...currentUser, ...data.user };
+        const updatedUser = { ...currentUser, contact: formData.contact };
         localStorage.setItem('user', JSON.stringify(updatedUser));
-        setMessage({ type: 'success', text: 'Profile updated successfully!' });
+        setMessage({ type: 'success', text: 'Contact updated successfully!' });
         setTimeout(() => navigate('/teacher/profile'), 1500);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update profile.' });
+        setMessage({ type: 'error', text: data.error || 'Failed to update.' });
       }
     } catch (error) {
       console.error('Error:', error);
@@ -111,26 +106,27 @@ export default function EditProfile() {
 
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
-    content: { maxWidth: '700px', margin: '0 auto', background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
-    title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
+    content: { maxWidth: '600px', margin: '0 auto', background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
+    title: { fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backBtn: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     form: { display: 'flex', flexDirection: 'column', gap: '20px' },
-    formGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    formGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
     label: { fontSize: '14px', fontWeight: '600', color: '#374151' },
     input: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' },
     inputDisabled: { background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' },
-    infoBox: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' },
-    classTag: { display: 'inline-block', padding: '4px 12px', background: '#dbeafe', color: '#1e40af', borderRadius: '16px', fontSize: '13px', fontWeight: '500', marginRight: '8px', marginBottom: '8px' },
-    subjectTag: { display: 'inline-block', padding: '4px 12px', background: '#fef3c7', color: '#92400e', borderRadius: '16px', fontSize: '13px', fontWeight: '500', marginRight: '8px', marginBottom: '8px' },
-    buttonGroup: { display: 'flex', gap: '12px', marginTop: '16px' },
+    infoBox: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' },
+    tagContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
+    classTag: { padding: '4px 12px', background: '#dbeafe', color: '#1e40af', borderRadius: '16px', fontSize: '13px', fontWeight: '500' },
+    subjectTag: { padding: '4px 12px', background: '#fef3c7', color: '#92400e', borderRadius: '16px', fontSize: '13px', fontWeight: '500' },
+    buttonGroup: { display: 'flex', gap: '12px', marginTop: '8px' },
     saveBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
     cancelBtn: { flex: 1, padding: '12px', background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
     message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
-    success: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
-    error: { background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' },
+    success: { background: '#d1fae5', color: '#065f46' },
+    error: { background: '#fee2e2', color: '#991b1b' },
     disabled: { opacity: 0.6, cursor: 'not-allowed' },
-    hint: { fontSize: '12px', color: '#6b7280', marginTop: '4px' },
+    hint: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
     loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
@@ -140,12 +136,14 @@ export default function EditProfile() {
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Edit Profile</h1>
-          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back to Profile</button>
+          <h1 style={styles.title}>✏️ Edit Profile</h1>
+          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back</button>
         </div>
 
         <div style={styles.infoBox}>
-          <p style={{ fontSize: '14px', color: '#166534', margin: 0 }}>ℹ️ Only contact number can be updated. Other details are managed by School Admin.</p>
+          <p style={{ fontSize: '14px', color: '#166534', margin: 0 }}>
+            ℹ️ Only your contact number can be updated here. For other changes, please contact your School Admin.
+          </p>
         </div>
 
         {message.text && (
@@ -158,7 +156,7 @@ export default function EditProfile() {
           <div style={styles.formGroup}>
             <label style={styles.label}>Full Name</label>
             <input type="text" value={formData.name} disabled style={{ ...styles.input, ...styles.inputDisabled }} />
-            <span style={styles.hint}>Contact School Admin to change name</span>
+            <span style={styles.hint}>Managed by School Admin</span>
           </div>
 
           <div style={styles.formGroup}>
@@ -180,7 +178,7 @@ export default function EditProfile() {
 
           <div style={styles.formGroup}>
             <label style={styles.label}>Assigned Classes</label>
-            <div>
+            <div style={styles.tagContainer}>
               {formData.assignedClasses.length > 0 ? (
                 formData.assignedClasses.map((cls, i) => <span key={i} style={styles.classTag}>{cls}</span>)
               ) : (
@@ -191,7 +189,7 @@ export default function EditProfile() {
 
           <div style={styles.formGroup}>
             <label style={styles.label}>Assigned Subjects</label>
-            <div>
+            <div style={styles.tagContainer}>
               {formData.assignedSubjects.length > 0 ? (
                 formData.assignedSubjects.map((subj, i) => <span key={i} style={styles.subjectTag}>{subj}</span>)
               ) : (
