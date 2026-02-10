@@ -27,5 +27,7 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      - key: REACT_APP_API_URL
+        sync: false
       - key: USER_DELETION_PIN
         sync: false

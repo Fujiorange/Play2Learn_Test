@@ -74,8 +74,14 @@ In your Render dashboard, add the following environment variables:
 
 | Variable | Example Value | Description |
 |----------|---------------|-------------|
-| `FRONTEND_URL` | `https://play2learn-test.onrender.com` | URL where frontend is hosted (auto-detected if not set) |
+| `FRONTEND_URL` | `https://play2learn-test.onrender.com` | URL where frontend is hosted (recommended to set explicitly) |
+| `REACT_APP_API_URL` | `https://play2learn-test.onrender.com` | API URL for frontend to connect to (recommended for production) |
 | `USER_DELETION_PIN` | `7h9p2k5m` | PIN required for user deletion (defaults to random) |
+
+**Important Notes:**
+- If you deploy backend and frontend on the **same** Render service (using the existing setup), set both `FRONTEND_URL` and `REACT_APP_API_URL` to the same Render URL (e.g., `https://your-app.onrender.com`)
+- If you deploy backend and frontend **separately**, set `REACT_APP_API_URL` to your backend URL and `FRONTEND_URL` to your frontend URL
+- For the standard single-service deployment, these values should be identical
 
 ### 4. Deploy
 

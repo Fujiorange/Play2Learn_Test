@@ -33,10 +33,8 @@ const corsOptions = {
     // Add FRONTEND_URL from environment if set
     if (process.env.FRONTEND_URL) {
       allowedOrigins.push(process.env.FRONTEND_URL);
-    }
-    
-    // Add default Render URL if in production
-    if (process.env.NODE_ENV === 'production') {
+    } else if (process.env.NODE_ENV === 'production') {
+      // Fallback to default Render URL only if FRONTEND_URL is not set
       allowedOrigins.push('https://play2learn-test.onrender.com');
     }
     
