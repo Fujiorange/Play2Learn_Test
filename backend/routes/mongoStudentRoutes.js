@@ -1189,18 +1189,26 @@ router.get("/leaderboard", async (req, res) => {
 
     // Use provided parameters or fall back to current user's school/class
     const filterSchoolId = schoolId || currentUser.schoolId;
-    const filterClass = classId || currentUser.class;
+    const filterClass = classId !== undefined && classId !== 'null' ? classId : currentUser.class;
 
-    // Build filter query - must match school AND class
+    // Build filter query
     const filterQuery = {
-      ...(filterSchoolId && { schoolId: filterSchoolId }),
-      ...(filterClass && { class: filterClass }),
       role: 'Student' // Only show students
     };
+    
+    // Always filter by school
+    if (filterSchoolId) {
+      filterQuery.schoolId = filterSchoolId;
+    }
+    
+    // Only add class filter if classId is provided and not null
+    if (filterClass !== null && filterClass !== undefined && filterClass !== 'null') {
+      filterQuery.class = filterClass;
+    }
 
     console.log(`🎯 Leaderboard filter:`, filterQuery);
 
-    // Find students matching school and class
+    // Find students matching school (and optionally class)
     const matchingStudents = await User.find(filterQuery)
       .select('_id name email schoolId class')
       .lean();
@@ -1219,29 +1227,97 @@ router.get("/leaderboard", async (req, res) => {
 
     const studentIds = matchingStudents.map(s => s._id);
 
-    // Get math profiles for these students, sorted by points
-    const students = await MathProfile.find({ student_id: { $in: studentIds } })
-      .sort({ total_points: -1 })
-      .limit(50)
+    // Get math profiles for these students
+    const profiles = await MathProfile.find({ student_id: { $in: studentIds } })
       .lean();
 
-    // Enrich with student details
+    // Get earliest quiz completion date for each student (for tie-breaking)
+    const db = mongoose.connection.db;
     const studentMap = new Map(matchingStudents.map(s => [s._id.toString(), s]));
+    
+    // Enrich profiles with student data and first quiz date
+    const enrichedProfiles = await Promise.all(profiles.map(async (p) => {
+      const student = studentMap.get(p.student_id.toString());
+      
+      // Get earliest quiz completion for this student
+      const earliestQuiz = await StudentQuiz.findOne({
+        student_id: p.student_id,
+        quiz_type: 'regular',
+        completed_at: { $exists: true }
+      }).sort({ completed_at: 1 }).select('completed_at').lean();
+      
+      // Also check adaptive quizzes
+      const earliestAdaptive = await QuizAttempt.findOne({
+        userId: p.student_id,
+        is_completed: true,
+        completedAt: { $exists: true }
+      }).sort({ completedAt: 1 }).select('completedAt').lean();
+      
+      // Use the earliest between regular and adaptive
+      let firstCompletionDate = null;
+      if (earliestQuiz && earliestAdaptive) {
+        firstCompletionDate = earliestQuiz.completed_at < earliestAdaptive.completedAt 
+          ? earliestQuiz.completed_at 
+          : earliestAdaptive.completedAt;
+      } else if (earliestQuiz) {
+        firstCompletionDate = earliestQuiz.completed_at;
+      } else if (earliestAdaptive) {
+        firstCompletionDate = earliestAdaptive.completedAt;
+      }
+      
+      // Get earned badges count
+      const earnedBadges = await db.collection('student_badges')
+        .countDocuments({ student_email: student?.email });
+      
+      return {
+        student_id: p.student_id,
+        name: student ? student.name : "Unknown",
+        points: p.total_points || 0,
+        level: p.current_profile || 1,
+        achievements: earnedBadges || 0,
+        firstCompletionDate: firstCompletionDate,
+        isCurrentUser: p.student_id.toString() === currentUserId
+      };
+    }));
+
+    // Sort by: 1) Level (desc), 2) Points (desc), 3) First completion date (asc - earlier is better)
+    enrichedProfiles.sort((a, b) => {
+      // First sort by level (higher level = higher rank)
+      if (a.level !== b.level) {
+        return b.level - a.level;
+      }
+      
+      // If same level, sort by points (more points = higher rank)
+      if (a.points !== b.points) {
+        return b.points - a.points;
+      }
+      
+      // If same level and points, sort by first completion date (earlier = higher rank)
+      if (a.firstCompletionDate && b.firstCompletionDate) {
+        return a.firstCompletionDate - b.firstCompletionDate;
+      } else if (a.firstCompletionDate) {
+        return -1; // a has date, b doesn't - a ranks higher
+      } else if (b.firstCompletionDate) {
+        return 1; // b has date, a doesn't - b ranks higher
+      }
+      
+      return 0; // Equal in all aspects
+    });
+
+    // Assign ranks and limit to top 50
+    const leaderboard = enrichedProfiles.slice(0, 50).map((entry, idx) => ({
+      rank: idx + 1,
+      name: entry.name,
+      points: entry.points,
+      level: entry.level,
+      profile: entry.level,
+      achievements: entry.achievements,
+      isCurrentUser: entry.isCurrentUser
+    }));
 
     res.json({
       success: true,
-      leaderboard: students.map((p, idx) => {
-        const student = studentMap.get(p.student_id.toString());
-        return {
-          rank: idx + 1,
-          name: student ? student.name : "Unknown",
-          points: p.total_points,
-          level: p.current_profile,
-          profile: p.current_profile,
-          achievements: 0,
-          isCurrentUser: p.student_id.toString() === currentUserId,
-        };
-      }),
+      leaderboard,
       filterInfo: {
         schoolId: filterSchoolId,
         class: filterClass,

@@ -92,6 +92,27 @@ export default function ViewLeaderboard() {
         <div style={styles.header}>
           <h1 style={styles.title}>🏆 Leaderboard</h1>
           <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
+          <div style={styles.toggleContainer}>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>View:</span>
+            <button 
+              style={{
+                ...styles.toggleButton,
+                ...(viewMode === 'class' ? styles.toggleButtonActive : styles.toggleButtonInactive)
+              }}
+              onClick={() => setViewMode('class')}
+            >
+              My Class
+            </button>
+            <button 
+              style={{
+                ...styles.toggleButton,
+                ...(viewMode === 'school' ? styles.toggleButtonActive : styles.toggleButtonInactive)
+              }}
+              onClick={() => setViewMode('school')}
+            >
+              My School
+            </button>
+          </div>
           {error && (
             <div style={styles.errorMessage}>
               ⚠️ {error}
