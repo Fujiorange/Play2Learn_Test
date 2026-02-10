@@ -57,9 +57,9 @@ function SchoolLicenseView() {
   };
 
   const getUsageColor = (percentage) => {
-    if (percentage >= 90) return '#ef4444'; // Red
-    if (percentage >= 70) return '#f59e0b'; // Orange
-    return '#10b981'; // Green
+    if (percentage >= 100) return '#ef4444'; // Red - Reached limit
+    if (percentage >= 80) return '#f59e0b'; // Orange - Near limit
+    return '#10b981'; // Green - Safe
   };
 
   const fetchAvailableLicenses = async () => {
@@ -377,7 +377,11 @@ function SchoolLicenseView() {
                 />
               </div>
             )}
-            {teacherPercentage >= 90 && (
+            {teacherPercentage >= 100 ? (
+              <div className="usage-warning" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
+                ⚠️ Reached limit! Upgrade license to add more teachers.
+              </div>
+            ) : teacherPercentage >= 80 && (
               <div className="usage-warning">Near limit!</div>
             )}
           </div>
@@ -406,7 +410,11 @@ function SchoolLicenseView() {
                 />
               </div>
             )}
-            {studentPercentage >= 90 && (
+            {studentPercentage >= 100 ? (
+              <div className="usage-warning" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
+                ⚠️ Reached limit! Upgrade license to add more students.
+              </div>
+            ) : studentPercentage >= 80 && (
               <div className="usage-warning">Near limit!</div>
             )}
           </div>
@@ -435,7 +443,11 @@ function SchoolLicenseView() {
                 />
               </div>
             )}
-            {classPercentage >= 90 && (
+            {classPercentage >= 100 ? (
+              <div className="usage-warning" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
+                ⚠️ Reached limit! Upgrade license to add more classes.
+              </div>
+            ) : classPercentage >= 80 && (
               <div className="usage-warning">Near limit!</div>
             )}
           </div>
