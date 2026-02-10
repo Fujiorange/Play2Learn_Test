@@ -2841,7 +2841,9 @@ router.put('/announcements/:id', authenticateToken, async (req, res) => {
     
     const updates = { ...req.body, updatedAt: new Date() };
     delete updates._id;
-    delete updates.school_id; // Prevent changing school_id
+    // Remove school_id from updates to prevent tampering
+    // The updateOne filter below ensures only announcements from user's school are updated
+    delete updates.school_id;
     
     if (updates.expiresAt) {
       updates.expiresAt = new Date(updates.expiresAt);
