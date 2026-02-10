@@ -224,7 +224,7 @@ function determineLevelAction(score) {
 }
 
 // Helper function to calculate performance score
-async function calculatePerformanceScore(attempt) {
+function calculatePerformanceScore(attempt) {
   // 1. Correct Answers
   const correctAnswers = attempt.correct_count;
   
@@ -562,7 +562,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.score = attempt.correct_count;
       
       // Calculate performance score
-      await calculatePerformanceScore(attempt);
+      calculatePerformanceScore(attempt);
       await attempt.save();
       
       // Update skill matrix based on answers
@@ -623,7 +623,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.score = attempt.correct_count;
       
       // Calculate performance score
-      await calculatePerformanceScore(attempt);
+      calculatePerformanceScore(attempt);
       await attempt.save();
       
       // Update skill matrix based on answers

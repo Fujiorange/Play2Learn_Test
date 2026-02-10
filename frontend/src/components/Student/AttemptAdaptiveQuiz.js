@@ -267,6 +267,10 @@ function AttemptAdaptiveQuiz() {
               <div className="stat-label">Correct Answers</div>
             </div>
             <div className="stat-card">
+              <div className="stat-value">{results.total_answered}</div>
+              <div className="stat-label">Total Questions</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-value">{results.accuracy}%</div>
               <div className="stat-label">Accuracy</div>
             </div>
