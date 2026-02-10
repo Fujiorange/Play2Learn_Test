@@ -827,13 +827,17 @@ router.post("/quiz/submit-placement", async (req, res) => {
 
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
 
-    let startingProfile = 1;
-    if (quiz.percentage >= 90) startingProfile = 7;
-    else if (quiz.percentage >= 80) startingProfile = 6;
-    else if (quiz.percentage >= 70) startingProfile = 5;
-    else if (quiz.percentage >= 60) startingProfile = 4;
-    else if (quiz.percentage >= 50) startingProfile = 3;
-    else if (quiz.percentage >= 40) startingProfile = 2;
+    // Map percentage to profile level (1-10) in 10% increments
+    let startingProfile;
+    if (quiz.percentage >= 90) startingProfile = 10;
+    else if (quiz.percentage >= 80) startingProfile = 9;
+    else if (quiz.percentage >= 70) startingProfile = 8;
+    else if (quiz.percentage >= 60) startingProfile = 7;
+    else if (quiz.percentage >= 50) startingProfile = 6;
+    else if (quiz.percentage >= 40) startingProfile = 5;
+    else if (quiz.percentage >= 30) startingProfile = 4;
+    else if (quiz.percentage >= 20) startingProfile = 3;
+    else if (quiz.percentage >= 10) startingProfile = 2;
     else startingProfile = 1;
 
     mathProfile.current_profile = startingProfile;
