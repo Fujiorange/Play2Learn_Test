@@ -36,6 +36,14 @@ function AttemptAdaptiveQuiz() {
     }
   }, [currentQuestion, showFeedback, questionStartTime]);
 
+  // Cleanup timer when quiz completes or component unmounts
+  useEffect(() => {
+    return () => {
+      setQuestionStartTime(null);
+      setTimeElapsed(0);
+    };
+  }, [quizCompleted]);
+
   useEffect(() => {
     if (quizId) {
       startQuiz();
@@ -404,7 +412,7 @@ function AttemptAdaptiveQuiz() {
           <div className="timer-display">
             <span className="timer-icon">⏱️</span>
             <span className="timer-value">
-              {Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, '0')}
+              {formatTime(timeElapsed)}
             </span>
           </div>
         )}

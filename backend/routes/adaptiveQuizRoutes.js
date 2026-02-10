@@ -19,6 +19,9 @@ const {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
+// Constants
+const MAX_PERFORMANCE_HISTORY_LENGTH = 20;
+
 // Middleware to authenticate users
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -310,54 +313,53 @@ async function finalizeQuizCompletion(userId, attempt, quizLevel) {
         performanceScore,
         completedAt: new Date()
       });
-      // Keep only last 20 performance records
-      if (studentProfile.performanceHistory.length > 20) {
-        studentProfile.performanceHistory = studentProfile.performanceHistory.slice(-20);
+      // Keep only last MAX_PERFORMANCE_HISTORY_LENGTH performance records
+      if (studentProfile.performanceHistory.length > MAX_PERFORMANCE_HISTORY_LENGTH) {
+        studentProfile.performanceHistory = studentProfile.performanceHistory.slice(-MAX_PERFORMANCE_HISTORY_LENGTH);
       }
     }
     
     await studentProfile.save();
     
-    // Automatically generate/ensure quiz for next level if it doesn't exist
-    if (nextLevel !== quizLevel) {
-      try {
-        // Check if quiz exists for next level
-        const existingNextQuiz = await Quiz.findOne({
-          quiz_level: nextLevel,
-          quiz_type: 'adaptive',
-          is_active: true
-        });
+    // Automatically generate/ensure quiz exists and is launched for next level
+    // This applies whether student is advancing, staying, or going back a level
+    try {
+      // Check if quiz exists for next level
+      const existingNextQuiz = await Quiz.findOne({
+        quiz_level: nextLevel,
+        quiz_type: 'adaptive',
+        is_active: true
+      });
+      
+      if (!existingNextQuiz) {
+        // Auto-generate quiz for next level
+        console.log(`Auto-generating quiz for level ${nextLevel} for student ${userId}`);
+        const newQuiz = await quizGenerationService.generateQuiz(
+          nextLevel,
+          userId,
+          nextLevel === quizLevel ? 'repeat_level' : 'auto_progression',
+          false
+        );
         
-        if (!existingNextQuiz) {
-          // Auto-generate quiz for next level
-          console.log(`Auto-generating quiz for level ${nextLevel} for student ${userId}`);
-          const newQuiz = await quizGenerationService.generateQuiz(
-            nextLevel,
-            userId,
-            'auto_progression',
-            false
-          );
-          
-          // Auto-launch the quiz (make it available for the student)
-          newQuiz.is_launched = true;
-          newQuiz.launched_at = new Date();
-          newQuiz.launched_by = null; // System-launched
-          await newQuiz.save();
-          
-          console.log(`Quiz for level ${nextLevel} auto-generated and launched`);
-        } else if (!existingNextQuiz.is_launched) {
-          // If quiz exists but not launched, auto-launch it
-          existingNextQuiz.is_launched = true;
-          existingNextQuiz.launched_at = new Date();
-          existingNextQuiz.launched_by = null; // System-launched
-          await existingNextQuiz.save();
-          
-          console.log(`Quiz for level ${nextLevel} auto-launched`);
-        }
-      } catch (genError) {
-        console.error(`Error auto-generating/launching quiz for level ${nextLevel}:`, genError.message);
-        // Don't fail the completion if quiz generation fails
+        // Auto-launch the quiz (make it available for the student)
+        newQuiz.is_launched = true;
+        newQuiz.launched_at = new Date();
+        newQuiz.launched_by = null; // System-launched
+        await newQuiz.save();
+        
+        console.log(`Quiz for level ${nextLevel} auto-generated and launched`);
+      } else if (!existingNextQuiz.is_launched) {
+        // If quiz exists but not launched, auto-launch it
+        existingNextQuiz.is_launched = true;
+        existingNextQuiz.launched_at = new Date();
+        existingNextQuiz.launched_by = null; // System-launched
+        await existingNextQuiz.save();
+        
+        console.log(`Quiz for level ${nextLevel} auto-launched`);
       }
+    } catch (genError) {
+      console.error(`Error auto-generating/launching quiz for level ${nextLevel}:`, genError.message);
+      // Don't fail the completion if quiz generation fails
     }
     
     return {

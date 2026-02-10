@@ -53,7 +53,7 @@ function calculatePerformanceScore(answers, quizLevel = 1) {
 
   // Apply difficulty multiplier based on quiz level
   // Map quiz level (1-10) to difficulty (1-5) for the formula
-  // Levels 1-2 -> difficulty 1, Levels 3-4 -> difficulty 2, etc.
+  // Mapping: Level 1→Diff 1, Levels 2-3→Diff 2, Levels 4-5→Diff 3, Levels 6-7→Diff 4, Levels 8-10→Diff 5
   const difficulty = Math.min(5, Math.ceil(quizLevel / 2));
   const difficultyMultiplier = 1 + 0.2 * (difficulty - 1);
 

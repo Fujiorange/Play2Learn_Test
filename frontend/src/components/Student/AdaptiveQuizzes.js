@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import './AdaptiveQuizzes.css';
 
@@ -37,6 +37,31 @@ function AdaptiveQuizzes() {
 
   const getToken = () => localStorage.getItem('token');
 
+  const fetchQuizForLevel = useCallback(async (level) => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_BASE_URL}/api/adaptive-quiz/quizzes/level/${level}`,
+        {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        // Start the quiz directly
+        startQuiz(data.data._id);
+      } else {
+        setError(data.error || `No quiz available for level ${level}`);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Failed to fetch quiz for level:', error);
+      setError('Failed to load quiz for the requested level');
+      setLoading(false);
+    }
+  }, []);
+
   const fetchData = async () => {
     try {
       // Fetch student's current level
@@ -67,30 +92,23 @@ function AdaptiveQuizzes() {
     }
   };
 
-  const fetchQuizForLevel = async (level) => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `${API_BASE_URL}/api/adaptive-quiz/quizzes/level/${level}`,
-        {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        }
-      );
-      const data = await response.json();
-      
-      if (data.success) {
-        // Start the quiz directly
-        startQuiz(data.data._id);
-      } else {
-        setError(data.error || `No quiz available for level ${level}`);
-        setLoading(false);
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    // If a level is requested via URL parameter and we have loaded the student level
+    if (requestedLevel && studentLevel !== null) {
+      const level = parseInt(requestedLevel);
+      if (level >= 1 && level <= 10) {
+        setSelectedLevel(level);
+        fetchQuizForLevel(level);
       }
-    } catch (error) {
-      console.error('Failed to fetch quiz for level:', error);
-      setError('Failed to load quiz for the requested level');
-      setLoading(false);
+    } else if (studentLevel !== null && selectedLevel === null) {
+      // Auto-select student's current level
+      setSelectedLevel(studentLevel);
     }
-  };
+  }, [requestedLevel, studentLevel, fetchQuizForLevel]);
 
   const startQuiz = (quizId) => {
     navigate(`/student/adaptive-quiz/${quizId}`);
