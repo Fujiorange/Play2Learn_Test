@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: play2learn
+    env: node
+    plan: free
+    buildCommand: npm run render-build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+        generateValue: true
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        sync: false
+      - key: EMAIL_SECURE
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: USER_DELETION_PIN
+        sync: false

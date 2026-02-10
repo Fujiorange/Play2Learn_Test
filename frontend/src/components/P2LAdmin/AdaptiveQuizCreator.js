@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getQuestionStats } from '../../services/p2lAdminService';
 import './AdaptiveQuizCreator.css';
 
+const API_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 function AdaptiveQuizCreator() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -127,7 +130,7 @@ function AdaptiveQuizCreator() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/p2ladmin/quizzes/generate-adaptive', {
+      const response = await fetch(`${API_URL}/api/p2ladmin/quizzes/generate-adaptive`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
