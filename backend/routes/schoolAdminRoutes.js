@@ -1900,6 +1900,15 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
     // Now delete the user
     await User.findByIdAndDelete(req.params.id);
     
+    // Update school's current teacher/student count using atomic decrement
+    if (user.role === 'Teacher' || user.role === 'Student') {
+      const decrementField = user.role === 'Teacher' ? 'current_teachers' : 'current_students';
+      await School.findByIdAndUpdate(
+        schoolAdmin.schoolId,
+        { $inc: { [decrementField]: -1 } }
+      );
+    }
+    
     res.json({ 
       success: true, 
       message: 'User deleted successfully',
@@ -2665,6 +2674,12 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
     
     // Delete the class
     await Class.findByIdAndDelete(req.params.id);
+    
+    // Update school's current class count using atomic decrement
+    await School.findByIdAndUpdate(
+      schoolAdmin.schoolId,
+      { $inc: { current_classes: -1 } }
+    );
     
     res.json({
       success: true,
