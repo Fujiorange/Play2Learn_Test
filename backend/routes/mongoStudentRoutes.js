@@ -851,13 +851,15 @@ router.post("/quiz/generate", async (req, res) => {
       });
     }
 
-    if (!mathProfile.placement_completed) {
-      return res.status(400).json({
-        success: false,
-        error: "Please complete placement quiz first",
-        requiresPlacement: true,
-      });
-    }
+    // REMOVED: Placement quiz completion check
+    // Level 1 quiz serves as the placement quiz, no separate completion required
+    // if (!mathProfile.placement_completed) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     error: "Please complete placement quiz first",
+    //     requiresPlacement: true,
+    //   });
+    // }
 
     const now = getSingaporeTime();
     const lastResetMid = getSgtMidnightTime(mathProfile.last_reset_date || now);

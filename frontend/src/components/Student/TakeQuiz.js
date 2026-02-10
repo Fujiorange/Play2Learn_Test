@@ -31,11 +31,8 @@ export default function TakeQuiz() {
         } else {
           setError(result.error || 'Failed to load quiz');
           
-          // Handle specific errors
-          if (result.requiresPlacement) {
-            alert('Please complete placement quiz first!');
-            navigate('/student/quiz/placement');
-          } else if (result.error?.includes('Daily quiz limit reached')) {
+          // Handle daily limit error
+          if (result.error?.includes('Daily quiz limit reached')) {
             setTimeout(() => navigate('/student/quiz/attempt'), 2000);
           }
         }
