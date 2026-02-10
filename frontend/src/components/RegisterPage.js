@@ -5,12 +5,11 @@ import authService from '../services/authService';
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
-    gender: '',
-    dateOfBirth: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    institutionName: '',
+    referralSource: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -29,31 +28,21 @@ export default function RegisterPage() {
     if (error) setError('');
   };
 
-  const calculateAge = (dob) => {
-    const today = new Date();
-    const birthDate = new Date(dob);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
+
 
   const handleSubmit = async () => {
     setError('');
     setSuccess(false);
 
     // Validation
-    if (!formData.name || !formData.email || !formData.gender || !formData.dateOfBirth || !formData.password) {
+    if (!formData.email || !formData.password) {
       setError('Please fill in all required fields');
       return;
     }
 
-    // Age validation
-    const age = calculateAge(formData.dateOfBirth);
-    if (age < 6 || age > 100) {
-      setError('Please enter a valid date of birth');
+    // Institution name is required
+    if (!formData.institutionName) {
+      setError('Institution/Organization name is required');
       return;
     }
 
@@ -70,22 +59,13 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Prepare registration data with defaults for trial users
-      const registrationData = {
-        name: formData.name,
+      // Register as institute admin with trial license
+      const result = await authService.registerSchoolAdmin({
         email: formData.email,
         password: formData.password,
-        gender: formData.gender,
-        dateOfBirth: formData.dateOfBirth,
-        role: 'student', // Default trial role
-        gradeLevel: 'Not Set', // Will be determined later
-        organizationName: 'Trial User',
-        organizationType: 'individual',
-        contact: '',
-        businessRegistrationNumber: ''
-      };
-
-      const result = await authService.register(registrationData);
+        institutionName: formData.institutionName,
+        referralSource: formData.referralSource || null
+      });
 
       if (result.success) {
         setSuccess(true);
@@ -325,6 +305,32 @@ export default function RegisterPage() {
       flexShrink: '0',
       marginTop: '2px',
     },
+    tabContainer: {
+      display: 'flex',
+      gap: '10px',
+      marginBottom: '30px',
+      background: '#f3f4f6',
+      padding: '4px',
+      borderRadius: '10px',
+    },
+    tab: {
+      flex: 1,
+      padding: '10px',
+      border: 'none',
+      background: 'transparent',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      color: '#6b7280',
+      fontFamily: 'inherit',
+    },
+    tabActive: {
+      background: 'white',
+      color: '#10b981',
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+    },
   };
 
   return (
@@ -344,27 +350,28 @@ export default function RegisterPage() {
 
           <h1 style={styles.title}>Start Your Journey!</h1>
           <p style={styles.subtitle}>
-            Create your free account in seconds. No credit card required.
+            Register your institute and get started with a free trial account.
           </p>
 
           <div>
+            {/* Institution Name */}
             <div style={styles.formGroup}>
               <label style={styles.label}>
-                Full Name<span style={styles.required}>*</span>
+                Institution/Organization Name<span style={styles.required}>*</span>
               </label>
               <input
                 type="text"
-                name="name"
-                value={formData.name}
+                name="institutionName"
+                value={formData.institutionName}
                 onChange={handleChange}
                 onKeyPress={handleKeyPress}
-                onFocus={() => setFocusedField('name')}
+                onFocus={() => setFocusedField('institutionName')}
                 onBlur={() => setFocusedField('')}
-                placeholder="Enter your full name"
+                placeholder="Your school or organization name"
                 disabled={loading}
                 style={{
                   ...styles.input,
-                  ...(focusedField === 'name' ? styles.inputFocus : {}),
+                  ...(focusedField === 'institutionName' ? styles.inputFocus : {}),
                 }}
               />
             </div>
@@ -390,48 +397,32 @@ export default function RegisterPage() {
               />
             </div>
 
+            {/* Referral Source */}
             <div style={styles.formGroup}>
               <label style={styles.label}>
-                Gender<span style={styles.required}>*</span>
+                How did you hear about us?
               </label>
               <select
-                name="gender"
-                value={formData.gender}
+                name="referralSource"
+                value={formData.referralSource}
                 onChange={handleChange}
-                onFocus={() => setFocusedField('gender')}
+                onFocus={() => setFocusedField('referralSource')}
                 onBlur={() => setFocusedField('')}
                 disabled={loading}
                 style={{
                   ...styles.select,
-                  ...(focusedField === 'gender' ? styles.inputFocus : {}),
+                  ...(focusedField === 'referralSource' ? styles.inputFocus : {}),
                 }}
               >
-                <option value="">Select your gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
+                <option value="">Select an option (optional)</option>
+                <option value="search-engine">Search Engine (Google, Bing, etc.)</option>
+                <option value="social-media">Social Media</option>
+                <option value="friend-referral">Friend or Colleague</option>
+                <option value="advertisement">Advertisement</option>
+                <option value="conference-event">Conference or Event</option>
+                <option value="blog-article">Blog or Article</option>
                 <option value="other">Other</option>
-                <option value="prefer-not-to-say">Prefer not to say</option>
               </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>
-                Date of Birth<span style={styles.required}>*</span>
-              </label>
-              <input
-                type="date"
-                name="dateOfBirth"
-                value={formData.dateOfBirth}
-                onChange={handleChange}
-                onFocus={() => setFocusedField('dateOfBirth')}
-                onBlur={() => setFocusedField('')}
-                max={new Date().toISOString().split('T')[0]}
-                disabled={loading}
-                style={{
-                  ...styles.input,
-                  ...(focusedField === 'dateOfBirth' ? styles.inputFocus : {}),
-                }}
-              />
             </div>
 
             <div style={styles.formGroup}>
@@ -530,12 +521,12 @@ export default function RegisterPage() {
                 cursor: loading ? 'not-allowed' : 'pointer',
               }}
             >
-              {loading ? 'Creating Account...' : 'Sign Up'}
+              {loading ? 'Creating Account...' : 'Start Free Trial'}
             </button>
 
             {success && (
               <div style={styles.successMessage}>
-                ✅ Account created successfully! Redirecting to login...
+                ✅ Institute registered successfully with free trial! Redirecting to login...
               </div>
             )}
 

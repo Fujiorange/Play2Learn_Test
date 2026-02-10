@@ -20,6 +20,9 @@ import StudentList from './components/Teacher/StudentList';
 import StudentPerformance from './components/Teacher/StudentPerformance';
 import StudentLeaderboard from './components/Teacher/StudentLeaderboard';
 import StudentMatrix from './components/Teacher/StudentMatrix';
+<<<<<<< HEAD
+=======
+>>>>>>> 128570246e39a9fe6bbf512692c860248d8a5e51
 import WriteTestimonial from './components/Teacher/WriteTestimonial';
 import TeacherCreateTicket from './components/Teacher/CreateTicket';
 import TeacherTrackTicket from './components/Teacher/TrackTicket';
@@ -42,7 +45,6 @@ import DisplaySkillMatrix from './components/Student/DisplaySkillMatrix';
 import ViewDetailedSubjectInfo from './components/Student/ViewDetailedSubjectInfo';
 import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
-import TakeQuiz from './components/Student/TakeQuiz';
 import QuizResult from './components/Student/QuizResult';
 import AttemptAssignment from './components/Student/AttemptAssignment';
 import ViewResultHistory from './components/Student/ViewResultHistory';
@@ -84,6 +86,7 @@ import ParentViewNewsUpdates from './components/Parents/ViewNewsUpdates';
 // SchoolAdmin Components
 import SchoolAdminDashboard from './components/SchoolAdmin/SchoolAdminDashboard';
 import ManualAddUser from './components/SchoolAdmin/ManualAddUser';
+import SchoolLicenseView from './components/SchoolAdmin/SchoolLicenseView';
 // RemoveUser removed - delete functionality moved to role management pages
 import BulkUploadCSV from './components/SchoolAdmin/BulkUploadCSV';
 import ManageClasses from './components/SchoolAdmin/ManageClasses';
@@ -112,7 +115,7 @@ import TeacherViewAnnouncements from './components/Teacher/ViewAnnouncements';
 import P2LAdminDashboard from './components/P2LAdmin/P2LAdminDashboard';
 import SchoolManagement from './components/P2LAdmin/SchoolManagement';
 import SchoolAdminManagement from './components/P2LAdmin/SchoolAdminManagement';
-import ManualAddSchoolAdmin from './components/P2LAdmin/ManualAddSchoolAdmin';
+import ManualAddSchoolAdmin from './components/P2LAdmin/ManualAddSchoolAdmin'; // ⭐ ADDED - Missing import
 import QuestionBank from './components/P2LAdmin/QuestionBank';
 import QuizManager from './components/P2LAdmin/QuizManager';
 import AdaptiveQuizCreator from './components/P2LAdmin/AdaptiveQuizCreator';
@@ -122,6 +125,7 @@ import MaintenanceBroadcastManager from './components/P2LAdmin/MaintenanceBroadc
 import UserManagement from './components/P2LAdmin/UserManagement';
 import SupportTicketManagement from './components/P2LAdmin/SupportTicketManagement';
 import SkillPointsConfig from './components/P2LAdmin/SkillPointsConfig';
+import LicenseManagement from './components/P2LAdmin/LicenseManagement';
 
 // Maintenance Banner
 import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner';
@@ -131,36 +135,22 @@ import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 
 function App() {
-  // Get user role from localStorage for maintenance banner
-  const getUserRole = () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      return user.role || null;
-    } catch {
-      return null;
-    }
-  };
-
   return (
     <Router>
       <div className="App">
-        {/* Show maintenance banner on all pages except landing */}
-        <MaintenanceBanner userRole={getUserRole()} />
-        
-        <Routes>
-          {/* ========== LANDING PAGE ========== */}
-          <Route
-            path="/"
-            element={<DynamicLandingPage />}
-          />
+        {/* Maintenance Banner */}
+        <MaintenanceBanner />
 
-          {/* ========== AUTHENTICATION ========== */}
+        <Routes>
+          {/* ========== PUBLIC ROUTES ========== */}
+          <Route path="/" element={<DynamicLandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/register_admin" element={<RegisterAdminPage />} />
+          <Route path="/register-admin" element={<RegisterAdminPage />} />
 
           {/* ========== TEACHER ROUTES ========== */}
           <Route path="/teacher" element={<TeacherDashboard />} />
+          <Route path="/teacher/announcements" element={<TeacherViewAnnouncements />} />
           <Route path="/teacher/profile" element={<TeacherViewProfile />} />
           <Route path="/teacher/profile/edit" element={<TeacherEditProfile />} />
           <Route path="/teacher/profile/picture" element={<TeacherUpdatePicture />} />
@@ -168,15 +158,15 @@ function App() {
           <Route path="/teacher/students/performance" element={<StudentPerformance />} />
           <Route path="/teacher/students/leaderboard" element={<StudentLeaderboard />} />
           <Route path="/teacher/students/matrix" element={<StudentMatrix />} />
+<<<<<<< HEAD
+=======
+>>>>>>> 128570246e39a9fe6bbf512692c860248d8a5e51
           <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
           <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
           <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
           
           {/* ⭐ NEW ROUTE - Teacher News & Updates */}
           <Route path="/teacher/news" element={<TeacherViewNewsUpdates />} />
-          
-          {/* ⭐ NEW ROUTE - Teacher Announcements */}
-          <Route path="/teacher/announcements" element={<TeacherViewAnnouncements />} />
           
           {/* ⭐ NEW ROUTE - Teacher Quiz Assignment */}
           <Route path="/teacher/quiz-assignment" element={<TeacherQuizAssignment />} />
@@ -198,14 +188,13 @@ function App() {
           {/* ⭐ NEW ROUTE - Student News & Updates */}
           <Route path="/student/news" element={<StudentViewNewsUpdates />} />
 
-          {/* â­ NEW ROUTES - Student Rewards System */}
+          {/* ⭐ NEW ROUTES - Student Rewards System */}
           <Route path="/student/shop" element={<StudentViewRewardShop />} />
           <Route path="/student/badges" element={<StudentViewBadges />} />
 
           {/* ========== QUIZ ROUTES ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
-          <Route path="/student/quiz/take" element={<TakeQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
 
           {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
@@ -246,6 +235,7 @@ function App() {
 
           {/* ========== SCHOOL ADMIN ROUTES ========== */}
           <Route path="/school-admin" element={<SchoolAdminDashboard />} />
+          <Route path="/school-admin/license" element={<SchoolLicenseView />} />
           <Route path="/school-admin/users/manual-add" element={<ManualAddUser />} />
           {/* RemoveUser route removed - delete functionality moved to role management pages */}
           <Route path="/school-admin/users/bulk-upload" element={<BulkUploadCSV />} />
@@ -275,6 +265,7 @@ function App() {
           <Route path="/p2ladmin/schools" element={<SchoolManagement />} />
           <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
           <Route path="/p2ladmin/school-admins/manual-add" element={<ManualAddSchoolAdmin />} />
+          <Route path="/p2ladmin/licenses" element={<LicenseManagement />} />
           <Route path="/p2ladmin/questions" element={<QuestionBank />} />
           <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
           <Route path="/p2ladmin/quizzes/create-adaptive" element={<AdaptiveQuizCreator />} />

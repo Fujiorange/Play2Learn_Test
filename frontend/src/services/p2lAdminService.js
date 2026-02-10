@@ -108,6 +108,11 @@ export const getLandingPagePricingPlans = async () => {
   return apiCall('/api/p2ladmin/landing/pricing-plans');
 };
 
+// Get landing page statistics (schools, students, teachers)
+export const getLandingPageStatistics = async () => {
+  return apiCall('/api/p2ladmin/landing/statistics');
+};
+
 // ==================== SCHOOLS ====================
 export const getSchools = async () => {
   return apiCall('/api/p2ladmin/schools');
@@ -244,6 +249,10 @@ export const getQuestionGrades = async () => {
   return apiCall('/api/p2ladmin/questions-grades');
 };
 
+export const getQuestionQuizLevels = async () => {
+  return apiCall('/api/p2ladmin/questions-quiz-levels');
+};
+
 export const bulkDeleteQuestions = async (ids) => {
   return apiCall('/api/p2ladmin/questions/bulk-delete', {
     method: 'POST',
@@ -277,6 +286,13 @@ export const updateQuiz = async (id, quizData) => {
 export const deleteQuiz = async (id) => {
   return apiCall(`/api/p2ladmin/quizzes/${id}`, {
     method: 'DELETE',
+  });
+};
+
+export const generateQuiz = async (generationData) => {
+  return apiCall('/api/p2ladmin/quizzes/generate', {
+    method: 'POST',
+    body: JSON.stringify(generationData),
   });
 };
 
@@ -408,6 +424,8 @@ export default {
   saveLandingPage,
   updateLandingPage,
   deleteLandingPage,
+  getLandingPagePricingPlans,
+  getLandingPageStatistics,
   getSchools,
   getSchool,
   createSchool,

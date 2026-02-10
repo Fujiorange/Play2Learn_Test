@@ -74,6 +74,127 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// POST /register-school-admin - Register an institute with free trial
+router.post('/register-school-admin', async (req, res) => {
+  try {
+    const {
+      email,
+      password,
+      institutionName,
+      referralSource,
+    } = req.body;
+
+    // Validation - only email, password, and institutionName required
+    if (!email || !password || !institutionName) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email, password, and institution name are required' 
+      });
+    }
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'Email already registered' });
+    }
+
+    // Check if institution name already exists
+    const School = require('../models/School');
+    const License = require('../models/License');
+    
+    // Escape special regex characters to prevent regex injection
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedInstitutionName = escapeRegex(institutionName);
+    
+    const existingSchool = await School.findOne({ 
+      organization_name: new RegExp(`^${escapedInstitutionName}$`, 'i') 
+    });
+    if (existingSchool) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'An organization with this name already exists. Please use a different name.' 
+      });
+    }
+
+    // Find the trial license
+    const trialLicense = await License.findOne({ 
+      name: 'Free Trial',
+      type: 'free',
+      isActive: true 
+    });
+    
+    if (!trialLicense) {
+      console.error('❌ Trial license not found in database');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Trial license not configured. Please contact support.' 
+      });
+    }
+
+    // Create school with free trial license
+    const newSchool = new School({
+      organization_name: institutionName,
+      organization_type: 'school',
+      licenseId: trialLicense._id,
+      licenseExpiresAt: null, // Free trial is perpetual (no expiration)
+      contact: email, // Use email as contact
+      is_active: true,
+      current_teachers: 0,
+      current_students: 0,
+      current_classes: 0
+    });
+
+    await newSchool.save();
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generate user-friendly name from email
+    // e.g., "john.doe@example.com" -> "John Doe"
+    const emailPrefix = email.split('@')[0];
+    const nameParts = emailPrefix.split(/[._-]/).filter(part => part.length > 0);
+    const displayName = nameParts
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ') || emailPrefix;
+
+    // Create institute admin user
+    const newUser = new User({
+      name: displayName,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: 'School Admin',
+      schoolId: newSchool._id.toString(),
+      contact: null,
+      gender: null,
+      date_of_birth: null,
+      emailVerified: true,
+      isTrialUser: true
+    });
+
+    await newUser.save();
+
+    // Log referral source if provided (for analytics)
+    if (referralSource) {
+      console.log(`📊 New institute registration - Referral source: ${referralSource}`);
+    }
+
+    console.log(`✅ New institute registered: ${email} for ${institutionName}`);
+    console.log(`   License: ${trialLicense.name} (Teachers: 0/${trialLicense.maxTeachers}, Students: 0/${trialLicense.maxStudents}, Classes: 0/${trialLicense.maxClasses})`);
+
+    return res.json({ 
+      success: true, 
+      message: 'Institute registered successfully with free trial',
+      schoolId: newSchool._id
+    });
+  } catch (error) {
+    console.error('School admin registration error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Registration failed. Please try again.' 
+    });
+  }
+});
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;

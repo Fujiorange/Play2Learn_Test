@@ -78,13 +78,24 @@ router.get('/dashboard', async (req, res) => {
     const assignedClasses = teacher.assignedClasses || [];
     const assignedSubjects = teacher.assignedSubjects || [];
     
-    // Count students in assigned classes
+    console.log('📊 Teacher dashboard for:', teacher.email);
+    console.log('📊 Assigned classes:', assignedClasses);
+    console.log('📊 Teacher schoolId:', teacher.schoolId);
+    
+    // Count students - if no assigned classes, count all students in same school
     let totalStudents = 0;
     if (assignedClasses.length > 0) {
       totalStudents = await User.countDocuments({
         role: 'Student',
         class: { $in: assignedClasses }
       });
+    } else if (teacher.schoolId) {
+      // Fallback: count all students in the same school
+      totalStudents = await User.countDocuments({
+        role: 'Student',
+        schoolId: teacher.schoolId
+      });
+      console.log('📊 Using schoolId fallback, found', totalStudents, 'students');
     }
     
     // Count active quizzes launched by this teacher
@@ -97,11 +108,14 @@ router.get('/dashboard', async (req, res) => {
       ]
     });
     
-    // Get recent quiz attempts from students in assigned classes
-    const students = await User.find({
-      role: 'Student',
-      class: { $in: assignedClasses }
-    }).select('_id');
+    // Get recent quiz attempts from students
+    let studentQuery = { role: 'Student' };
+    if (assignedClasses.length > 0) {
+      studentQuery.class = { $in: assignedClasses };
+    } else if (teacher.schoolId) {
+      studentQuery.schoolId = teacher.schoolId;
+    }
+    const students = await User.find(studentQuery).select('_id');
     
     const studentIds = students.map(s => s._id);
     
@@ -769,123 +783,142 @@ router.get('/my-classes', async (req, res) => {
   }
 });
 
-// ==================== FEEDBACK SCHEMA ====================
-const feedbackSchema = new mongoose.Schema({
-  teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  recipientType: { type: String, enum: ['student', 'parent'], required: true },
-  subject: { type: String, required: true },
-  category: { type: String, enum: ['academic', 'behavior', 'attendance', 'participation', 'general'], default: 'general' },
-  message: { type: String, required: true },
-  priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
-  isRead: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
-});
 
-const TeacherFeedback = mongoose.models.TeacherFeedback || mongoose.model('TeacherFeedback', feedbackSchema);
-
-// ==================== FEEDBACK ENDPOINTS ====================
-
-// Create feedback for student/parent
-router.post('/feedback', async (req, res) => {
-  try {
-    const teacherId = req.user.userId;
-    const { recipientType, studentId, subject, category, message, priority } = req.body;
-    
-    if (!studentId || !subject || !message) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Student, subject, and message are required' 
-      });
-    }
-    
-    // Verify the student is in teacher's assigned classes
-    const teacher = req.teacher;
-    const student = await User.findById(studentId);
-    
-    if (!student || !teacher.assignedClasses?.includes(student.class)) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Access denied to this student' 
-      });
-    }
-    
-    let recipientId = studentId;
-    
-    // If sending to parent, find the parent linked to this student
-    if (recipientType === 'parent') {
-      const parent = await User.findOne({
-        role: 'Parent',
-        'linkedStudents.studentId': studentId
-      });
-      
-      if (!parent) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'No parent linked to this student' 
-        });
-      }
-      recipientId = parent._id;
-    }
-    
-    const feedback = new TeacherFeedback({
-      teacherId,
-      recipientId,
-      recipientType: recipientType || 'student',
-      subject,
-      category: category || 'general',
-      message,
-      priority: priority || 'normal'
-    });
-    
-    await feedback.save();
-    
-    res.json({
-      success: true,
-      message: 'Feedback sent successfully',
-      feedbackId: feedback._id
-    });
-  } catch (error) {
-    console.error('Create feedback error:', error);
-    res.status(500).json({ success: false, error: 'Failed to create feedback' });
-  }
-});
-
-// Get feedback received by teacher (from parents/students)
+// ==================== FEEDBACK ====================
 router.get('/feedback', async (req, res) => {
   try {
     const teacherId = req.user.userId;
+    const db = mongoose.connection.db;
     
-    // Get feedback where teacher is the recipient
-    // Also get messages from parents/students
-    const messages = await Message.find({
-      receiverId: teacherId,
-      senderRole: { $in: ['Parent', 'Student'] }
-    })
-    .sort({ createdAt: -1 })
-    .populate('senderId', 'name role')
-    .limit(50);
+    const feedback = await db.collection('feedback')
+      .find({ teacherId: new mongoose.Types.ObjectId(teacherId) })
+      .sort({ createdAt: -1 })
+      .toArray();
     
-    const feedback = messages.map(msg => ({
-      id: msg._id,
-      from: msg.senderId ? `${msg.senderId.role} - ${msg.senderId.name}` : 'Unknown',
-      date: msg.createdAt.toISOString().split('T')[0],
-      // Use first 50 chars of message as subject preview if no subject field
-      subject: msg.message ? msg.message.substring(0, 50) + (msg.message.length > 50 ? '...' : '') : 'No subject', 
-      category: 'general',
-      status: msg.read ? 'read' : 'unread',
-      message: msg.message
-    }));
-    
-    res.json({
-      success: true,
-      feedback,
-      totalFeedback: feedback.length,
-      unreadCount: feedback.filter(f => f.status === 'unread').length
-    });
+    res.json({ success: true, feedback });
   } catch (error) {
     console.error('Get feedback error:', error);
     res.status(500).json({ success: false, error: 'Failed to load feedback' });
+  }
+});
+
+router.post('/feedback', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+    const teacher = req.teacher;
+    const { studentId, type, content } = req.body;
+    
+    if (!studentId || !content) {
+      return res.status(400).json({ success: false, error: 'Student and content are required' });
+    }
+    
+    const db = mongoose.connection.db;
+    
+    // Get student info
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+    
+    const feedbackDoc = {
+      teacherId: new mongoose.Types.ObjectId(teacherId),
+      teacherName: teacher.name,
+      studentId: new mongoose.Types.ObjectId(studentId),
+      studentName: student.name,
+      type: type || 'general',
+      content,
+      createdAt: new Date()
+    };
+    
+    await db.collection('feedback').insertOne(feedbackDoc);
+    
+    res.json({ success: true, message: 'Feedback sent successfully' });
+  } catch (error) {
+    console.error('Create feedback error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send feedback' });
+  }
+});
+
+// ==================== SUPPORT TICKETS ====================
+router.get('/support-tickets', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+    const db = mongoose.connection.db;
+    
+    const tickets = await db.collection('supporttickets')
+      .find({ createdBy: new mongoose.Types.ObjectId(teacherId) })
+      .sort({ createdAt: -1 })
+      .toArray();
+    
+    res.json({ success: true, tickets });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load support tickets' });
+  }
+});
+
+router.post('/support-tickets', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+    const teacher = req.teacher;
+    const { subject, description, priority } = req.body;
+    
+    if (!subject || !description) {
+      return res.status(400).json({ success: false, error: 'Subject and description are required' });
+    }
+    
+    const db = mongoose.connection.db;
+    
+    const ticket = {
+      createdBy: new mongoose.Types.ObjectId(teacherId),
+      createdByName: teacher.name,
+      createdByRole: 'Teacher',
+      schoolId: teacher.schoolId,
+      subject,
+      description,
+      priority: priority || 'medium',
+      status: 'open',
+      createdAt: new Date()
+    };
+    
+    const result = await db.collection('supporttickets').insertOne(ticket);
+    
+    res.json({ success: true, ticket: { ...ticket, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Create support ticket error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create support ticket' });
+  }
+});
+
+// ==================== TESTIMONIALS ====================
+router.post('/testimonials', async (req, res) => {
+  try {
+    const teacherId = req.user.userId;
+    const teacher = req.teacher;
+    const { content, rating } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({ success: false, error: 'Content is required' });
+    }
+    
+    const db = mongoose.connection.db;
+    
+    const testimonial = {
+      userId: new mongoose.Types.ObjectId(teacherId),
+      userName: teacher.name,
+      userRole: 'Teacher',
+      content,
+      rating: rating || 5,
+      approved: false,
+      createdAt: new Date()
+    };
+    
+    await db.collection('testimonials').insertOne(testimonial);
+    
+    res.json({ success: true, message: 'Testimonial submitted successfully' });
+  } catch (error) {
+    console.error('Create testimonial error:', error);
+    res.status(500).json({ success: false, error: 'Failed to submit testimonial' });
   }
 });
 

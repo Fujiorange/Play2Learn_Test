@@ -251,6 +251,36 @@ const schoolAdminService = {
     }
   },
 
+  async bulkUploadClass(file) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/classes/bulk-upload-csv`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload class CSV');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('bulkUploadClass error:', error);
+      return { success: false, error: error.message || 'Failed to upload class CSV' };
+    }
+  },
+
   async getClass(classId) {
     try {
       const token = this.getToken();

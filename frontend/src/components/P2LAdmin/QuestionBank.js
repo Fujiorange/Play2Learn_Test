@@ -1,7 +1,7 @@
 // Question Bank Management Component
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, bulkDeleteQuestions } from '../../services/p2lAdminService';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, getQuestionQuizLevels, bulkDeleteQuestions } from '../../services/p2lAdminService';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -9,16 +9,18 @@ function QuestionBank() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '' });
+  const [filters, setFilters] = useState({ difficulty: '', subject: '', topic: '', grade: '', quiz_level: '' });
   const [subjects, setSubjects] = useState([]);
   const [topics, setTopics] = useState([]);
   const [grades, setGrades] = useState([]);
+  const [quizLevels, setQuizLevels] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
     choices: ['', '', '', ''],
     answer: '',
     difficulty: 3,
+    quiz_level: 1,
     subject: 'General',
     topic: '',
     grade: 'Primary 1'
@@ -37,6 +39,7 @@ function QuestionBank() {
     fetchSubjects();
     fetchTopics();
     fetchGrades();
+    fetchQuizLevels();
   }, []);
 
   const fetchQuestions = async () => {
@@ -77,6 +80,15 @@ function QuestionBank() {
       setGrades(response.data || []);
     } catch (error) {
       console.error('Failed to fetch grades:', error);
+    }
+  };
+
+  const fetchQuizLevels = async () => {
+    try {
+      const response = await getQuestionQuizLevels();
+      setQuizLevels(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch quiz levels:', error);
     }
   };
 
@@ -130,6 +142,7 @@ function QuestionBank() {
       choices: question.choices || ['', '', '', ''],
       answer: question.answer,
       difficulty: question.difficulty,
+      quiz_level: question.quiz_level || 1,
       subject: question.subject || 'General',
       topic: question.topic || '',
       grade: question.grade || 'Primary 1'
@@ -200,6 +213,7 @@ function QuestionBank() {
       choices: ['', '', '', ''],
       answer: '',
       difficulty: 3,
+      quiz_level: 1,
       subject: 'General',
       topic: '',
       grade: 'Primary 1'
@@ -264,10 +278,10 @@ function QuestionBank() {
   };
 
   const downloadTemplate = () => {
-    const template = `text,choice1,choice2,choice3,choice4,answer,difficulty,subject,topic,grade
-"What is 2 + 2?","2","3","4","5","4",1,"Math","Addition","Primary 1"
-"What is the capital of France?","London","Berlin","Paris","Rome","Paris",2,"Geography","Capitals","Primary 1"
-"Which planet is closest to the sun?","Venus","Mars","Mercury","Earth","Mercury",3,"Science","Solar System","Primary 1"`;
+    const template = `text,choice1,choice2,choice3,choice4,answer,difficulty,quiz_level,subject,topic,grade
+"What is 2 + 2?","2","3","4","5","4",1,1,"Math","Addition","Primary 1"
+"What is the capital of France?","London","Berlin","Paris","Rome","Paris",2,1,"Geography","Capitals","Primary 1"
+"Which planet is closest to the sun?","Venus","Mars","Mercury","Earth","Mercury",3,2,"Science","Solar System","Primary 1"`;
     
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -360,7 +374,22 @@ function QuestionBank() {
           </select>
         </div>
 
-        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '' })} className="btn-clear">
+        <div className="filter-group">
+          <label>Quiz Level:</label>
+          <select 
+            value={filters.quiz_level}
+            onChange={(e) => setFilters({ ...filters, quiz_level: e.target.value })}
+          >
+            <option value="">All</option>
+            {quizLevels.map((level) => (
+              <option key={level} value={level}>
+                Quiz Level {level}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button onClick={() => setFilters({ difficulty: '', subject: '', topic: '', grade: '', quiz_level: '' })} className="btn-clear">
           Clear Filters
         </button>
         
@@ -474,6 +503,27 @@ function QuestionBank() {
                 </div>
 
                 <div className="form-group">
+                  <label>Quiz Level *</label>
+                  <select
+                    name="quiz_level"
+                    value={formData.quiz_level}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value={1}>Quiz Level 1</option>
+                    <option value={2}>Quiz Level 2</option>
+                    <option value={3}>Quiz Level 3</option>
+                    <option value={4}>Quiz Level 4</option>
+                    <option value={5}>Quiz Level 5</option>
+                    <option value={6}>Quiz Level 6</option>
+                    <option value={7}>Quiz Level 7</option>
+                    <option value={8}>Quiz Level 8</option>
+                    <option value={9}>Quiz Level 9</option>
+                    <option value={10}>Quiz Level 10</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
                   <label>Subject</label>
                   <input
                     type="text"
@@ -537,6 +587,7 @@ function QuestionBank() {
                   <li><strong>choice1, choice2, choice3, choice4</strong> - Answer choices (optional)</li>
                   <li><strong>answer</strong> - The correct answer (required)</li>
                   <li><strong>difficulty</strong> - Number from 1-5 (default: 3)</li>
+                  <li><strong>quiz_level</strong> - Number from 1-10 (required, default: 1)</li>
                   <li><strong>subject</strong> - Subject name (default: General)</li>
                   <li><strong>topic</strong> - Topic name (optional)</li>
                   <li><strong>grade</strong> - Grade level: Primary 1 to 6 (default: Primary 1)</li>
@@ -645,6 +696,8 @@ function QuestionBank() {
                 </span>
                 <span className="subject-badge">{question.subject}</span>
                 {question.grade && <span className="grade-badge">{question.grade}</span>}
+                {question.quiz_level && <span className="quiz-level-badge">Quiz Level {question.quiz_level}</span>}
+                {question.topic && <span className="topic-badge">{question.topic}</span>}
               </div>
               
               <p className="question-text">{question.text}</p>
@@ -661,8 +714,6 @@ function QuestionBank() {
               )}
               
               <p className="answer"><strong>Answer:</strong> {question.answer}</p>
-              
-              {question.topic && <p className="topic"><strong>Topic:</strong> {question.topic}</p>}
               
               <div className="card-actions">
                 <button onClick={() => handleEdit(question)} className="btn-edit">

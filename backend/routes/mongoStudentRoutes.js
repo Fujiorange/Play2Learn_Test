@@ -632,6 +632,34 @@ router.get("/math-profile", async (req, res) => {
   }
 });
 
+// ==================== PLACEMENT STATUS ENDPOINT ====================
+router.get("/placement-status", async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+
+    let mathProfile = await MathProfile.findOne({ student_id: studentId });
+    
+    if (!mathProfile) {
+      return res.json({
+        success: true,
+        placementCompleted: false,
+        placementScore: null,
+        placementDate: null
+      });
+    }
+
+    res.json({
+      success: true,
+      placementCompleted: mathProfile.placement_completed || false,
+      placementScore: mathProfile.placement_score || null,
+      placementDate: mathProfile.placement_date || null
+    });
+  } catch (error) {
+    console.error("❌ Placement status error:", error);
+    res.status(500).json({ success: false, error: "Failed to check placement status" });
+  }
+});
+
 // ==================== MATH SKILLS ENDPOINT ====================
 router.get("/math-skills", async (req, res) => {
   try {
@@ -686,6 +714,7 @@ router.get("/math-skills", async (req, res) => {
 router.post("/placement-quiz/generate", async (req, res) => {
   try {
     const studentId = req.user.userId;
+    const Question = require('../models/Question');
 
     let mathProfile = await MathProfile.findOne({ student_id: studentId });
 
@@ -705,45 +734,44 @@ router.post("/placement-quiz/generate", async (req, res) => {
       });
     }
 
-    // Get an active placement quiz from P2L Admin created quizzes
-    const placementQuiz = await Quiz.findOne({
-      quiz_type: 'placement',
-      is_active: true
-    }).sort({ createdAt: -1 }); // Get most recent placement quiz
+    // Pull 20 random questions from the shared question bank
+    const questions = await Question.aggregate([
+      { $match: { is_active: true } },
+      { $sample: { size: 20 } }
+    ]);
 
-    if (!placementQuiz || !placementQuiz.questions || placementQuiz.questions.length === 0) {
+    if (!questions || questions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "No active placement quiz found. Please contact your administrator.",
+        error: "No questions available in the question bank. Please contact your administrator.",
       });
     }
 
-    // Create a student quiz attempt record using the P2L Admin quiz
+    // Create a student quiz attempt record with dynamically selected questions
     const quiz = await StudentQuiz.create({
       student_id: studentId,
       quiz_type: "placement",
-      quiz_id: placementQuiz._id,
       profile_level: 5,
-      questions: placementQuiz.questions.map(q => ({
+      questions: questions.map(q => ({
         question_text: q.text,
-        operation: 'general',
+        operation: q.topic || 'general',
         correct_answer: q.answer,
         student_answer: null,
         is_correct: false,
       })),
       score: 0,
-      total_questions: placementQuiz.questions.length,
+      total_questions: questions.length,
     });
 
     res.json({
       success: true,
       quiz_id: quiz._id,
-      questions: placementQuiz.questions.map((q) => ({ 
+      questions: questions.map((q) => ({ 
         question_text: q.text, 
         choices: q.choices,
-        operation: 'general' 
+        operation: q.topic || 'general' 
       })),
-      total_questions: placementQuiz.questions.length,
+      total_questions: questions.length,
     });
   } catch (error) {
     console.error("❌ Generate placement quiz error:", error);
@@ -752,7 +780,7 @@ router.post("/placement-quiz/generate", async (req, res) => {
 });
 
 // ==================== PLACEMENT QUIZ - SUBMIT ====================
-router.post("/placement-quiz/submit", async (req, res) => {
+router.post("/quiz/submit-placement", async (req, res) => {
   try {
     const studentId = req.user.userId;
     const { quiz_id, answers } = req.body;
@@ -799,13 +827,17 @@ router.post("/placement-quiz/submit", async (req, res) => {
 
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
 
-    let startingProfile = 1;
-    if (quiz.percentage >= 90) startingProfile = 7;
-    else if (quiz.percentage >= 80) startingProfile = 6;
-    else if (quiz.percentage >= 70) startingProfile = 5;
-    else if (quiz.percentage >= 60) startingProfile = 4;
-    else if (quiz.percentage >= 50) startingProfile = 3;
-    else if (quiz.percentage >= 40) startingProfile = 2;
+    // Map percentage to profile level (1-10) in 10% increments
+    let startingProfile;
+    if (quiz.percentage >= 90) startingProfile = 10;
+    else if (quiz.percentage >= 80) startingProfile = 9;
+    else if (quiz.percentage >= 70) startingProfile = 8;
+    else if (quiz.percentage >= 60) startingProfile = 7;
+    else if (quiz.percentage >= 50) startingProfile = 6;
+    else if (quiz.percentage >= 40) startingProfile = 5;
+    else if (quiz.percentage >= 30) startingProfile = 4;
+    else if (quiz.percentage >= 20) startingProfile = 3;
+    else if (quiz.percentage >= 10) startingProfile = 2;
     else startingProfile = 1;
 
     mathProfile.current_profile = startingProfile;
@@ -1832,3 +1864,4 @@ router.get("/badges/progress", async (req, res) => {
 });
 
 module.exports = router;
+

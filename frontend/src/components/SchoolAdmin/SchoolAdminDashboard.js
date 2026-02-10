@@ -300,6 +300,25 @@ export default function SchoolAdminDashboard() {
             </ul>
           </div>
 
+          {/* License & Subscription */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionIcon}>📜</span>
+              <h2 style={styles.sectionTitle}>License & Subscription</h2>
+            </div>
+            <ul style={styles.menuList}>
+              <li
+                style={{ ...styles.menuItem, ...(hoveredItem === 'license' ? styles.menuItemHover : {}) }}
+                onMouseEnter={() => setHoveredItem('license')}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() => handleMenuClick('/school-admin/license')}
+              >
+                <span>📊 View License Details</span>
+                <span style={styles.arrow}>→</span>
+              </li>
+            </ul>
+          </div>
+
           {/* Support */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>

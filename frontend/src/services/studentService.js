@@ -111,7 +111,7 @@ const studentService = {
       if (!token) return { success: false, error: 'Not authenticated' };
 
       const response = await fetch(
-        `${API_URL}/mongo/student/placement-quiz/submit`,
+        `${API_URL}/mongo/student/quiz/submit-placement`,
         {
           method: 'POST',
           headers: {
@@ -132,6 +132,34 @@ const studentService = {
     } catch (error) {
       console.error('submitPlacementQuiz error:', error);
       return { success: false, error: error.message || 'Failed to submit placement quiz' };
+    }
+  },
+
+  async getPlacementStatus() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'Not authenticated' };
+
+      const response = await fetch(
+        `${API_URL}/mongo/student/placement-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const { json, text } = await parseJsonSafe(response);
+
+      if (!response.ok) {
+        throw new Error(json?.error || text || 'Failed to fetch placement status');
+      }
+
+      return json;
+    } catch (error) {
+      console.error('getPlacementStatus error:', error);
+      return { success: false, error: error.message || 'Failed to fetch placement status' };
     }
   },
 

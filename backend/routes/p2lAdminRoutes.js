@@ -8,6 +8,7 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const User = require('../models/User');
 const School = require('../models/School');
+const License = require('../models/License');
 const Question = require('../models/Question');
 const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
@@ -15,6 +16,7 @@ const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
+const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
@@ -208,7 +210,7 @@ router.get('/dashboard-stats', authenticateP2LAdmin, async (req, res) => {
 // Get all schools
 router.get('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
-    const schools = await School.find().sort({ createdAt: -1 });
+    const schools = await School.find().populate('licenseId').sort({ createdAt: -1 });
     res.json({
       success: true,
       data: schools
@@ -225,7 +227,7 @@ router.get('/schools', authenticateP2LAdmin, async (req, res) => {
 // Get single school
 router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const school = await School.findById(req.params.id);
+    const school = await School.findById(req.params.id).populate('licenseId');
     if (!school) {
       return res.status(404).json({ 
         success: false, 
@@ -248,25 +250,36 @@ router.get('/schools/:id', authenticateP2LAdmin, async (req, res) => {
 // Create school
 router.post('/schools', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, plan, plan_info, contact } = req.body;
+    const { organization_name, organization_type, licenseId, contact } = req.body;
     
     // Validate required fields
-    if (!organization_name || !plan || !plan_info) {
+    if (!organization_name || !licenseId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'organization_name, plan, and plan_info are required' 
+        error: 'organization_name and licenseId are required' 
+      });
+    }
+
+    // Verify license exists
+    const license = await License.findById(licenseId);
+    if (!license) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'License not found' 
       });
     }
 
     const school = new School({
       organization_name,
       organization_type: organization_type || 'school',
-      plan,
-      plan_info,
+      licenseId,
       contact: contact || ''
     });
 
     await school.save();
+
+    // Populate license data before returning
+    await school.populate('licenseId');
 
     res.status(201).json({
       success: true,
@@ -285,7 +298,7 @@ router.post('/schools', authenticateP2LAdmin, async (req, res) => {
 // Update school
 router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, plan, plan_info, contact, is_active } = req.body;
+    const { organization_name, organization_type, licenseId, contact, is_active } = req.body;
     
     const school = await School.findById(req.params.id);
     if (!school) {
@@ -295,15 +308,28 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Verify license exists if being updated
+    if (licenseId && licenseId !== school.licenseId.toString()) {
+      const license = await License.findById(licenseId);
+      if (!license) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'License not found' 
+        });
+      }
+    }
+
     // Update fields if provided
     if (organization_name) school.organization_name = organization_name;
     if (organization_type) school.organization_type = organization_type;
-    if (plan) school.plan = plan;
-    if (plan_info) school.plan_info = plan_info;
+    if (licenseId) school.licenseId = licenseId;
     if (contact !== undefined) school.contact = contact;
     if (is_active !== undefined) school.is_active = is_active;
 
     await school.save();
+    
+    // Populate license data before returning
+    await school.populate('licenseId');
 
     res.json({
       success: true,
@@ -511,7 +537,11 @@ router.post('/school-admins', authenticateP2LAdmin, async (req, res) => {
           schoolId: schoolId,
           emailVerified: true,
           accountActive: true,
-          requirePasswordChange: true
+          requirePasswordChange: true,
+          // SECURITY NOTE: tempPassword stored temporarily for one-time viewing by P2L admin
+          // This is cleared when: (1) viewed by admin, or (2) user changes password
+          // Used as fallback if email delivery fails
+          tempPassword: tempPassword
         });
 
         await admin.save();
@@ -708,6 +738,10 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
     // Update admin with new password and require password change
     admin.password = hashedPassword;
     admin.requirePasswordChange = true;
+    // SECURITY NOTE: tempPassword stored temporarily for one-time viewing by P2L admin
+    // This is cleared when: (1) viewed by admin, or (2) user changes password
+    // Used as fallback if email delivery fails
+    admin.tempPassword = tempPassword;
     await admin.save();
     
     // Send email with new credentials
@@ -743,13 +777,14 @@ router.post('/school-admins/:id/reset-password', authenticateP2LAdmin, async (re
 // Get all questions
 router.get('/questions', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { subject, topic, difficulty, grade, is_active } = req.query;
+    const { subject, topic, difficulty, grade, quiz_level, is_active } = req.query;
     
     const filter = {};
     if (subject) filter.subject = subject;
     if (topic) filter.topic = topic;
     if (difficulty) filter.difficulty = parseInt(difficulty);
     if (grade) filter.grade = grade;
+    if (quiz_level) filter.quiz_level = parseInt(quiz_level);
     if (is_active !== undefined) filter.is_active = is_active === 'true';
 
     const questions = await Question.find(filter)
@@ -838,6 +873,29 @@ router.get('/questions-grades', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch grades' 
+    });
+  }
+});
+
+// Get unique quiz levels
+router.get('/questions-quiz-levels', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const quizLevels = await Question.distinct('quiz_level');
+    
+    // Sort quiz levels numerically
+    const sortedQuizLevels = quizLevels
+      .filter(level => level !== null && level !== undefined)
+      .sort((a, b) => a - b);
+    
+    res.json({
+      success: true,
+      data: sortedQuizLevels
+    });
+  } catch (error) {
+    console.error('Get quiz levels error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch quiz levels' 
     });
   }
 });
@@ -1095,11 +1153,19 @@ router.post('/questions/upload-csv', authenticateP2LAdmin, upload.single('file')
             difficulty = 3;
           }
 
+          // Parse quiz_level (default to 1 if not provided or invalid)
+          let quiz_level = parseInt(normalizedRow.quiz_level || normalizedRow['quiz level']) || 1;
+          if (quiz_level < 1 || quiz_level > 10) {
+            console.warn(`⚠️ Invalid quiz_level ${quiz_level} on line ${lineNumber}, defaulting to 1`);
+            quiz_level = 1;
+          }
+
           results.push({
             text: text.trim(),
             choices: choices,
             answer: answer.trim(),
             difficulty: difficulty,
+            quiz_level: quiz_level,
             subject: normalizedRow.subject || 'General',
             topic: normalizedRow.topic || '',
             grade: normalizedRow.grade || 'Primary 1',
@@ -1225,76 +1291,91 @@ router.get('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   }
 });
 
-// Create quiz
+// Create quiz (BLOCKED - quizzes should be auto-generated)
 router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { title, description, questions, is_adaptive, is_active, quiz_type } = req.body;
-    
-    // Validate required fields
-    if (!title) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'title is required' 
-      });
-    }
-
-    // Populate questions with full details from Question references
-    const populatedQuestions = [];
-    if (questions && questions.length > 0) {
-      // Fetch all questions in parallel for better performance
-      const questionIds = questions.map(q => q.question_id).filter(id => id);
-      const questionDocs = await Question.find({ _id: { $in: questionIds } });
-      
-      // Create a map for quick lookup
-      const questionMap = new Map(questionDocs.map(doc => [doc._id.toString(), doc]));
-      
-      // Populate questions in order, log warnings for missing questions
-      for (const q of questions) {
-        if (q.question_id) {
-          const questionDoc = questionMap.get(q.question_id.toString());
-          if (questionDoc) {
-            populatedQuestions.push({
-              question_id: questionDoc._id,
-              text: questionDoc.text,
-              choices: questionDoc.choices,
-              answer: questionDoc.answer,
-              difficulty: questionDoc.difficulty
-            });
-          } else {
-            console.warn(`⚠️ Question not found: ${q.question_id}`);
-          }
-        }
-      }
-      
-      if (populatedQuestions.length !== questionIds.length) {
-        console.warn(`⚠️ Some questions were not found. Expected ${questionIds.length}, got ${populatedQuestions.length}`);
-      }
-    }
-
-    const finalQuizType = quiz_type || (is_adaptive ? 'adaptive' : 'placement');
-
-    const quiz = new Quiz({
-      title,
-      description: description || '',
-      quiz_type: finalQuizType,
-      questions: populatedQuestions,
-      is_adaptive: is_adaptive !== undefined ? is_adaptive : (finalQuizType === 'adaptive'),
-      is_active: is_active !== undefined ? is_active : true,
-      created_by: req.user._id
-    });
-
-    await quiz.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Quiz created successfully',
-      data: quiz
+    // Block manual quiz creation
+    return res.status(403).json({
+      success: false,
+      error: 'Manual quiz creation is disabled. Please use the quiz generation endpoint instead.',
+      hint: 'Use POST /api/p2ladmin/quizzes/generate to auto-generate quizzes'
     });
   } catch (error) {
     console.error('Create quiz error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create quiz' 
+    });
+  }
+});
+
+// Generate quiz automatically
+router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { quiz_level, student_id, trigger_reason } = req.body;
+    
+    // Validate quiz_level
+    if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid quiz_level. Must be between 1 and 10'
+      });
+    }
+    
+    // Check if generation is possible
+    const availability = await checkGenerationAvailability(quiz_level);
+    if (!availability.available) {
+      return res.status(400).json({
+        success: false,
+        error: availability.message,
+        data: availability
+      });
+    }
+    
+    // Generate the quiz
+    const quiz = await generateQuiz(
+      quiz_level,
+      student_id || null,
+      trigger_reason || 'manual'
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: `Quiz generated successfully for level ${quiz_level}`,
+      data: quiz
+    });
+  } catch (error) {
+    console.error('Quiz generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate quiz'
+    });
+  }
+});
+
+// Check quiz generation availability for a level
+router.get('/quizzes/check-availability/:level', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const level = parseInt(req.params.level);
+    
+    if (!level || level < 1 || level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid quiz level. Must be between 1 and 10'
+      });
+    }
+    
+    const availability = await checkGenerationAvailability(level);
+    
+    res.json({
+      success: true,
+      data: availability
+    });
+  } catch (error) {
+    console.error('Check availability error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check availability'
     });
   }
 });
@@ -1339,13 +1420,23 @@ router.put('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
 // Delete quiz
 router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const quiz = await Quiz.findByIdAndDelete(req.params.id);
+    const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz not found' 
       });
     }
+    
+    // Block deletion of auto-generated quizzes
+    if (quiz.is_auto_generated) {
+      return res.status(403).json({
+        success: false,
+        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
+      });
+    }
+    
+    await Quiz.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,
@@ -1648,6 +1739,83 @@ router.delete('/landing', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete landing page' 
+    });
+  }
+});
+
+// ==================== Landing Page Statistics ====================
+// In-memory cache for statistics (1-hour duration)
+// This also serves as a rate-limiting mechanism to prevent database overload
+let statisticsCache = {
+  data: null,
+  timestamp: null,
+  CACHE_DURATION: 3600000, // 1 hour in milliseconds
+  requestCount: 0,
+  lastReset: Date.now()
+};
+
+// Get landing page statistics (schools, students, teachers)
+// NOTE: This endpoint is intentionally public (no auth required) because
+// statistics are displayed on the public landing page About section
+// Rate limiting: Cache serves dual purpose of performance optimization and rate limiting
+router.get('/landing/statistics', async (req, res) => {
+  try {
+    // Track request count for monitoring
+    statisticsCache.requestCount++;
+    
+    // Check if cache is valid
+    const now = Date.now();
+    if (statisticsCache.data && statisticsCache.timestamp && 
+        (now - statisticsCache.timestamp) < statisticsCache.CACHE_DURATION) {
+      return res.json({
+        success: true,
+        ...statisticsCache.data,
+        fromCache: true
+      });
+    }
+
+    // Fetch fresh data only if cache expired
+    // Get active schools
+    const activeSchools = await School.find({ is_active: true });
+    const activeSchoolIds = activeSchools.map(school => school._id.toString());
+    
+    // Count statistics
+    const schoolCount = activeSchools.length;
+    
+    // Count students from active schools
+    const studentCount = await User.countDocuments({
+      role: 'Student',
+      schoolId: { $in: activeSchoolIds }
+    });
+    
+    // Count teachers from active schools
+    const teacherCount = await User.countDocuments({
+      role: 'Teacher',
+      schoolId: { $in: activeSchoolIds }
+    });
+    
+    // Prepare response
+    const stats = {
+      schools: schoolCount,
+      students: studentCount,
+      teachers: teacherCount,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Update cache
+    statisticsCache.data = stats;
+    statisticsCache.timestamp = now;
+    
+    res.json({
+      success: true,
+      ...stats,
+      fromCache: false
+    });
+  } catch (error) {
+    console.error('Get landing page statistics error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch statistics' 
     });
   }
 });
