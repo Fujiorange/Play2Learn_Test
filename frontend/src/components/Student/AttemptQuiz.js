@@ -16,6 +16,13 @@ export default function AttemptQuiz() {
   const [studentData, setStudentData] = useState(null);
   const [error, setError] = useState("");
 
+  // Helper function to get color based on P-score
+  const getPScoreColor = (score) => {
+    if (score > 2.4) return "#10b981"; // Green for excellent
+    if (score > 1.7) return "#3b82f6"; // Blue for very good
+    return "#ef4444"; // Red for needs improvement
+  };
+
   useEffect(() => {
     const loadStudentData = async () => {
       if (!authService.isAuthenticated()) {
@@ -275,7 +282,7 @@ export default function AttemptQuiz() {
                       {studentData.quiz_history.slice(-5).reverse().map((quiz, index) => (
                         <tr key={index} style={{ borderBottom: "1px solid #e5e7eb" }}>
                           <td style={{ padding: "12px", fontSize: "14px" }}>Level {quiz.level_attempted}</td>
-                          <td style={{ padding: "12px", fontSize: "14px", fontWeight: "600", color: quiz.P_score > 2.4 ? "#10b981" : quiz.P_score > 1.7 ? "#3b82f6" : "#ef4444" }}>
+                          <td style={{ padding: "12px", fontSize: "14px", fontWeight: "600", color: getPScoreColor(quiz.P_score) }}>
                             {quiz.P_score.toFixed(2)}
                           </td>
                           <td style={{ padding: "12px", fontSize: "14px" }}>

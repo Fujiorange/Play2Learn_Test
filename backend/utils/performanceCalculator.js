@@ -107,8 +107,11 @@ function determineNextLevel(performanceScore, currentLevel) {
     nextLevel = Math.min(MAX_QUIZ_LEVEL, currentLevel + 1);
   } else {
     // Skip levels with MAX 2-level skip cap
+    // P = 2.5: extra = 0, skip = 1 level up
+    // P = 2.7: extra = 1, skip = 2 levels up
+    // P >= 2.8: extra >= 2, skip = 2 levels up (capped)
     const extra_levels = Math.floor((performanceScore - 2.4) / 0.2);
-    const skip_amount = Math.min(2, extra_levels + 1); // Cap at 2 levels maximum
+    const skip_amount = Math.min(2, extra_levels + 1); // Start at +1, cap at +2
     nextLevel = Math.min(MAX_QUIZ_LEVEL, currentLevel + skip_amount);
   }
 
