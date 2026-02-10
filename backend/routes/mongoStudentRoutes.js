@@ -714,6 +714,7 @@ router.get("/math-skills", async (req, res) => {
 router.post("/placement-quiz/generate", async (req, res) => {
   try {
     const studentId = req.user.userId;
+    const Question = require('../models/Question');
 
     let mathProfile = await MathProfile.findOne({ student_id: studentId });
 
@@ -733,45 +734,44 @@ router.post("/placement-quiz/generate", async (req, res) => {
       });
     }
 
-    // Get an active placement quiz from P2L Admin created quizzes
-    const placementQuiz = await Quiz.findOne({
-      quiz_type: 'placement',
-      is_active: true
-    }).sort({ createdAt: -1 }); // Get most recent placement quiz
+    // Pull 20 random questions from the shared question bank
+    const questions = await Question.aggregate([
+      { $match: { is_active: true } },
+      { $sample: { size: 20 } }
+    ]);
 
-    if (!placementQuiz || !placementQuiz.questions || placementQuiz.questions.length === 0) {
+    if (!questions || questions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "No active placement quiz found. Please contact your administrator.",
+        error: "No questions available in the question bank. Please contact your administrator.",
       });
     }
 
-    // Create a student quiz attempt record using the P2L Admin quiz
+    // Create a student quiz attempt record with dynamically selected questions
     const quiz = await StudentQuiz.create({
       student_id: studentId,
       quiz_type: "placement",
-      quiz_id: placementQuiz._id,
       profile_level: 5,
-      questions: placementQuiz.questions.map(q => ({
+      questions: questions.map(q => ({
         question_text: q.text,
-        operation: 'general',
+        operation: q.topic || 'general',
         correct_answer: q.answer,
         student_answer: null,
         is_correct: false,
       })),
       score: 0,
-      total_questions: placementQuiz.questions.length,
+      total_questions: questions.length,
     });
 
     res.json({
       success: true,
       quiz_id: quiz._id,
-      questions: placementQuiz.questions.map((q) => ({ 
+      questions: questions.map((q) => ({ 
         question_text: q.text, 
         choices: q.choices,
-        operation: 'general' 
+        operation: q.topic || 'general' 
       })),
-      total_questions: placementQuiz.questions.length,
+      total_questions: questions.length,
     });
   } catch (error) {
     console.error("❌ Generate placement quiz error:", error);
