@@ -210,6 +210,65 @@ async function updateSkillsFromAdaptiveQuiz(userId, answers) {
   }
 }
 
+// Helper function to determine level action based on performance score
+function determineLevelAction(score) {
+  if (score < 8) {
+    return { action: 'decrease', levels: 1 };
+  } else if (score >= 8 && score < 12) {
+    return { action: 'stay', levels: 0 };
+  } else if (score >= 12 && score < 18) {
+    return { action: 'increase', levels: 1 };
+  } else {
+    return { action: 'increase', levels: 2 };
+  }
+}
+
+// Helper function to calculate performance score
+async function calculatePerformanceScore(attempt) {
+  // 1. Correct Answers
+  const correctAnswers = attempt.correct_count;
+  
+  // 2. Calculate Average Time Per Question
+  const answersWithTime = attempt.answers.filter(a => a.timeSpent !== null && a.timeSpent !== undefined);
+  const totalTime = answersWithTime.reduce((sum, a) => sum + a.timeSpent, 0);
+  const avgTime = answersWithTime.length > 0 ? totalTime / answersWithTime.length : 20;
+  
+  // 3. Speed Bonus
+  let speedBonus;
+  if (avgTime < 5) {
+    speedBonus = 1.5;
+  } else if (avgTime < 10) {
+    speedBonus = 1.2;
+  } else if (avgTime < 20) {
+    speedBonus = 1.0;
+  } else {
+    speedBonus = 0.8;
+  }
+  
+  // 4. Calculate Average Difficulty
+  const totalDifficulty = attempt.answers.reduce((sum, a) => sum + (a.difficulty || 1), 0);
+  const avgDifficulty = attempt.answers.length > 0 ? totalDifficulty / attempt.answers.length : 1;
+  
+  // 5. Difficulty Bonus (interpolated)
+  const difficultyBonus = 1.0 + ((avgDifficulty - 1) * 0.25);
+  
+  // 6. Calculate Final Score
+  const performanceScore = correctAnswers * speedBonus * difficultyBonus;
+  
+  // 7. Update attempt with metrics
+  attempt.performance_score = Math.round(performanceScore * 100) / 100;
+  attempt.speed_bonus = Math.round(speedBonus * 100) / 100;
+  attempt.difficulty_bonus = Math.round(difficultyBonus * 100) / 100;
+  attempt.average_time_per_question = Math.round(avgTime * 100) / 100;
+  attempt.average_difficulty = Math.round(avgDifficulty * 100) / 100;
+  
+  // 8. Determine Level Change
+  const levelAction = determineLevelAction(performanceScore);
+  attempt.recommended_level_action = levelAction;
+  
+  return attempt;
+}
+
 // Helper function to update streak and points when adaptive quiz is completed
 async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, totalAnswered) {
   try {
@@ -501,6 +560,9 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
+      
+      // Calculate performance score
+      await calculatePerformanceScore(attempt);
       await attempt.save();
       
       // Update skill matrix based on answers
@@ -559,6 +621,9 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
+      
+      // Calculate performance score
+      await calculatePerformanceScore(attempt);
       await attempt.save();
       
       // Update skill matrix based on answers
@@ -594,7 +659,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
           total_answered: attempt.total_answered,
           target_correct_answers: targetCorrect,
           current_difficulty: attempt.current_difficulty
-        }
+        },
+        presentedAt: new Date().toISOString()
       }
     });
   } catch (error) {
@@ -610,7 +676,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
 router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const { questionId, answer } = req.body;
+    const { questionId, answer, presentedAt } = req.body;
     const userId = req.user.userId;
 
     if (!questionId || answer === undefined || answer === null) {
@@ -674,6 +740,12 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
     // Check answer
     const isCorrect = answer.toString().trim().toLowerCase() === question.answer.toString().trim().toLowerCase();
 
+    // Calculate time spent
+    const answeredAt = new Date();
+    const timeSpent = presentedAt 
+      ? (answeredAt - new Date(presentedAt)) / 1000  // Convert to seconds
+      : null;
+
     // Add answer to attempt
     attempt.answers.push({
       questionId: question.question_id || question._id,
@@ -681,7 +753,10 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       difficulty: question.difficulty,
       answer: answer,
       correct_answer: question.answer,
-      isCorrect: isCorrect
+      isCorrect: isCorrect,
+      answeredAt: answeredAt,
+      presentedAt: presentedAt ? new Date(presentedAt) : null,
+      timeSpent: timeSpent
     });
 
     attempt.total_answered += 1;
@@ -731,7 +806,8 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
         correct_answer: question.answer,
         new_difficulty: attempt.current_difficulty,
         correct_count: attempt.correct_count,
-        total_answered: attempt.total_answered
+        total_answered: attempt.total_answered,
+        timeSpent: timeSpent
       }
     });
   } catch (error) {
@@ -770,7 +846,8 @@ router.get('/attempts/:attemptId/results', authenticateToken, async (req, res) =
     const difficultyProgression = attempt.answers.map((a, index) => ({
       questionNumber: index + 1,
       difficulty: a.difficulty,
-      isCorrect: a.isCorrect
+      isCorrect: a.isCorrect,
+      timeSpent: a.timeSpent
     }));
 
     res.json({
@@ -781,6 +858,12 @@ router.get('/attempts/:attemptId/results', authenticateToken, async (req, res) =
         total_answered: attempt.total_answered,
         target_correct_answers: targetCorrect,
         accuracy: accuracy,
+        performance_score: attempt.performance_score,
+        speed_bonus: attempt.speed_bonus,
+        difficulty_bonus: attempt.difficulty_bonus,
+        average_time_per_question: attempt.average_time_per_question,
+        average_difficulty: attempt.average_difficulty,
+        recommended_level_action: attempt.recommended_level_action,
         is_completed: attempt.is_completed,
         difficulty_progression: difficultyProgression,
         answers: attempt.answers,

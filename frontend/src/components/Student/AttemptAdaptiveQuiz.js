@@ -22,6 +22,7 @@ function AttemptAdaptiveQuiz() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
   const [placementVerified, setPlacementVerified] = useState(false);
+  const [presentedAt, setPresentedAt] = useState(null);
 
   useEffect(() => {
     if (quizId) {
@@ -148,6 +149,7 @@ function AttemptAdaptiveQuiz() {
         } else {
           setCurrentQuestion(data.data.question);
           setProgress(data.data.progress);
+          setPresentedAt(data.data.presentedAt);
           setAnswer('');
           setShowFeedback(false);
         }
@@ -181,7 +183,8 @@ function AttemptAdaptiveQuiz() {
           },
           body: JSON.stringify({
             questionId: currentQuestion.id,
-            answer: answer.trim()
+            answer: answer.trim(),
+            presentedAt: presentedAt
           })
         }
       );
@@ -264,14 +267,58 @@ function AttemptAdaptiveQuiz() {
               <div className="stat-label">Correct Answers</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value">{results.total_answered}</div>
-              <div className="stat-label">Total Questions</div>
-            </div>
-            <div className="stat-card">
               <div className="stat-value">{results.accuracy}%</div>
               <div className="stat-label">Accuracy</div>
             </div>
+            {results.performance_score !== undefined && results.performance_score !== null && (
+              <div className="stat-card highlight">
+                <div className="stat-value">{results.performance_score}</div>
+                <div className="stat-label">Performance Score</div>
+              </div>
+            )}
           </div>
+
+          {results.performance_score !== undefined && results.performance_score !== null && (
+            <>
+              <div className="bonus-breakdown">
+                <h3>Score Breakdown</h3>
+                <div className="breakdown-grid">
+                  <div className="breakdown-item">
+                    <span className="breakdown-label">Speed Bonus:</span>
+                    <span className="breakdown-value">{results.speed_bonus}x</span>
+                    <span className="breakdown-detail">
+                      (Avg: {results.average_time_per_question?.toFixed(1)}s per question)
+                    </span>
+                  </div>
+                  <div className="breakdown-item">
+                    <span className="breakdown-label">Difficulty Bonus:</span>
+                    <span className="breakdown-value">{results.difficulty_bonus}x</span>
+                    <span className="breakdown-detail">
+                      (Avg difficulty: {results.average_difficulty?.toFixed(1)})
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {results.recommended_level_action && (
+                <div className={`level-recommendation ${results.recommended_level_action.action}`}>
+                  <h3>📊 Level Recommendation</h3>
+                  <p>
+                    {results.recommended_level_action.action === 'decrease' && 
+                      '⬇️ Consider practicing at a lower difficulty level'}
+                    {results.recommended_level_action.action === 'stay' && 
+                      '➡️ Continue at your current level'}
+                    {results.recommended_level_action.action === 'increase' && 
+                      results.recommended_level_action.levels === 1 &&
+                      '⬆️ Great! Move up to the next level'}
+                    {results.recommended_level_action.action === 'increase' && 
+                      results.recommended_level_action.levels === 2 &&
+                      '🚀 Excellent! Skip ahead 2 levels!'}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
 
           <div className="difficulty-progression">
             <h3>Difficulty Progression</h3>
@@ -288,6 +335,9 @@ function AttemptAdaptiveQuiz() {
                   <span className="result-icon">
                     {item.isCorrect ? '✓' : '✗'}
                   </span>
+                  {item.timeSpent && (
+                    <span className="time-spent">{item.timeSpent.toFixed(1)}s</span>
+                  )}
                 </div>
               ))}
             </div>

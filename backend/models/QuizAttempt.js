@@ -11,7 +11,9 @@ const quizAttemptSchema = new mongoose.Schema({
     answer: { type: String },
     correct_answer: { type: String },
     isCorrect: { type: Boolean },
-    answeredAt: { type: Date, default: Date.now }
+    answeredAt: { type: Date, default: Date.now },
+    presentedAt: { type: Date },
+    timeSpent: { type: Number }
   }],
   current_difficulty: { type: Number, default: 1 },
   correct_count: { type: Number, default: 0 },
@@ -19,7 +21,13 @@ const quizAttemptSchema = new mongoose.Schema({
   is_completed: { type: Boolean, default: false },
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date },
-  timeSpent: { type: Number } // in seconds
+  timeSpent: { type: Number }, // in seconds
+  performance_score: { type: Number, default: 0 },
+  speed_bonus: { type: Number, default: 1.0 },
+  difficulty_bonus: { type: Number, default: 1.0 },
+  average_time_per_question: { type: Number },
+  average_difficulty: { type: Number },
+  recommended_level_action: { type: mongoose.Schema.Types.Mixed }
 });
 
 // Add compound index for efficient querying of user's attempts
