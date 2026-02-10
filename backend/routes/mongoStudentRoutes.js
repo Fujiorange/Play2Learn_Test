@@ -1191,7 +1191,10 @@ router.get("/leaderboard", async (req, res) => {
 
     // Use provided parameters or fall back to current user's school/class
     const filterSchoolId = schoolId || currentUser.schoolId;
-    const filterClass = classId !== undefined && classId !== 'null' ? classId : currentUser.class;
+    // Handle class parameter - convert string 'null' to actual null
+    const filterClass = (classId === undefined || classId === null || classId === 'null') 
+      ? null 
+      : classId;
 
     // Build filter query
     const filterQuery = {
@@ -1204,7 +1207,7 @@ router.get("/leaderboard", async (req, res) => {
     }
     
     // Only add class filter if classId is provided and not null
-    if (filterClass !== null && filterClass !== undefined && filterClass !== 'null') {
+    if (filterClass) {
       filterQuery.class = filterClass;
     }
 

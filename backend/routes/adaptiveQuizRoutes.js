@@ -22,6 +22,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-producti
 
 // Constants
 const MAX_PERFORMANCE_HISTORY_LENGTH = 20;
+const DEFAULT_QUESTION_DIFFICULTY = 3;
+
+// Helper function to get quiz level from attempt or quiz
+function getQuizLevel(attempt, quiz) {
+  return attempt?.quizLevel || quiz?.quiz_level || 1;
+}
 
 // Middleware to authenticate users
 const authenticateToken = async (req, res, next) => {
@@ -121,7 +127,7 @@ async function updateSkillsFromAdaptiveQuiz(userId, answers) {
       topic = topic.charAt(0).toUpperCase() + topic.slice(1);
       
       // Get difficulty level (default to 3 if not specified)
-      const difficulty = answer.difficulty || 3;
+      const difficulty = answer.difficulty || DEFAULT_QUESTION_DIFFICULTY;
       const difficultyStr = String(difficulty);
       
       // Get points for this difficulty level
@@ -254,7 +260,7 @@ async function updateStreakAndPointsOnQuizCompletion(userId, answers, quizLevel)
     // Calculate points based on quiz level and difficulty
     let pointsEarned = 0;
     answers.forEach(answer => {
-      const difficulty = answer.difficulty || 3; // Default to medium difficulty
+      const difficulty = answer.difficulty || DEFAULT_QUESTION_DIFFICULTY; // Default to medium difficulty
       const isCorrect = answer.isCorrect || false;
       pointsEarned += calculateQuestionPoints(quizLevel, difficulty, isCorrect);
     });
@@ -559,7 +565,7 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
     const quizzesWithStats = quizzes.map(quiz => {
       const difficultyCount = {};
       quiz.questions.forEach(q => {
-        const diff = q.difficulty || 3;
+        const diff = q.difficulty || DEFAULT_QUESTION_DIFFICULTY;
         difficultyCount[diff] = (difficultyCount[diff] || 0) + 1;
       });
 
@@ -725,14 +731,14 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.score = attempt.correct_count;
       
       // Calculate performance metrics and update student progress
-      const performanceMetrics = await finalizeQuizCompletion(userId, attempt, attempt.quizLevel || quiz.quiz_level || 1);
+      const performanceMetrics = await finalizeQuizCompletion(userId, attempt, getQuizLevel(attempt, quiz));
       await attempt.save();
       
       // Update skill matrix based on answers
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       
       // Update streak and award points when quiz is completed
-      await updateStreakAndPointsOnQuizCompletion(userId, attempt.answers, attempt.quizLevel || quiz.quiz_level || 1);
+      await updateStreakAndPointsOnQuizCompletion(userId, attempt.answers, getQuizLevel(attempt, quiz));
 
       return res.json({
         success: true,
@@ -744,7 +750,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
           target_correct_answers: targetCorrect,
           performanceScore: performanceMetrics.performanceScore,
           nextLevel: performanceMetrics.nextLevel,
-          currentLevel: attempt.quizLevel || quiz.quiz_level || 1,
+          currentLevel: getQuizLevel(attempt, quiz),
           averageTime: performanceMetrics.avgTime,
           totalTime: performanceMetrics.totalTime,
           rating: performanceMetrics.rating
@@ -792,14 +798,14 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.score = attempt.correct_count;
       
       // Calculate performance metrics and update student progress
-      const performanceMetrics = await finalizeQuizCompletion(userId, attempt, attempt.quizLevel || quiz.quiz_level || 1);
+      const performanceMetrics = await finalizeQuizCompletion(userId, attempt, getQuizLevel(attempt, quiz));
       await attempt.save();
       
       // Update skill matrix based on answers
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       
       // Update streak and award points when quiz is completed
-      await updateStreakAndPointsOnQuizCompletion(userId, attempt.answers, attempt.quizLevel || quiz.quiz_level || 1);
+      await updateStreakAndPointsOnQuizCompletion(userId, attempt.answers, getQuizLevel(attempt, quiz));
 
       return res.json({
         success: true,
@@ -811,7 +817,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
           target_correct_answers: targetCorrect,
           performanceScore: performanceMetrics.performanceScore,
           nextLevel: performanceMetrics.nextLevel,
-          currentLevel: attempt.quizLevel || quiz.quiz_level || 1,
+          currentLevel: getQuizLevel(attempt, quiz),
           averageTime: performanceMetrics.avgTime,
           totalTime: performanceMetrics.totalTime,
           rating: performanceMetrics.rating
