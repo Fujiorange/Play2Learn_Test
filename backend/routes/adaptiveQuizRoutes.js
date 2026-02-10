@@ -7,6 +7,15 @@ const User = require('../models/User');
 const MathSkill = require('../models/MathSkill');
 const MathProfile = require('../models/MathProfile');
 const SkillPointsConfig = require('../models/SkillPointsConfig');
+const StudentProfile = require('../models/StudentProfile');
+const quizGenerationService = require('../services/quizGenerationService');
+const {
+  calculatePerformanceScore,
+  determineNextLevel,
+  calculateAverageTime,
+  calculateTotalTime,
+  getPerformanceRating
+} = require('../utils/performanceCalculator');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -261,6 +270,109 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
   }
 }
 
+// Helper function to calculate performance and update student progress
+async function finalizeQuizCompletion(userId, attempt, quizLevel) {
+  try {
+    // Calculate performance score
+    const performanceScore = calculatePerformanceScore(attempt.answers, quizLevel);
+    
+    // Determine next level
+    const nextLevel = determineNextLevel(performanceScore, quizLevel);
+    
+    // Calculate time metrics
+    const totalTime = calculateTotalTime(attempt.answers);
+    const avgTime = calculateAverageTime(attempt.answers);
+    
+    // Update attempt with performance metrics
+    attempt.performanceScore = performanceScore;
+    attempt.nextLevel = nextLevel;
+    attempt.timeSpent = totalTime;
+    
+    // Update or create student profile with new level
+    let studentProfile = await StudentProfile.findOne({ userId });
+    
+    if (!studentProfile) {
+      studentProfile = new StudentProfile({
+        userId,
+        currentLevel: nextLevel,
+        lastQuizTaken: new Date(),
+        performanceHistory: [{
+          quizLevel,
+          performanceScore,
+          completedAt: new Date()
+        }]
+      });
+    } else {
+      studentProfile.currentLevel = nextLevel;
+      studentProfile.lastQuizTaken = new Date();
+      studentProfile.performanceHistory.push({
+        quizLevel,
+        performanceScore,
+        completedAt: new Date()
+      });
+      // Keep only last 20 performance records
+      if (studentProfile.performanceHistory.length > 20) {
+        studentProfile.performanceHistory = studentProfile.performanceHistory.slice(-20);
+      }
+    }
+    
+    await studentProfile.save();
+    
+    // Automatically generate/ensure quiz for next level if it doesn't exist
+    if (nextLevel !== quizLevel) {
+      try {
+        // Check if quiz exists for next level
+        const existingNextQuiz = await Quiz.findOne({
+          quiz_level: nextLevel,
+          quiz_type: 'adaptive',
+          is_active: true
+        });
+        
+        if (!existingNextQuiz) {
+          // Auto-generate quiz for next level
+          console.log(`Auto-generating quiz for level ${nextLevel} for student ${userId}`);
+          const newQuiz = await quizGenerationService.generateQuiz(
+            nextLevel,
+            userId,
+            'auto_progression',
+            false
+          );
+          
+          // Auto-launch the quiz (make it available for the student)
+          newQuiz.is_launched = true;
+          newQuiz.launched_at = new Date();
+          newQuiz.launched_by = null; // System-launched
+          await newQuiz.save();
+          
+          console.log(`Quiz for level ${nextLevel} auto-generated and launched`);
+        } else if (!existingNextQuiz.is_launched) {
+          // If quiz exists but not launched, auto-launch it
+          existingNextQuiz.is_launched = true;
+          existingNextQuiz.launched_at = new Date();
+          existingNextQuiz.launched_by = null; // System-launched
+          await existingNextQuiz.save();
+          
+          console.log(`Quiz for level ${nextLevel} auto-launched`);
+        }
+      } catch (genError) {
+        console.error(`Error auto-generating/launching quiz for level ${nextLevel}:`, genError.message);
+        // Don't fail the completion if quiz generation fails
+      }
+    }
+    
+    return {
+      performanceScore,
+      nextLevel,
+      totalTime,
+      avgTime,
+      rating: getPerformanceRating(performanceScore)
+    };
+  } catch (error) {
+    console.error("Error finalizing quiz completion:", error);
+    throw error;
+  }
+}
+
 // Helper function to check if a quiz is available for a student
 const isQuizAvailableForStudent = async (quiz, userId) => {
   // If quiz is not launched, it's not available
@@ -430,10 +542,11 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
       }
     }
 
-    // Create new quiz attempt
+    // Create new quiz attempt with quiz level
     const attempt = new QuizAttempt({
       userId,
       quizId,
+      quizLevel: quiz.quiz_level || 1,
       current_difficulty: quiz.adaptive_config?.starting_difficulty || 1,
       correct_count: 0,
       total_answered: 0,
@@ -448,6 +561,7 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
       data: {
         attemptId: attempt._id,
         quizTitle: quiz.title,
+        quizLevel: quiz.quiz_level,
         target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
         current_difficulty: attempt.current_difficulty,
         correct_count: attempt.correct_count
@@ -501,6 +615,9 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
+      
+      // Calculate performance metrics and update student progress
+      const performanceMetrics = await finalizeQuizCompletion(userId, attempt, attempt.quizLevel || quiz.quiz_level || 1);
       await attempt.save();
       
       // Update skill matrix based on answers
@@ -516,7 +633,13 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         data: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect
+          target_correct_answers: targetCorrect,
+          performanceScore: performanceMetrics.performanceScore,
+          nextLevel: performanceMetrics.nextLevel,
+          currentLevel: attempt.quizLevel || quiz.quiz_level || 1,
+          averageTime: performanceMetrics.avgTime,
+          totalTime: performanceMetrics.totalTime,
+          rating: performanceMetrics.rating
         }
       });
     }
@@ -559,6 +682,9 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       attempt.is_completed = true;
       attempt.completedAt = new Date();
       attempt.score = attempt.correct_count;
+      
+      // Calculate performance metrics and update student progress
+      const performanceMetrics = await finalizeQuizCompletion(userId, attempt, attempt.quizLevel || quiz.quiz_level || 1);
       await attempt.save();
       
       // Update skill matrix based on answers
@@ -574,7 +700,13 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         data: {
           correct_count: attempt.correct_count,
           total_answered: attempt.total_answered,
-          target_correct_answers: targetCorrect
+          target_correct_answers: targetCorrect,
+          performanceScore: performanceMetrics.performanceScore,
+          nextLevel: performanceMetrics.nextLevel,
+          currentLevel: attempt.quizLevel || quiz.quiz_level || 1,
+          averageTime: performanceMetrics.avgTime,
+          totalTime: performanceMetrics.totalTime,
+          rating: performanceMetrics.rating
         }
       });
     }
@@ -610,7 +742,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
 router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const { questionId, answer } = req.body;
+    const { questionId, answer, timeSpent } = req.body;
     const userId = req.user.userId;
 
     if (!questionId || answer === undefined || answer === null) {
@@ -674,14 +806,15 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
     // Check answer
     const isCorrect = answer.toString().trim().toLowerCase() === question.answer.toString().trim().toLowerCase();
 
-    // Add answer to attempt
+    // Add answer to attempt with time tracking
     attempt.answers.push({
       questionId: question.question_id || question._id,
       question_text: question.text,
       difficulty: question.difficulty,
       answer: answer,
       correct_answer: question.answer,
-      isCorrect: isCorrect
+      isCorrect: isCorrect,
+      timeSpent: timeSpent || null
     });
 
     attempt.total_answered += 1;
@@ -770,18 +903,29 @@ router.get('/attempts/:attemptId/results', authenticateToken, async (req, res) =
     const difficultyProgression = attempt.answers.map((a, index) => ({
       questionNumber: index + 1,
       difficulty: a.difficulty,
-      isCorrect: a.isCorrect
+      isCorrect: a.isCorrect,
+      timeSpent: a.timeSpent
     }));
+
+    // Calculate time metrics
+    const totalTime = calculateTotalTime(attempt.answers);
+    const avgTime = calculateAverageTime(attempt.answers);
 
     res.json({
       success: true,
       data: {
         quizTitle: attempt.quizId.title,
+        quizLevel: attempt.quizLevel,
         correct_count: attempt.correct_count,
         total_answered: attempt.total_answered,
         target_correct_answers: targetCorrect,
         accuracy: accuracy,
         is_completed: attempt.is_completed,
+        performanceScore: attempt.performanceScore || 0,
+        nextLevel: attempt.nextLevel,
+        averageTime: avgTime,
+        totalTime: totalTime,
+        rating: attempt.performanceScore ? getPerformanceRating(attempt.performanceScore) : 'N/A',
         difficulty_progression: difficultyProgression,
         answers: attempt.answers,
         startedAt: attempt.startedAt,
@@ -882,6 +1026,108 @@ router.post('/attempts/:attemptId/cancel', authenticateToken, async (req, res) =
     res.status(500).json({
       success: false,
       error: 'Failed to cancel quiz attempt'
+    });
+  }
+});
+
+// Get student's current level and performance history
+router.get('/student/level', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    let studentProfile = await StudentProfile.findOne({ userId });
+    
+    if (!studentProfile) {
+      // Create default profile if it doesn't exist
+      studentProfile = new StudentProfile({
+        userId,
+        currentLevel: 1
+      });
+      await studentProfile.save();
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        currentLevel: studentProfile.currentLevel,
+        totalPoints: studentProfile.totalPoints,
+        lastQuizTaken: studentProfile.lastQuizTaken,
+        performanceHistory: studentProfile.performanceHistory || []
+      }
+    });
+  } catch (error) {
+    console.error('Get student level error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get student level'
+    });
+  }
+});
+
+// Get quiz for a specific level (auto-generates if needed)
+router.get('/quizzes/level/:level', authenticateToken, async (req, res) => {
+  try {
+    const level = parseInt(req.params.level);
+    const userId = req.user.userId;
+    
+    if (isNaN(level) || level < 1 || level > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid level. Must be between 1 and 10'
+      });
+    }
+    
+    // Try to find existing quiz for this level
+    let quiz = await Quiz.findOne({
+      quiz_level: level,
+      quiz_type: 'adaptive',
+      is_active: true,
+      is_launched: true
+    });
+    
+    // If no quiz exists, try to generate one
+    if (!quiz) {
+      try {
+        console.log(`No quiz found for level ${level}, attempting to generate...`);
+        quiz = await quizGenerationService.generateQuiz(
+          level,
+          userId,
+          'on_demand',
+          false
+        );
+        
+        // Auto-launch the generated quiz
+        quiz.is_launched = true;
+        quiz.launched_at = new Date();
+        quiz.launched_by = null;
+        await quiz.save();
+        
+        console.log(`Quiz for level ${level} generated and auto-launched`);
+      } catch (genError) {
+        return res.status(500).json({
+          success: false,
+          error: `Failed to generate quiz for level ${level}: ${genError.message}`
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        _id: quiz._id,
+        title: quiz.title,
+        description: quiz.description,
+        quiz_level: quiz.quiz_level,
+        total_questions: quiz.questions.length,
+        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
+        difficulty_progression: quiz.adaptive_config?.difficulty_progression || 'gradual'
+      }
+    });
+  } catch (error) {
+    console.error('Get quiz by level error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get quiz for level'
     });
   }
 });

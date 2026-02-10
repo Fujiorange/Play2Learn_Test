@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const quizAttemptSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
+  quizLevel: { type: Number, min: 1, max: 10, default: 1 }, // Quiz level for this attempt
   score: { type: Number, default: 0 },
   answers: [{
     questionId: { type: mongoose.Schema.Types.ObjectId },
@@ -11,15 +12,18 @@ const quizAttemptSchema = new mongoose.Schema({
     answer: { type: String },
     correct_answer: { type: String },
     isCorrect: { type: Boolean },
+    timeSpent: { type: Number }, // Time spent on this question in seconds
     answeredAt: { type: Date, default: Date.now }
   }],
   current_difficulty: { type: Number, default: 1 },
   correct_count: { type: Number, default: 0 },
   total_answered: { type: Number, default: 0 },
   is_completed: { type: Boolean, default: false },
+  performanceScore: { type: Number, default: 0 }, // Calculated performance score (P)
+  nextLevel: { type: Number, min: 1, max: 10, default: null }, // Recommended next quiz level
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date },
-  timeSpent: { type: Number } // in seconds
+  timeSpent: { type: Number } // Total time spent in seconds
 });
 
 // Add compound index for efficient querying of user's attempts
