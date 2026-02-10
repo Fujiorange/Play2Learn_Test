@@ -41,12 +41,19 @@ export default function TeacherDashboard() {
     console.log('📊 Dashboard API Response:', data); // For debugging
     
     if (data.success) {
-      setDashboardData(data.data); // Note: data.data because service returns {success, data: {...}}
+      console.log('🔍 Dashboard data details:');
+      console.log('- Total students:', data.data?.total_students);
+      console.log('- Assigned classes:', data.data?.assigned_classes);
+      console.log('- Active quizzes:', data.data?.active_quizzes, '(type:', typeof data.data?.active_quizzes, ')');
+      console.log('- Average score:', data.data?.average_score, '(type:', typeof data.data?.average_score, ')');
+      console.log('- Raw data:', data.data);
+      
+      setDashboardData(data.data);
     } else {
       console.error('Dashboard API failed:', data.error);
       
       // Auto-logout if token is invalid
-      if (data.error.includes('token') || data.error.includes('authenticated')) {
+      if (data.error?.includes('token') || data.error?.includes('authenticated')) {
         authService.logout();
         navigate('/login');
       }
@@ -223,29 +230,42 @@ export default function TeacherDashboard() {
           <p style={styles.welcomeSubtitle}>Primary 1 Mathematics - Manage your classes and students</p>
         </div>
 
-        {/* Stats Cards */}
-        <div style={styles.statsGrid}>
-          <div style={styles.statCard}>
-            <div style={styles.statIcon}>👥</div>
-            <p style={styles.statValue}>{dashboardData?.total_students || 0}</p>
-            <p style={styles.statLabel}>Total Students</p>
-          </div>
-          <div style={styles.statCard}>
-            <div style={styles.statIcon}>📚</div>
-            <p style={styles.statValue}>{dashboardData?.assigned_classes?.length || 0}</p>
-            <p style={styles.statLabel}>My Classes</p>
-          </div>
-          <div style={styles.statCard}>
-            <div style={styles.statIcon}>🎯</div>
-            <p style={styles.statValue}>{dashboardData?.active_quizzes || 0}</p>
-            <p style={styles.statLabel}>Active Quizzes</p>
-          </div>
-          <div style={styles.statCard}>
-            <div style={styles.statIcon}>📊</div>
-            <p style={styles.statValue}>{dashboardData?.average_score?.toFixed(0) || 0}%</p>
-            <p style={styles.statLabel}>Avg. Score</p>
-          </div>
+        {/* Stats Cards - UPDATED WITH CORRECT FIELD NAMES */}
+      <div style={styles.statsGrid}>
+        <div style={styles.statCard}>
+          <div style={styles.statIcon}>👥</div>
+          <p style={styles.statValue}>{dashboardData?.total_students || 0}</p>
+          <p style={styles.statLabel}>Total Students</p>
         </div>
+        <div style={styles.statCard}>
+          <div style={styles.statIcon}>📚</div>
+          <p style={styles.statValue}>{dashboardData?.assigned_classes?.length || 0}</p>
+          <p style={styles.statLabel}>My Classes</p>
+        </div>
+        <div style={styles.statCard}>
+          <div style={styles.statIcon}>🎯</div>
+          {/* FIX: Use active_assignments instead of active_quizzes */}
+          <p style={styles.statValue}>
+            {dashboardData?.active_assignments !== undefined && 
+            dashboardData?.active_assignments !== null 
+              ? dashboardData.active_assignments 
+              : 0}
+          </p>
+          <p style={styles.statLabel}>Active Quizzes</p>
+        </div>
+        <div style={styles.statCard}>
+          <div style={styles.statIcon}>📊</div>
+          {/* FIX: Use avg_performance instead of average_score */}
+          <p style={styles.statValue}>
+            {dashboardData?.avg_performance !== undefined && 
+            dashboardData?.avg_performance !== null && 
+            !isNaN(dashboardData.avg_performance)
+              ? Math.round(dashboardData.avg_performance) + '%'
+              : '0%'}
+          </p>
+          <p style={styles.statLabel}>Avg. Score</p>
+        </div>
+      </div>
 
         {/* Menu Sections */}
         <div style={styles.sectionsGrid}>
