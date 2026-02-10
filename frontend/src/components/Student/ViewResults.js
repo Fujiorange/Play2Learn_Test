@@ -156,10 +156,10 @@ export default function ViewResults() {
         ) : (
           <div style={styles.emptyState}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎲</div>
-            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No adaptive quiz results yet</p>
-            <p>Complete the placement quiz first, then start adaptive quizzes to see your results here!</p>
+            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No quiz results yet</p>
+            <p>Start your quiz journey to see your results here!</p>
             <button
-              onClick={() => navigate('/student/adaptive-quizzes')}
+              onClick={() => navigate('/student/quiz/attempt')}
               style={{
                 marginTop: '20px',
                 padding: '12px 24px',

@@ -244,11 +244,11 @@ export default function QuizResult() {
           {quizType === 'placement' && (
             <button
               style={{ ...styles.button, ...styles.primaryButton }}
-              onClick={() => navigate('/student/adaptive-quizzes')}
+              onClick={() => navigate('/student/quiz/attempt')}
               onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
               onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
             >
-              🎲 Start Adaptive Quizzes
+              🎲 Start Quizzes
             </button>
           )}
 

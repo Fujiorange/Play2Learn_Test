@@ -157,10 +157,10 @@ export default function StudentDashboard() {
     // 2️⃣ Adaptive Quizzes
     {
       id: 'adaptive-quiz',
-      title: 'Adaptive Quizzes',
-      description: 'Try quizzes that adapt to your skill level',
+      title: 'Quiz',
+      description: 'Play adaptive quizzes and level up',
       icon: '🎲',
-      action: () => navigate('/student/adaptive-quizzes'),
+      action: () => navigate('/student/quiz/attempt'),
     },
     // 3️⃣ Skill Matrix (KEPT THIS ONE)
     {
