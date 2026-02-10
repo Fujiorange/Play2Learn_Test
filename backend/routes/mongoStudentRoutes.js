@@ -228,37 +228,17 @@ if (!mongoose.models.Testimonial) {
   mongoose.model("Testimonial", testimonialSchema);
 }
 
-function shuffleInPlace(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function buildOperationSequence(profile) {
-  if (profile <= 5) {
-    const addCount = Math.random() < 0.5 ? 7 : 8;
-    const subCount = 15 - addCount;
-    const ops = [
-      ...Array(addCount).fill("addition"),
-      ...Array(subCount).fill("subtraction"),
-    ];
-    return shuffleInPlace(ops);
-  }
-
-  const ops = ["addition", "subtraction", "multiplication", "division"];
-  const counts = { addition: 3, subtraction: 3, multiplication: 3, division: 3 };
-  const pick = shuffleInPlace([...ops]).slice(0, 3);
-  pick.forEach((k) => (counts[k] += 1));
-
-  const seq = [];
-  ops.forEach((k) => {
-    for (let i = 0; i < counts[k]; i++) seq.push(k);
-  });
-
-  return shuffleInPlace(seq);
-}
+// ==================== OLD QUIZ HELPER FUNCTIONS - REMOVED ====================
+// The following helper functions were only used by the old regular quiz system:
+// - buildOperationSequence(profile) - generated operation sequences
+// - generateQuestion(range, operation) - generated questions on the fly
+// - Second getProfileConfig(profile) instance (duplicate)
+// - shuffleInPlace(arr) - helper for randomization
+// - randInt(min, max) - random integer generator
+//
+// These have been removed as the new adaptive quiz system uses
+// P2L Admin created quizzes from the database instead.
+// ==============================================================================
 
 // ==================== SCHEMA COMPATIBILITY HELPER ====================
 /**
@@ -282,84 +262,8 @@ function isQuizCompleted(quiz) {
   return false;
 }
 
-// ==================== PROFILE CONFIG ====================
-function getProfileConfig(profile) {
-  const configs = {
-    1: { range: [1, 10] },
-    2: { range: [1, 20] },
-    3: { range: [1, 30] },
-    4: { range: [1, 40] },
-    5: { range: [1, 50] },
-    6: { range: [1, 60] },
-    7: { range: [1, 70] },
-    8: { range: [1, 80] },
-    9: { range: [1, 90] },
-    10: { range: [1, 100] },
-  };
-  return configs[profile] || configs[1];
-}
-
-function shuffleInPlace(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function randInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function generateQuestion(range, operation) {
-  const [min, max] = range;
-  let num1, num2, answer, questionText;
-
-  switch (operation) {
-    case "addition":
-      num1 = randInt(min, max);
-      num2 = randInt(min, max);
-      answer = num1 + num2;
-      questionText = `${num1} + ${num2} = ?`;
-      break;
-
-    case "subtraction":
-      num1 = randInt(min, max);
-      num2 = randInt(min, num1);
-      answer = num1 - num2;
-      questionText = `${num1} - ${num2} = ?`;
-      break;
-
-    case "multiplication":
-      num1 = randInt(1, 12);
-      num2 = randInt(1, 12);
-      answer = num1 * num2;
-      questionText = `${num1} × ${num2} = ?`;
-      break;
-
-    case "division":
-      num2 = randInt(1, 12);
-      const quotient = randInt(1, 12);
-      num1 = num2 * quotient;
-      answer = quotient;
-      questionText = `${num1} ÷ ${num2} = ?`;
-      break;
-
-    default:
-      num1 = randInt(min, max);
-      num2 = randInt(min, max);
-      answer = num1 + num2;
-      questionText = `${num1} + ${num2} = ?`;
-  }
-
-  return {
-    question_text: questionText,
-    operation,
-    correct_answer: answer,
-    student_answer: null,
-    is_correct: false,
-  };
-}
+// ==================== HELPER FUNCTIONS ====================
+// getProfileConfig is kept for placement quiz if needed
 
 // Helper function to get default difficulty points configuration
 function getDefaultDifficultyPoints() {
@@ -835,166 +739,22 @@ router.post("/placement-quiz/submit", async (req, res) => {
   }
 });
 
-// ==================== REGULAR QUIZ - GENERATE ====================
-router.post("/quiz/generate", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-
-    let mathProfile = await MathProfile.findOne({ student_id: studentId });
-
-    if (!mathProfile) {
-      mathProfile = await MathProfile.create({
-        student_id: studentId,
-        current_profile: 1,
-        placement_completed: false,
-        total_points: 0,
-      });
-    }
-
-    // REMOVED: Placement quiz completion check
-    // Level 1 quiz serves as the placement quiz, no separate completion required
-    // if (!mathProfile.placement_completed) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     error: "Please complete placement quiz first",
-    //     requiresPlacement: true,
-    //   });
-    // }
-
-    const now = getSingaporeTime();
-    const lastResetMid = getSgtMidnightTime(mathProfile.last_reset_date || now);
-    const todayMid = getSgtMidnightTime(now);
-
-    if (todayMid > lastResetMid) {
-      mathProfile.quizzes_today = 0;
-      mathProfile.last_reset_date = now;
-      await mathProfile.save();
-    }
-
-    const dailyLimit = 2; // Frontend expects 2 attempts per day
-    if (mathProfile.quizzes_today >= dailyLimit) {
-      return res.status(400).json({
-        success: false,
-        error: "Daily quiz limit reached. Come back tomorrow at 12:00 AM SGT!",
-      });
-    }
-
-    const profile = mathProfile.current_profile;
-    const cfg = getProfileConfig(profile);
-    const opSeq = buildOperationSequence(profile);
-    const questions = opSeq.map((op) => generateQuestion(cfg.range, op));
-
-    const quiz = await StudentQuiz.create({
-      student_id: studentId,
-      quiz_type: "regular",
-      profile_level: profile,
-      questions,
-      score: 0,
-      total_questions: 15,
-      percentage: 0,
-      points_earned: 0,
-    });
-
-    mathProfile.quizzes_today += 1;
-    await mathProfile.save();
-
-    res.json({
-      success: true,
-      quiz_id: quiz._id,
-      profile,
-      questions: questions.map((q) => ({ question_text: q.question_text, operation: q.operation })),
-      total_questions: 15,
-      attemptsToday: mathProfile.quizzes_today,
-    });
-  } catch (error) {
-    console.error("❌ Generate quiz error:", error);
-    res.status(500).json({ success: false, error: "Failed to generate quiz" });
-  }
-});
-
-// ==================== REGULAR QUIZ - SUBMIT ====================
-router.post("/quiz/submit", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-    const { quiz_id, answers } = req.body;
-
-    const quiz = await StudentQuiz.findById(quiz_id);
-    if (!quiz || quiz.quiz_type !== "regular") {
-      return res.status(404).json({ success: false, error: "Quiz not found" });
-    }
-
-    let score = 0;
-    quiz.questions.forEach((q, i) => {
-      const studentAnswer = answers[i];
-      q.student_answer = studentAnswer;
-      q.is_correct = studentAnswer === q.correct_answer;
-      if (q.is_correct) score++;
-    });
-
-    quiz.score = score;
-    quiz.percentage = Math.round((score / 15) * 100);
-    quiz.points_earned = score * 10;
-    quiz.completed_at = new Date();
-    await quiz.save();
-
-    const mathProfile = await MathProfile.findOne({ student_id: studentId });
-    const oldProfile = mathProfile.current_profile;
-
-    let newProfile = oldProfile;
-    let profileChanged = false;
-    let changeType = null;
-
-    if (quiz.percentage >= 70) {
-      mathProfile.consecutive_fails = 0;
-
-      if (mathProfile.current_profile < 10) {
-        newProfile = mathProfile.current_profile + 1;
-        mathProfile.current_profile = newProfile;
-        profileChanged = true;
-        changeType = "advance";
-      }
-    } else if (quiz.percentage < 50) {
-      mathProfile.consecutive_fails += 1;
-
-      if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile > 1) {
-        newProfile = mathProfile.current_profile - 1;
-        mathProfile.current_profile = newProfile;
-        mathProfile.consecutive_fails = 0;
-        profileChanged = true;
-        changeType = "demote";
-      } else if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile === 1) {
-        // At lowest profile, reset fail counter without demotion
-        mathProfile.consecutive_fails = 0;
-      }
-    } else {
-      mathProfile.consecutive_fails = 0;
-    }
-
-    mathProfile.total_points += quiz.points_earned;
-    updateStreakOnCompletion(mathProfile);
-    await mathProfile.save();
-
-    await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, mathProfile.current_profile);
-
-    res.json({
-      success: true,
-      result: {
-        score,
-        total: 15,
-        percentage: quiz.percentage,
-        points_earned: quiz.points_earned,
-        old_profile: oldProfile,
-        new_profile: newProfile,
-        profile_changed: profileChanged,
-        change_type: changeType,
-        consecutive_fails: mathProfile.consecutive_fails,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Submit quiz error:", error);
-    res.status(500).json({ success: false, error: "Failed to submit quiz" });
-  }
-});
+// ==================== OLD REGULAR QUIZ SYSTEM - REMOVED ====================
+// The old regular quiz system has been completely removed.
+// All quizzes now use the adaptive quiz system with P2L Admin created quizzes.
+// See ADAPTIVE_QUIZ_SYSTEM_LEVEL1_PLACEMENT.md for documentation.
+//
+// Removed endpoints:
+// - POST /quiz/generate (generated questions on the fly)
+// - POST /quiz/submit (submitted old regular quiz)
+//
+// Removed helper functions:
+// - buildOperationSequence() - only used by old system
+// - generateQuestion() - only used by old system  
+// - getProfileConfig() - duplicated, kept one instance for placement quiz if needed
+//
+// Migration: All students should now use /student/quiz/attempt → AttemptAdaptiveQuiz
+// ==============================================================================
 
 // ==================== QUIZ RESULTS / HISTORY ====================
 // ==================== MATH PROGRESS ====================

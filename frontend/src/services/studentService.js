@@ -135,59 +135,11 @@ const studentService = {
     }
   },
 
-  // ==================== REGULAR QUIZ ====================
-  async generateQuiz() {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return { success: false, error: 'Not authenticated' };
-
-      const response = await fetch(`${API_URL}/mongo/student/quiz/generate`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const { json, text } = await parseJsonSafe(response);
-
-      if (!response.ok) {
-        throw new Error(json?.error || text || 'Failed to generate quiz');
-      }
-
-      return normalizeQuizResponse(json);
-    } catch (error) {
-      console.error('generateQuiz error:', error);
-      return { success: false, error: error.message || 'Failed to generate quiz' };
-    }
-  },
-
-  async submitQuiz(quizId, answers) {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return { success: false, error: 'Not authenticated' };
-
-      const response = await fetch(`${API_URL}/mongo/student/quiz/submit`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ quiz_id: quizId, answers }),
-      });
-
-      const { json, text } = await parseJsonSafe(response);
-
-      if (!response.ok) {
-        throw new Error(json?.error || text || 'Failed to submit quiz');
-      }
-
-      return json;
-    } catch (error) {
-      console.error('submitQuiz error:', error);
-      return { success: false, error: error.message || 'Failed to submit quiz' };
-    }
-  },
+  // ==================== OLD REGULAR QUIZ - REMOVED ====================
+  // The generateQuiz() and submitQuiz() methods have been removed.
+  // All quizzes now use the adaptive quiz system.
+  // Use /api/adaptive-quiz/... endpoints instead.
+  // See ADAPTIVE_QUIZ_SYSTEM_LEVEL1_PLACEMENT.md for documentation.
 
   // ==================== MATH PROFILE & QUIZ METHODS ====================
   async getMathProfile() {
