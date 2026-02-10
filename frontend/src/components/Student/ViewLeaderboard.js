@@ -10,38 +10,42 @@ export default function ViewLeaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState('');
+  const [viewMode, setViewMode] = useState('class'); // 'class' or 'school'
 
-  useEffect(() => {
-    const loadLeaderboard = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
+  const loadLeaderboard = async (mode) => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
 
-      const user = authService.getCurrentUser();
-      setCurrentUser(user);
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
 
-      try {
-        // REAL API CALL - Get leaderboard filtered by current user's school & class
-        const result = await studentService.getLeaderboard(user.schoolId, user.class);
+    try {
+      setLoading(true);
+      // Get leaderboard - if mode is 'school', pass only schoolId; if 'class', pass both
+      const result = mode === 'school' 
+        ? await studentService.getLeaderboard(user.schoolId, null)
+        : await studentService.getLeaderboard(user.schoolId, user.class);
 
-        if (result.success) {
-          setLeaderboard(result.leaderboard || []);
-        } else {
-          setError('Failed to load leaderboard');
-          setLeaderboard([]);
-        }
-      } catch (error) {
-        console.error('Load leaderboard error:', error);
+      if (result.success) {
+        setLeaderboard(result.leaderboard || []);
+      } else {
         setError('Failed to load leaderboard');
         setLeaderboard([]);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Load leaderboard error:', error);
+      setError('Failed to load leaderboard');
+      setLeaderboard([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadLeaderboard();
-  }, [navigate]);
+  useEffect(() => {
+    loadLeaderboard(viewMode);
+  }, [navigate, viewMode]);
 
   const getRankBadgeStyle = (rank) => {
     if (rank === 1) return { background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', color: 'white' };
@@ -56,6 +60,10 @@ export default function ViewLeaderboard() {
     header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' },
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    toggleContainer: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '16px' },
+    toggleButton: { padding: '8px 16px', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
+    toggleButtonActive: { background: '#10b981', color: 'white' },
+    toggleButtonInactive: { background: '#e5e7eb', color: '#6b7280' },
     errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', width: '100%' },
     podium: { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '16px', marginBottom: '32px', padding: '32px', background: 'white', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
     podiumPlace: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '150px' },

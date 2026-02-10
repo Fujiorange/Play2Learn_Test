@@ -194,16 +194,7 @@ export default function StudentDashboard() {
       icon: '🏆',
       action: () => navigate('/student/leaderboard'),
     },
-    // ❌ REMOVED: Duplicate Skill Matrix was here (line 182-188)
-    // 7️⃣ Placement Quiz
-    {
-      id: 'quiz',
-      title: 'Placement Quiz',
-      description: 'Take a placement quiz to assess your skill level',
-      icon: '🎯',
-      action: () => navigate('/student/quiz/attempt'),
-    },
-    // 8️⃣ School Announcements
+    // 7️⃣ School Announcements
     {
       id: 'announcements',
       title: 'School Announcements',
@@ -359,10 +350,7 @@ export default function StudentDashboard() {
         </div>
 
         <div style={styles.menuGrid}>
-          {menuItems
-            // ✅ Hide Placement Quiz if already completed
-            .filter(item => item.id !== 'quiz' || !dashboardData.placementCompleted)
-            .map((item) => (
+          {menuItems.map((item) => (
             <div
               key={item.id}
               style={{
