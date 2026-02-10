@@ -239,6 +239,13 @@ function AttemptAdaptiveQuiz() {
     }
   };
 
+  const formatTime = (seconds) => {
+    if (!seconds) return '0s';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
   if (loading) {
     return (
       <div className="adaptive-quiz-container">
@@ -248,13 +255,6 @@ function AttemptAdaptiveQuiz() {
   }
 
   if (quizCompleted && results) {
-    const formatTime = (seconds) => {
-      if (!seconds) return '0s';
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-    };
-
     return (
       <div className="adaptive-quiz-container">
         <div className="results-container">
