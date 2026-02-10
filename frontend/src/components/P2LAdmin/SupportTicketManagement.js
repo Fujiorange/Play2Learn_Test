@@ -22,7 +22,7 @@ function SupportTicketManagement() {
   const [message, setMessage] = useState({ type: '', text: '' });
   
   // Filters
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('open'); // Changed default from 'all' to 'open'
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
