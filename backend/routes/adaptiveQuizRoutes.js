@@ -362,6 +362,47 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
   }
 }
 
+// ==================== GET STUDENT'S CURRENT LEVEL ====================
+// ✅ CRITICAL: This reads placement quiz result from MathProfile.current_profile
+router.get('/student/current-level', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const mathProfile = await MathProfile.findOne({ student_id: userId });
+    
+    if (!mathProfile) {
+      return res.json({
+        success: true,
+        currentLevel: 1,
+        unlockedLevels: [1],
+        placementCompleted: false
+      });
+    }
+    
+    // ✅ CRITICAL FIX: Read adaptive_quiz_level (set by placement quiz)
+    // If not set, fall back to current_profile (also set by placement quiz)
+    const currentLevel = mathProfile.adaptive_quiz_level || mathProfile.current_profile || 1;
+    
+    // Generate array of unlocked levels (1 up to current)
+    const unlockedLevels = Array.from({ length: currentLevel }, (_, i) => i + 1);
+    
+    console.log(`✅ Student ${userId} - Placement Level: ${currentLevel}, Unlocked: ${unlockedLevels}`);
+    
+    res.json({
+      success: true,
+      currentLevel: currentLevel,
+      unlockedLevels: unlockedLevels,
+      placementCompleted: mathProfile.placement_completed || false
+    });
+  } catch (error) {
+    console.error('Error fetching student level:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch student level'
+    });
+  }
+});
+
 // Get all available adaptive quizzes - SHOW ALL LEVELS
 router.get('/quizzes', authenticateToken, async (req, res) => {
   try {
@@ -413,42 +454,6 @@ router.get('/quizzes', authenticateToken, async (req, res) => {
   }
 });
 
-// Get student's current adaptive quiz level
-router.get('/student/current-level', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    
-    const mathProfile = await MathProfile.findOne({ student_id: userId });
-    
-    if (!mathProfile) {
-      return res.json({
-        success: true,
-        currentLevel: 1,
-        unlockedLevels: [1],
-        placementCompleted: false
-      });
-    }
-    
-    const currentLevel = mathProfile.adaptive_quiz_level || 1;
-    
-    // Generate array of unlocked levels (1 up to current)
-    const unlockedLevels = Array.from({ length: currentLevel }, (_, i) => i + 1);
-    
-    res.json({
-      success: true,
-      currentLevel: currentLevel,
-      unlockedLevels: unlockedLevels,
-      placementCompleted: mathProfile.placement_completed || false
-    });
-  } catch (error) {
-    console.error('Error fetching student level:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch student level'
-    });
-  }
-});
-
 // Start quiz with AUTO-LAUNCH
 router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
   try {
@@ -490,9 +495,9 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if student has unlocked this level
+    // ✅ CRITICAL: Check if student has unlocked this level based on placement
     const mathProfile = await MathProfile.findOne({ student_id: userId });
-    const studentLevel = mathProfile?.adaptive_quiz_level || 1;
+    const studentLevel = mathProfile?.adaptive_quiz_level || mathProfile?.current_profile || 1;
     const quizLevel = quiz.quiz_level || 1;
 
     console.log(`📊 Access check: User ${userId} (Level ${studentLevel}) requesting Quiz Level ${quizLevel}`);
@@ -647,7 +652,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
-      // Update and verify student level
+      // ✅ CRITICAL: Update student's adaptive_quiz_level in MathProfile
       let confirmedLevel = currentLevel;
       try {
         console.log(`📊 Attempting to update student level from ${currentLevel} to ${levelDecision.nextLevel}`);
@@ -658,6 +663,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
           
           if (targetLevel > (mathProfile.adaptive_quiz_level || 1)) {
             mathProfile.adaptive_quiz_level = targetLevel;
+            mathProfile.current_profile = targetLevel; // Keep in sync
             await mathProfile.save();
             
             const verifiedProfile = await MathProfile.findOne({ student_id: userId });
@@ -704,7 +710,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
 
     console.log(`🔍 Question ${attempt.total_answered + 1}/20 - Looking for difficulty ${currentDifficulty}`);
 
-    // PRIORITY 1: Exact difficulty, not recently answered (BEST - Adaptive ideal)
+    // PRIORITY 1: Exact difficulty, not recently answered
     const exactNotRecent = quiz.questions.filter(q => {
       const qId = q._id.toString();
       return q.difficulty === currentDifficulty && !recentlyAnsweredIds.includes(qId);
@@ -715,7 +721,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       console.log(`✅ Found question at difficulty ${currentDifficulty} (Priority 1 - Exact match)`);
     }
 
-    // PRIORITY 2: Current +1 difficulty, not recently answered (GOOD - Slightly harder)
+    // PRIORITY 2: Current +1 difficulty, not recently answered
     if (!nextQuestion && currentDifficulty < 5) {
       const higherNotRecent = quiz.questions.filter(q => {
         const qId = q._id.toString();
@@ -728,7 +734,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       }
     }
 
-    // PRIORITY 3: ANY difficulty at or above current, not recently answered (OK - Maintains or increases)
+    // PRIORITY 3: ANY difficulty at or above current, not recently answered
     if (!nextQuestion) {
       const anyAtOrAbove = quiz.questions.filter(q => {
         const qId = q._id.toString();
@@ -741,7 +747,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       }
     }
 
-    // PRIORITY 4: Current difficulty -1, not recently answered (ACCEPTABLE - Slightly easier)
+    // PRIORITY 4: Current difficulty -1, not recently answered
     if (!nextQuestion && currentDifficulty > 1) {
       const lowerNotRecent = quiz.questions.filter(q => {
         const qId = q._id.toString();
@@ -754,7 +760,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       }
     }
 
-    // PRIORITY 5: ANY question not recently answered (FALLBACK - Any difficulty)
+    // PRIORITY 5: ANY question not recently answered
     if (!nextQuestion) {
       const anyNotRecent = quiz.questions.filter(q => {
         const qId = q._id.toString();
@@ -767,7 +773,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       }
     }
 
-    // PRIORITY 6: ABSOLUTELY ANY QUESTION (FORCE REUSE - Better than stopping early)
+    // PRIORITY 6: ABSOLUTELY ANY QUESTION (FORCE REUSE)
     if (!nextQuestion) {
       if (quiz.questions.length > 0) {
         nextQuestion = quiz.questions[Math.floor(Math.random() * quiz.questions.length)];
@@ -820,6 +826,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         if (mathProfile) {
           if (levelDecision.nextLevel > (mathProfile.adaptive_quiz_level || 1)) {
             mathProfile.adaptive_quiz_level = levelDecision.nextLevel;
+            mathProfile.current_profile = levelDecision.nextLevel;
             await mathProfile.save();
             
             const verifiedProfile = await MathProfile.findOne({ student_id: userId });
@@ -1180,7 +1187,7 @@ router.get('/student/level', authenticateToken, async (req, res) => {
         currentLevel: mathProfile.current_profile || 1,
         totalPoints: mathProfile.total_points || 0,
         placementCompleted: mathProfile.placement_completed || false,
-        adaptiveQuizLevel: mathProfile.adaptive_quiz_level || 1
+        adaptiveQuizLevel: mathProfile.adaptive_quiz_level || mathProfile.current_profile || 1
       }
     });
   } catch (error) {

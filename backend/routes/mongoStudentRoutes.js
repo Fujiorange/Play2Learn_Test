@@ -2,12 +2,10 @@
 // ✅ All endpoints match frontend expectations
 // ✅ Field names corrected for compatibility
 // ✅ Daily limit set to 2 quizzes (matching frontend)
-
 // ✅ Placement quizzes excluded from all statistics
 // ✅ Quiz model points to quiz_attempts collection (CRITICAL FIX!)
-// ✅ Profile 1 counter reset added (Line 725-728)
+// ✅ CRITICAL FIX: Placement quiz now sets adaptive_quiz_level for Quiz Journey!
 
-// backend/routes/mongoStudentRoutes.js - COMPREHENSIVE FIX v13
 const express = require("express");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
@@ -181,6 +179,7 @@ if (!mongoose.models.Quiz) {
     collection: 'quiz_attempts'
   }));
 }
+
 if (!mongoose.models.MathSkill) {
   const mathSkillSchema = new mongoose.Schema({
     student_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -227,18 +226,6 @@ if (!mongoose.models.Testimonial) {
   });
   mongoose.model("Testimonial", testimonialSchema);
 }
-
-// ==================== OLD QUIZ HELPER FUNCTIONS - REMOVED ====================
-// The following helper functions were only used by the old regular quiz system:
-// - buildOperationSequence(profile) - generated operation sequences
-// - generateQuestion(range, operation) - generated questions on the fly
-// - Second getProfileConfig(profile) instance (duplicate)
-// - shuffleInPlace(arr) - helper for randomization
-// - randInt(min, max) - random integer generator
-//
-// These have been removed as the new adaptive quiz system uses
-// P2L Admin created quizzes from the database instead.
-// ==============================================================================
 
 // ==================== SCHEMA COMPATIBILITY HELPER ====================
 /**
@@ -586,7 +573,6 @@ router.get("/math-skills", async (req, res) => {
   }
 });
 
-
 // ==================== PLACEMENT QUIZ - STATUS ====================
 router.get("/placement-quiz/status", async (req, res) => {
   try {
@@ -687,6 +673,7 @@ router.post("/placement-quiz/generate", async (req, res) => {
 });
 
 // ==================== PLACEMENT QUIZ - SUBMIT ====================
+// ✅ CRITICAL FIX: Now sets adaptive_quiz_level for Quiz Journey!
 router.post("/placement-quiz/submit", async (req, res) => {
   try {
     const studentId = req.user.userId;
@@ -747,10 +734,20 @@ router.post("/placement-quiz/submit", async (req, res) => {
     else if (quiz.percentage >= 10) startingProfile = 2;  // 10-19% → Level 2
     else startingProfile = 1;                             // 0-9% → Level 1
 
+    // ✅ CRITICAL FIX: Set BOTH fields
+    // current_profile: Used by legacy quiz system (kept for backward compatibility)
+    // adaptive_quiz_level: Used by adaptive quiz journey (REQUIRED FOR UNLOCKING LEVELS!)
     mathProfile.current_profile = startingProfile;
+    mathProfile.adaptive_quiz_level = startingProfile;  // 🆕 THIS IS THE KEY FIX!
     mathProfile.placement_completed = true;
     mathProfile.total_points += quiz.points_earned;
     await mathProfile.save();
+
+    console.log(`✅ Placement quiz completed for student ${studentId}:`);
+    console.log(`   - Score: ${score}/${totalQuestions} (${quiz.percentage}%)`);
+    console.log(`   - Assigned Level: ${startingProfile}`);
+    console.log(`   - current_profile: ${mathProfile.current_profile}`);
+    console.log(`   - adaptive_quiz_level: ${mathProfile.adaptive_quiz_level}`);
 
     await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, startingProfile);
 
@@ -772,24 +769,6 @@ router.post("/placement-quiz/submit", async (req, res) => {
   }
 });
 
-// ==================== OLD REGULAR QUIZ SYSTEM - REMOVED ====================
-// The old regular quiz system has been completely removed.
-// All quizzes now use the adaptive quiz system with P2L Admin created quizzes.
-// See ADAPTIVE_QUIZ_SYSTEM_LEVEL1_PLACEMENT.md for documentation.
-//
-// Removed endpoints:
-// - POST /quiz/generate (generated questions on the fly)
-// - POST /quiz/submit (submitted old regular quiz)
-//
-// Removed helper functions:
-// - buildOperationSequence() - only used by old system
-// - generateQuestion() - only used by old system  
-// - getProfileConfig() - duplicated, kept one instance for placement quiz if needed
-//
-// Migration: All students should now use /student/quiz/attempt → AttemptAdaptiveQuiz
-// ==============================================================================
-
-// ==================== QUIZ RESULTS / HISTORY ====================
 // ==================== MATH PROGRESS ====================
 router.get("/math-progress", async (req, res) => {
   try {
