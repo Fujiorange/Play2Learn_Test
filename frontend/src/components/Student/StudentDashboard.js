@@ -176,13 +176,13 @@ export default function StudentDashboard() {
       icon: '👤',
       action: () => navigate('/student/profile'),
     },
-    // 2️⃣ Level Quizzes (1-10)
+    // 2️⃣ Adaptive Quizzes
     {
-      id: 'level-quiz',
-      title: 'Level Quizzes',
-      description: 'Progress through 10 levels of mathematics mastery',
-      icon: '🎯',
-      action: () => navigate('/student/level-quizzes'),
+      id: 'adaptive-quiz',
+      title: 'Adaptive Quizzes',
+      description: 'Try quizzes that adapt to your skill level',
+      icon: '🎲',
+      action: () => navigate('/student/adaptive-quizzes'),
     },
     // 3️⃣ Skill Matrix (KEPT THIS ONE)
     {
