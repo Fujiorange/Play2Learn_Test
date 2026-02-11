@@ -92,40 +92,105 @@ function calculateProgressiveScore(attempt, quiz, timeElapsedSeconds) {
   };
 }
 
-// Helper function to determine next quiz level based on score
+// ==================== LEVEL PROGRESSION (OPTION A - ACCURACY FIRST) ====================
+/**
+ * Determines next quiz level based on performance
+ * PRIMARY RULE: Must have 70%+ accuracy to level up
+ * @param {number} currentLevel - Current quiz level (1-10)
+ * @param {object} scoreData - { accuracyScore, speedBonus, difficultyBonus, score }
+ * @returns {object} - { nextLevel, progression, levelChange, reason }
+ */
 function determineNextLevel(currentLevel, scoreData) {
-  const { score } = scoreData;
+  const { accuracyScore, speedBonus, difficultyBonus, score } = scoreData;
   
-  const THRESHOLD_DOWN = 0.40;
-  const THRESHOLD_STAY = 0.65;
-  const THRESHOLD_UP_ONE = 0.85;
-  const THRESHOLD_SKIP_TWO = 1.20;
+  // ✅ GATE 1: MINIMUM ACCURACY REQUIREMENT (70%)
+  const MIN_ACCURACY_TO_ADVANCE = 0.70;
+  const MIN_ACCURACY_TO_STAY = 0.40;
+  
+  console.log(`📊 Level Decision: Current=${currentLevel}, Accuracy=${Math.round(accuracyScore * 100)}%, Score=${score.toFixed(2)}`);
+  
+  // ❌ LEVEL DOWN: Accuracy < 40%
+  if (accuracyScore < MIN_ACCURACY_TO_STAY) {
+    const nextLevel = Math.max(1, currentLevel - 1);
+    console.log(`⬇️ Level DOWN: ${currentLevel} → ${nextLevel} (accuracy too low)`);
+    
+    return {
+      nextLevel: nextLevel,
+      progression: currentLevel === 1 ? 'repeat' : 'down',
+      levelChange: nextLevel - currentLevel,
+      reason: `Score below 40% (${Math.round(accuracyScore * 100)}%). Let's practice at an easier level.`,
+      blocked: false
+    };
+  }
+  
+  // ❌ STAY: Accuracy 40-69% (BLOCKED from advancing)
+  if (accuracyScore < MIN_ACCURACY_TO_ADVANCE) {
+    console.log(`➡️ STAY: Blocked by accuracy requirement (${Math.round(accuracyScore * 100)}% < 70%)`);
+    
+    return {
+      nextLevel: currentLevel,
+      progression: 'stay',
+      levelChange: 0,
+      reason: `You need 70%+ accuracy to advance. You scored ${Math.round(accuracyScore * 100)}%. Keep practicing!`,
+      blocked: true,
+      accuracyNeeded: 70 - Math.round(accuracyScore * 100)
+    };
+  }
+  
+  // ✅ GATE 2: Accuracy >= 70%, now check TOTAL SCORE with bonuses
+  
+  // THRESHOLDS (with bonuses applied)
+  const THRESHOLD_STAY = 0.85;      // Need 0.85 score to level up
+  const THRESHOLD_SKIP = 1.20;      // Need 1.20 score to skip levels
   
   let nextLevel = currentLevel;
   let progression = 'stay';
+  let reason = '';
   
-  if (score < THRESHOLD_DOWN) {
-    nextLevel = Math.max(1, currentLevel - 1);
-    progression = currentLevel === 1 ? 'repeat' : 'down';
-  } else if (score < THRESHOLD_STAY) {
-    nextLevel = currentLevel;
-    progression = 'stay';
-  } else if (score < THRESHOLD_UP_ONE) {
-    nextLevel = Math.min(10, currentLevel + 1);
-    progression = 'up_one';
-  } else if (score < THRESHOLD_SKIP_TWO) {
+  // 🚀 SKIP +2: Excellent performance (85%+ accuracy + 1.20+ score)
+  if (accuracyScore >= 0.85 && score >= THRESHOLD_SKIP) {
     nextLevel = Math.min(10, currentLevel + 2);
     progression = 'skip_one';
-  } else {
-    const levelsToSkip = Math.min(3, Math.floor(score / 0.4));
-    nextLevel = Math.min(10, currentLevel + levelsToSkip);
-    progression = 'skip_multiple';
+    reason = `🎉 Excellent! You scored ${Math.round(accuracyScore * 100)}% with great speed. Skipping ahead!`;
+    console.log(`⏫ SKIP: ${currentLevel} → ${nextLevel} (excellent performance)`);
+  }
+  // ⬆️ LEVEL UP +1: Good performance (75%+ accuracy + 0.85+ score)
+  else if (accuracyScore >= 0.75 && score >= THRESHOLD_STAY) {
+    nextLevel = Math.min(10, currentLevel + 1);
+    progression = 'up_one';
+    reason = `✨ Well done! You scored ${Math.round(accuracyScore * 100)}%. Ready for the next level!`;
+    console.log(`⬆️ LEVEL UP: ${currentLevel} → ${nextLevel} (good performance)`);
+  }
+  // ➡️ STAY: 70-74% accuracy OR score < 0.85
+  else {
+    nextLevel = currentLevel;
+    progression = 'stay';
+    reason = `Good job scoring ${Math.round(accuracyScore * 100)}%! Practice more to level up faster.`;
+    console.log(`➡️ STAY: ${currentLevel} (accuracy OK but need better score)`);
+  }
+  
+  // 🔒 MAX LEVEL CAP
+  if (nextLevel >= 10) {
+    nextLevel = 10;
+    progression = nextLevel === currentLevel ? 'stay' : 'max_reached';
+    reason = nextLevel === 10 && currentLevel < 10 
+      ? '🏆 Congratulations! You reached the maximum level!' 
+      : '🏆 You are at maximum level. Keep practicing!';
+    console.log(`🏆 MAX LEVEL: Staying at 10`);
   }
   
   return {
-    nextLevel,
-    progression,
-    levelChange: nextLevel - currentLevel
+    nextLevel: nextLevel,
+    progression: progression,
+    levelChange: nextLevel - currentLevel,
+    reason: reason,
+    blocked: false,
+    stats: {
+      accuracy: Math.round(accuracyScore * 100),
+      speedBonus: Math.round(speedBonus * 100),
+      difficultyBonus: Math.round(difficultyBonus * 100),
+      finalScore: Math.round(score * 100)
+    }
   };
 }
 
@@ -572,7 +637,10 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         progression: levelDecision.progression,
         currentLevel,
         nextLevel: levelDecision.nextLevel,
-        levelChange: levelDecision.levelChange
+        levelChange: levelDecision.levelChange,
+        reason: levelDecision.reason,
+        blocked: levelDecision.blocked,
+        stats: levelDecision.stats
       };
       
       await attempt.save();
@@ -736,7 +804,10 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         progression: levelDecision.progression,
         currentLevel,
         nextLevel: levelDecision.nextLevel,
-        levelChange: levelDecision.levelChange
+        levelChange: levelDecision.levelChange,
+        reason: levelDecision.reason,
+        blocked: levelDecision.blocked,
+        stats: levelDecision.stats
       };
       await attempt.save();
       
