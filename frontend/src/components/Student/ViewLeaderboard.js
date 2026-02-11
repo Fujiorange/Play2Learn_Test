@@ -4,13 +4,20 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function ViewLeaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserLevel, setCurrentUserLevel] = useState(null);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('class'); // 'class' or 'school'
+
+  const getToken = () => localStorage.getItem('token');
 
   const loadLeaderboard = async (mode) => {
     if (!authService.isAuthenticated()) {
@@ -23,6 +30,22 @@ export default function ViewLeaderboard() {
 
     try {
       setLoading(true);
+      
+      // ✅ Fetch YOUR Quiz Journey level
+      try {
+        const levelResponse = await fetch(`${API_BASE_URL}/api/adaptive-quiz/student/current-level`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const levelData = await levelResponse.json();
+        
+        if (levelData.success) {
+          setCurrentUserLevel(levelData.currentLevel || 1);
+          console.log('✅ Your Quiz Journey level:', levelData.currentLevel);
+        }
+      } catch (levelError) {
+        console.warn('⚠️ Could not fetch your quiz journey level:', levelError);
+      }
+      
       // Get leaderboard - if mode is 'school', pass only schoolId; if 'class', pass both
       const result = mode === 'school' 
         ? await studentService.getLeaderboard(user.schoolId, null)
@@ -174,7 +197,9 @@ export default function ViewLeaderboard() {
                     </td>
                     <td style={styles.td}><strong>{player.name}</strong>{player.isCurrentUser && ' (You)'}</td>
                     <td style={styles.td}><strong style={{ color: '#10b981' }}>{player.points?.toLocaleString() || 0}</strong></td>
-                    <td style={styles.td}>Level {player.level || 1}</td>
+                    <td style={styles.td}>
+                      Level {player.isCurrentUser && currentUserLevel !== null ? currentUserLevel : (player.level || 1)}
+                    </td>
                     <td style={styles.td}>🏆 {player.achievements || 0}</td>
                   </tr>
                 ))}
