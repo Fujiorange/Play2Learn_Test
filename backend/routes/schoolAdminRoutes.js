@@ -4316,6 +4316,22 @@ router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) =>
       });
     }
 
+    // Validate reason when disabling auto-renewal
+    if (!autoRenew && !reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reason is required when disabling auto-renewal'
+      });
+    }
+
+    // Validate otherReason when reason is 'other'
+    if (!autoRenew && reason === 'other' && !otherReason?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide details when selecting "Other"'
+      });
+    }
+
     const user = await User.findById(req.user.userId);
     if (!user || !user.schoolId) {
       return res.status(404).json({ success: false, error: 'School not found' });
@@ -4360,6 +4376,22 @@ router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) =>
 router.post('/cancel-subscription', authenticateSchoolAdmin, async (req, res) => {
   try {
     const { reason, otherReason } = req.body;
+
+    // Validate reason is provided
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reason is required when cancelling subscription'
+      });
+    }
+
+    // Validate otherReason when reason is 'other'
+    if (reason === 'other' && !otherReason?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide details when selecting "Other"'
+      });
+    }
 
     const user = await User.findById(req.user.userId);
     if (!user || !user.schoolId) {
