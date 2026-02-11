@@ -359,19 +359,6 @@ export default function AttemptQuiz() {
               Progress through 10 levels of adaptive quizzes! Each level adapts to your skill and gets progressively challenging.
             </p>
 
-            {/* ✅ REMOVED ATTEMPTS LIMIT DISPLAY - Unlimited quizzes now available! */}
-            {placementCompleted && (
-              <div style={{ 
-                ...styles.infoBox,
-                background: "#ecfdf5",
-                color: "#065f46",
-                border: "2px solid #10b981",
-                fontWeight: "600"
-              }}>
-                ✅ Unlimited Attempts Available!
-              </div>
-            )}
-
             <button
               style={{
                 ...styles.startButton,

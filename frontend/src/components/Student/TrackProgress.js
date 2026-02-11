@@ -4,11 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function TrackProgress() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [progressData, setProgressData] = useState(null);
   const [error, setError] = useState('');
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
     const loadProgress = async () => {
@@ -18,6 +24,24 @@ export default function TrackProgress() {
       }
 
       try {
+        // ✅ NEW: Fetch adaptive quiz level from Quiz Journey API
+        let adaptiveLevel = 1;
+        let unlockedLevels = [1];
+        try {
+          const levelResponse = await fetch(`${API_BASE_URL}/api/adaptive-quiz/student/current-level`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+          });
+          const levelData = await levelResponse.json();
+          
+          if (levelData.success) {
+            adaptiveLevel = levelData.currentLevel || 1;
+            unlockedLevels = levelData.unlockedLevels || [1];
+            console.log('✅ Quiz Journey level loaded:', adaptiveLevel);
+          }
+        } catch (levelError) {
+          console.warn('⚠️ Could not fetch quiz journey level:', levelError);
+        }
+
         // Fetch progress data and quiz history
         const progressResult = await studentService.getMathProgress();
         const historyResult = await studentService.getMathQuizHistory();
@@ -41,6 +65,8 @@ export default function TrackProgress() {
 
           setProgressData({
             ...progressResult.progressData,
+            currentProfile: adaptiveLevel, // ✅ USE QUIZ JOURNEY LEVEL
+            unlockedLevels: unlockedLevels.length,
             totalQuizzes,
             averageScore,
             recentQuizzes,
@@ -48,7 +74,8 @@ export default function TrackProgress() {
         } else {
           setError('Failed to load progress data');
           setProgressData({
-            currentProfile: 1,
+            currentProfile: adaptiveLevel,
+            unlockedLevels: unlockedLevels.length,
             profileProgress: 0,
             totalQuizzes: 0,
             streak: 0,
@@ -62,6 +89,7 @@ export default function TrackProgress() {
         setError('Failed to load progress data');
         setProgressData({
           currentProfile: 1,
+          unlockedLevels: 1,
           profileProgress: 0,
           totalQuizzes: 0,
           streak: 0,
@@ -255,8 +283,8 @@ export default function TrackProgress() {
         <div style={styles.statsGrid}>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>🎯</div>
-            <div style={styles.statLabel}>Current Profile</div>
-            <div style={styles.statValue}>Profile {progressData?.currentProfile || 1}</div>
+            <div style={styles.statLabel}>Current Level</div>
+            <div style={styles.statValue}>Level {progressData?.currentProfile || 1}</div>
           </div>
 
           <div style={styles.statCard}>
@@ -284,9 +312,9 @@ export default function TrackProgress() {
           </div>
         </div>
 
-        {/* Profile Progress */}
+        {/* Level Progress */}
         <div style={styles.profileProgressCard}>
-          <h2 style={styles.cardTitle}>Math Profile Progress</h2>
+          <h2 style={styles.cardTitle}>Quiz Journey Progress</h2>
           <div style={{ textAlign: 'center', marginBottom: '24px' }}>
             <div
               style={{
@@ -296,7 +324,7 @@ export default function TrackProgress() {
                 )}dd 100%)`,
               }}
             >
-              🎯 Profile {progressData?.currentProfile || 1}
+              🎯 Level {progressData?.currentProfile || 1}
             </div>
           </div>
 
@@ -316,8 +344,8 @@ export default function TrackProgress() {
 
           <div style={styles.progressText}>
             {progressData?.currentProfile === 10
-              ? '🏆 Maximum profile reached! Excellent work!'
-              : `Keep practicing to reach Profile ${(progressData?.currentProfile || 1) + 1}!`}
+              ? '🏆 Maximum level reached! Excellent work!'
+              : `Keep practicing to reach Level ${(progressData?.currentProfile || 1) + 1}!`}
           </div>
         </div>
 
@@ -335,7 +363,7 @@ export default function TrackProgress() {
                 <div key={idx} style={styles.quizItem}>
                   <div style={styles.quizInfo}>
                     <div style={styles.quizDate}>{quiz.date}</div>
-                    <div style={styles.quizProfile}>{quiz.quizTitle || `Profile ${quiz.profile} Quiz`}</div>
+                    <div style={styles.quizProfile}>{quiz.quizTitle || `Level ${quiz.profile} Quiz`}</div>
                   </div>
                   <div style={{ ...styles.quizScore, color: scoreColor }}>
                     {score}/{total} ({percentage}%)

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -10,6 +14,8 @@ export default function StudentDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [hoveredStat, setHoveredStat] = useState(null);
+
+  const getToken = () => localStorage.getItem('token');
 
   // Function to load dashboard data
   const loadDashboardData = async () => {
@@ -29,6 +35,22 @@ export default function StudentDashboard() {
         setUser(result.user);
       }
 
+      // ✅ NEW: Fetch adaptive quiz level from Quiz Journey API
+      let adaptiveLevel = 1;
+      try {
+        const levelResponse = await fetch(`${API_BASE_URL}/api/adaptive-quiz/student/current-level`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const levelData = await levelResponse.json();
+        
+        if (levelData.success) {
+          adaptiveLevel = levelData.currentLevel || 1;
+          console.log('✅ Quiz Journey level loaded:', adaptiveLevel);
+        }
+      } catch (levelError) {
+        console.warn('⚠️ Could not fetch quiz journey level:', levelError);
+      }
+
       // ✅ FIXED: Load dashboard data from MongoDB
       const dashData = await studentService.getDashboard();
       console.log('📊 Dashboard data loaded:', dashData);
@@ -43,9 +65,6 @@ export default function StudentDashboard() {
 
         const completedQuizzes =
           dashboardInfo.completedQuizzes ?? dashboardInfo.quizzesTaken ?? 0;
-
-        const level =
-          dashboardInfo.level ?? dashboardInfo.currentProfile ?? 1;
 
         const gradeLevel = dashboardInfo.gradeLevel ?? 'Primary 1';
 
@@ -67,22 +86,22 @@ export default function StudentDashboard() {
 
         setDashboardData({
           points,
-          level,
-          levelProgress: ((points % 500) / 500) * 100,
+          level: adaptiveLevel, // ✅ USE ADAPTIVE QUIZ LEVEL
+          levelProgress: ((adaptiveLevel / 10) * 100), // ✅ PROGRESS OUT OF 10 LEVELS
           achievements: dashboardInfo.achievements || 0,
           rank: userRank,
           completedQuizzes,
           grade_level: gradeLevel,
           placementCompleted: dashboardInfo.placementCompleted || false,
         });
-        console.log('✅ Dashboard data set successfully');
+        console.log('✅ Dashboard data set successfully with adaptive level:', adaptiveLevel);
       } else {
         console.error('❌ Failed to load dashboard:', dashData.error);
         // Set default values
         setDashboardData({
           points: 0,
-          level: 1,
-          levelProgress: 0,
+          level: adaptiveLevel,
+          levelProgress: 10,
           achievements: 0,
           rank: '#-',
           completedQuizzes: 0,
@@ -94,7 +113,7 @@ export default function StudentDashboard() {
       setDashboardData({
         points: 0,
         level: 1,
-        levelProgress: 0,
+        levelProgress: 10,
         achievements: 0,
         rank: '#-',
         completedQuizzes: 0,
@@ -262,7 +281,7 @@ export default function StudentDashboard() {
     {
       id: 'level',
       title: 'Current Level',
-      value: dashboardData.level,
+      value: dashboardData.level, // ✅ SHOW QUIZ JOURNEY LEVEL
       icon: '🎯',
     },
     {
@@ -317,8 +336,7 @@ export default function StudentDashboard() {
           <p style={styles.gradeLevel}>{dashboardData.grade_level}</p>
           <div style={styles.progressContainer}>
             <div style={styles.progressText}>
-              Level {dashboardData.level} - {dashboardData.levelProgress.toFixed(0)}
-              % to Level {dashboardData.level + 1}
+              Level {dashboardData.level} - {dashboardData.levelProgress.toFixed(0)}% Journey Completion
             </div>
             <div style={styles.progressBar}>
               <div
