@@ -45,7 +45,6 @@ import ViewLeaderboard from './components/Student/ViewLeaderboard';
 import DisplaySkillMatrix from './components/Student/DisplaySkillMatrix';
 import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
-import QuizResult from './components/Student/QuizResult';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
@@ -144,22 +143,22 @@ function App() {
           <Route path="/teacher/profile/edit" element={<TeacherEditProfile />} />
           <Route path="/teacher/profile/picture" element={<TeacherUpdatePicture />} />
           <Route path="/teacher/students" element={<StudentList />} />
-          <Route path="/teacher/student-performance" element={<StudentPerformance />} />
-          <Route path="/teacher/student-leaderboard" element={<StudentLeaderboard />} />
-          <Route path="/teacher/student-matrix" element={<StudentMatrix />} />
-          <Route path="/teacher/create-assignment" element={<CreateAssignment />} />
-          <Route path="/teacher/modify-assignment" element={<ModifyAssignment />} />
-          <Route path="/teacher/view-submissions" element={<ViewSubmissions />} />
-          <Route path="/teacher/track-completion" element={<TrackCompletion />} />
-          <Route path="/teacher/create-feedback" element={<CreateFeedback />} />
-          <Route path="/teacher/view-feedback" element={<ViewFeedback />} />
+          <Route path="/teacher/students/performance" element={<StudentPerformance />} />
+          <Route path="/teacher/students/leaderboard" element={<StudentLeaderboard />} />
+          <Route path="/teacher/students/matrix" element={<StudentMatrix />} />
+          <Route path="/teacher/assignment/create" element={<CreateAssignment />} />
+          <Route path="/teacher/assignment/modify" element={<ModifyAssignment />} />
+          <Route path="/teacher/submissions" element={<ViewSubmissions />} />
+          <Route path="/teacher/completion" element={<TrackCompletion />} />
+          <Route path="/teacher/feedback/create" element={<CreateFeedback />} />
+          <Route path="/teacher/feedback/view" element={<ViewFeedback />} />
           <Route path="/teacher/chat" element={<Chat />} />
           <Route path="/teacher/testimonial" element={<WriteTestimonial />} />
           <Route path="/teacher/support/create" element={<TeacherCreateTicket />} />
           <Route path="/teacher/support/track" element={<TeacherTrackTicket />} />
           <Route path="/teacher/news" element={<TeacherViewNewsUpdates />} />
-          <Route path="/teacher/quiz-assignment" element={<TeacherQuizAssignment />} />
           <Route path="/teacher/announcements" element={<TeacherViewAnnouncements />} />
+          <Route path="/teacher/quiz-assignment" element={<TeacherQuizAssignment />} />
 
           {/* ========== STUDENT ROUTES ========== */}
           <Route path="/student" element={<StudentDashboard />} />
@@ -170,19 +169,24 @@ function App() {
           <Route path="/student/progress" element={<TrackProgress />} />
           <Route path="/student/leaderboard" element={<ViewLeaderboard />} />
           <Route path="/student/skills" element={<DisplaySkillMatrix />} />
-          <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
-          <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
-          <Route path="/student/quiz/result" element={<QuizResult />} />
-          <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
-          <Route path="/student/quiz-journey" element={<QuizJourney />} />
-          <Route path="/student/result-history" element={<ViewResultHistory />} />
-          <Route path="/student/testimonial" element={<StudentWriteTestimonial />} />
-          <Route path="/student/support" element={<StudentCreateSupportTicket />} />
-          <Route path="/student/support/tickets" element={<StudentTrackSupportTicket />} />
           <Route path="/student/announcements" element={<StudentViewAnnouncements />} />
           <Route path="/student/news" element={<StudentViewNewsUpdates />} />
           <Route path="/student/shop" element={<StudentViewRewardShop />} />
           <Route path="/student/badges" element={<StudentViewBadges />} />
+
+          {/* ========== QUIZ ROUTES ========== */}
+          <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
+          <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
+          <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
+          <Route path="/student/quiz-journey" element={<QuizJourney />} />
+          <Route path="/student/results/history" element={<ViewResultHistory />} />
+          <Route path="/student/testimonial" element={<StudentWriteTestimonial />} />
+
+          {/* Student Support */}
+          <Route path="/student/support/create" element={<StudentCreateSupportTicket />} />
+          <Route path="/student/support/track" element={<StudentTrackSupportTicket />} />
+          <Route path="/student/support" element={<StudentCreateSupportTicket />} />
+          <Route path="/student/support/tickets" element={<StudentTrackSupportTicket />} />
 
           {/* ========== PARENT ROUTES ========== */}
           <Route path="/parent" element={<ParentDashboard />} />
@@ -190,54 +194,52 @@ function App() {
           <Route path="/parent/profile/edit" element={<ParentEditProfile />} />
           <Route path="/parent/profile/picture" element={<ParentUpdatePicture />} />
           <Route path="/parent/children" element={<ParentViewChildren />} />
-          <Route path="/parent/child-performance" element={<ParentViewChildPerformance />} />
-          <Route path="/parent/child-progress" element={<ParentViewChildProgress />} />
-          <Route path="/parent/view-feedback" element={<ParentViewFeedback />} />
-          <Route path="/parent/chat" element={<ParentChatWithTeacher />} />
-          <Route path="/parent/testimonial" element={<ParentWriteTestimonial />} />
-          <Route path="/parent/support" element={<ParentCreateSupportTicket />} />
-          <Route path="/parent/support/track" element={<ParentTrackSupportTicket />} />
-          <Route path="/parent/child-skills" element={<ParentViewChildSkillMatrix />} />
+          <Route path="/parent/children/performance" element={<ParentViewChildPerformance />} />
+          <Route path="/parent/children/progress" element={<ParentViewChildProgress />} />
+          <Route path="/parent/children/skills" element={<ParentViewChildSkillMatrix />} />
           <Route path="/parent/announcements" element={<ParentViewAnnouncements />} />
           <Route path="/parent/news" element={<ParentViewNewsUpdates />} />
+          <Route path="/parent/feedback" element={<ParentViewFeedback />} />
+          <Route path="/parent/chat" element={<ParentChatWithTeacher />} />
+          <Route path="/parent/testimonial" element={<ParentWriteTestimonial />} />
+          <Route path="/parent/support/create" element={<ParentCreateSupportTicket />} />
+          <Route path="/parent/support/track" element={<ParentTrackSupportTicket />} />
 
           {/* ========== SCHOOL ADMIN ROUTES ========== */}
           <Route path="/school-admin" element={<SchoolAdminDashboard />} />
-          <Route path="/school-admin/manual-add-user" element={<ManualAddUser />} />
           <Route path="/school-admin/license" element={<SchoolLicenseView />} />
-          <Route path="/school-admin/bulk-upload" element={<BulkUploadCSV />} />
-          <Route path="/school-admin/manage-classes" element={<ManageClasses />} />
-          <Route path="/school-admin/badge-management" element={<BadgeManagement />} />
-          <Route path="/school-admin/points-management" element={<PointsManagement />} />
-          <Route path="/school-admin/teacher-management" element={<TeacherManagement />} />
-          <Route path="/school-admin/student-management" element={<StudentManagement />} />
-          <Route path="/school-admin/parent-management" element={<ParentManagement />} />
-          <Route path="/school-admin/pending-credentials" element={<PendingCredentials />} />
-          <Route path="/school-admin/teacher-assignment" element={<TeacherAssignment />} />
+          <Route path="/school-admin/users/manual-add" element={<ManualAddUser />} />
+          <Route path="/school-admin/users/bulk-upload" element={<BulkUploadCSV />} />
+          <Route path="/school-admin/users/pending-credentials" element={<PendingCredentials />} />
+          <Route path="/school-admin/classes/manage" element={<ManageClasses />} />
+          <Route path="/school-admin/badges" element={<BadgeManagement />} />
+          <Route path="/school-admin/points" element={<PointsManagement />} />
+          <Route path="/school-admin/teachers" element={<TeacherManagement />} />
+          <Route path="/school-admin/students" element={<StudentManagement />} />
+          <Route path="/school-admin/parents" element={<ParentManagement />} />
+          <Route path="/school-admin/teachers/assignments" element={<TeacherAssignment />} />
           <Route path="/school-admin/announcements" element={<ManageAnnouncements />} />
           <Route path="/school-admin/support/create" element={<SchoolAdminCreateSupportTicket />} />
           <Route path="/school-admin/support/track" element={<SchoolAdminTrackSupportTicket />} />
-          <Route path="/school-admin/support-management" element={<SchoolAdminSupportTicketManagement />} />
+          <Route path="/school-admin/support-tickets" element={<SchoolAdminSupportTicketManagement />} />
 
-          {/* ========== P2L ADMIN ROUTES ========== */}
-          <Route path="/p2l-admin" element={<P2LAdminDashboard />} />
-          <Route path="/p2l-admin/school-management" element={<SchoolManagement />} />
-          <Route path="/p2l-admin/school-admin-management" element={<SchoolAdminManagement />} />
-          <Route path="/p2l-admin/add-school-admin" element={<ManualAddSchoolAdmin />} />
-          <Route path="/p2l-admin/question-bank" element={<QuestionBank />} />
-          <Route path="/p2l-admin/quiz-manager" element={<QuizManager />} />
-          <Route path="/p2l-admin/adaptive-quiz-creator" element={<AdaptiveQuizCreator />} />
-          <Route path="/p2l-admin/landing-page-manager" element={<LandingPageManager />} />
-          <Route path="/p2l-admin/health-check" element={<HealthCheck />} />
-          <Route path="/p2l-admin/maintenance" element={<MaintenanceBroadcastManager />} />
-          <Route path="/p2l-admin/user-management" element={<UserManagement />} />
-          <Route path="/p2l-admin/support-tickets" element={<SupportTicketManagement />} />
-          <Route path="/p2l-admin/skill-points-config" element={<SkillPointsConfig />} />
-          <Route path="/p2l-admin/license-management" element={<LicenseManagement />} />
-          <Route path="/p2l-admin/market-survey" element={<MarketSurvey />} />
-
-          {/* ========== FALLBACK / 404 ========== */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* ========== P2LADMIN ROUTES ========== */}
+          <Route path="/platform-admin" element={<Navigate to="/p2ladmin/dashboard" replace />} />
+          <Route path="/p2ladmin/dashboard" element={<P2LAdminDashboard />} />
+          <Route path="/p2ladmin/schools" element={<SchoolManagement />} />
+          <Route path="/p2ladmin/school-admins" element={<SchoolAdminManagement />} />
+          <Route path="/p2ladmin/school-admins/manual-add" element={<ManualAddSchoolAdmin />} />
+          <Route path="/p2ladmin/licenses" element={<LicenseManagement />} />
+          <Route path="/p2ladmin/questions" element={<QuestionBank />} />
+          <Route path="/p2ladmin/quizzes" element={<QuizManager />} />
+          <Route path="/p2ladmin/quizzes/create-adaptive" element={<AdaptiveQuizCreator />} />
+          <Route path="/p2ladmin/landing-page" element={<LandingPageManager />} />
+          <Route path="/p2ladmin/maintenance" element={<MaintenanceBroadcastManager />} />
+          <Route path="/p2ladmin/health" element={<HealthCheck />} />
+          <Route path="/p2ladmin/users" element={<UserManagement />} />
+          <Route path="/p2ladmin/support-tickets" element={<SupportTicketManagement />} />
+          <Route path="/p2ladmin/skill-points" element={<SkillPointsConfig />} />
+          <Route path="/p2ladmin/market-survey" element={<MarketSurvey />} />
         </Routes>
       </div>
     </Router>
