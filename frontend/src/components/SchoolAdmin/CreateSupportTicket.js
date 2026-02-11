@@ -11,7 +11,6 @@ export default function CreateSupportTicket() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
     category: 'website',
-    priority: 'normal',
     subject: '',
     description: '',
   });
@@ -49,7 +48,6 @@ export default function CreateSupportTicket() {
         setTimeout(() => {
           setFormData({ 
             category: 'website',
-            priority: 'normal',
             subject: '', 
             description: '' 
           });
@@ -107,12 +105,12 @@ export default function CreateSupportTicket() {
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>🎫 Create Support Ticket</h1>
+          <h1 style={styles.title}>✉️ Contact P2L Support</h1>
           <button style={styles.backButton} onClick={() => navigate('/school-admin')}>← Back to Dashboard</button>
         </div>
         
         <div style={styles.infoNote}>
-          ℹ️ As a School Admin, support tickets are sent to the P2L Admin team for website-related issues.
+          ℹ️ <strong>Website Support Tickets:</strong> Use this form to report technical issues, bugs, or request help with the Play2Learn platform. Your ticket will be sent directly to the P2L Admin team.
         </div>
         
         {message.text && (
@@ -122,21 +120,6 @@ export default function CreateSupportTicket() {
         )}
         
         <form style={styles.form} onSubmit={handleSubmit}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Priority</label>
-            <select 
-              value={formData.priority} 
-              onChange={(e) => setFormData({...formData, priority: e.target.value})} 
-              disabled={submitting}
-              style={styles.select}
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-          
           <div style={styles.formGroup}>
             <label style={styles.label}>Subject *</label>
             <input 

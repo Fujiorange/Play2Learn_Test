@@ -192,7 +192,7 @@ export default function TrackSupportTicket() {
         <div style={styles.header}>
           <div style={styles.headerTop}>
             <h1 style={styles.title}>
-              🎫 My Support Tickets
+              📤 My Website Support Tickets
               {unreadReplies > 0 && (
                 <span style={styles.notificationBadge} title={`${unreadReplies} ticket(s) with replies`}>
                   {unreadReplies}

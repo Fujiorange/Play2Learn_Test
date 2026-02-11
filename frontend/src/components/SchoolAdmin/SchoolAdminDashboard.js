@@ -241,15 +241,6 @@ export default function SchoolAdminDashboard() {
                 <span>Manage Classes</span>
                 <span style={styles.arrow}>→</span>
               </li>
-              <li
-                style={{ ...styles.menuItem, ...(hoveredItem === 'teacher-assignments' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('teacher-assignments')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => handleMenuClick('/school-admin/teachers/assignments')}
-              >
-                <span>👩‍🏫 Teacher Assignments</span>
-                <span style={styles.arrow}>→</span>
-              </li>
             </ul>
           </div>
 
@@ -332,7 +323,10 @@ export default function SchoolAdminDashboard() {
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => handleMenuClick('/school-admin/support-tickets')}
               >
-                <span>📥 Manage School Tickets</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span>📥 Manage School Tickets</span>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>Handle tickets from students, teachers & parents</span>
+                </div>
                 <span style={styles.arrow}>→</span>
               </li>
               <li
@@ -341,7 +335,10 @@ export default function SchoolAdminDashboard() {
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => handleMenuClick('/school-admin/support/track')}
               >
-                <span>📤 My Support Tickets</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span>📤 My Website Support Tickets</span>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>View your tickets sent to P2L Admin</span>
+                </div>
                 <span style={styles.arrow}>→</span>
               </li>
               <li
@@ -350,7 +347,10 @@ export default function SchoolAdminDashboard() {
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => handleMenuClick('/school-admin/support/create')}
               >
-                <span>✉️ Contact P2L Support</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span>✉️ Contact P2L Support</span>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>Create new website support ticket</span>
+                </div>
                 <span style={styles.arrow}>→</span>
               </li>
             </ul>
