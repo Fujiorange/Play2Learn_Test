@@ -24,9 +24,8 @@ export default function TrackProgress() {
       }
 
       try {
-        // ✅ NEW: Fetch adaptive quiz level from Quiz Journey API
+        // ✅ Fetch adaptive quiz level from Quiz Journey API
         let adaptiveLevel = 1;
-        let unlockedLevels = [1];
         try {
           const levelResponse = await fetch(`${API_BASE_URL}/api/adaptive-quiz/student/current-level`, {
             headers: { 'Authorization': `Bearer ${getToken()}` }
@@ -35,66 +34,50 @@ export default function TrackProgress() {
           
           if (levelData.success) {
             adaptiveLevel = levelData.currentLevel || 1;
-            unlockedLevels = levelData.unlockedLevels || [1];
             console.log('✅ Quiz Journey level loaded:', adaptiveLevel);
           }
         } catch (levelError) {
           console.warn('⚠️ Could not fetch quiz journey level:', levelError);
         }
 
-        // Fetch progress data and quiz history
-        const progressResult = await studentService.getMathProgress();
+        // ✅ Fetch quiz history (SAME AS ViewResults.js)
         const historyResult = await studentService.getMathQuizHistory();
+        
+        // ✅ Fetch progress data for streak and points
+        const progressResult = await studentService.getMathProgress();
 
-        if (progressResult.success) {
-          let recentQuizzes = [];
-          let totalQuizzes = 0;
-          let averageScore = 0;
+        let recentQuizzes = [];
+        let totalQuizzes = 0;
+        
+        if (historyResult.success && historyResult.history) {
+          // ✅ Filter to show only adaptive quizzes (SAME AS ViewResults.js)
+          const adaptiveQuizzes = (historyResult.history || []).filter(
+            (quiz) => quiz.quizType === 'adaptive'
+          );
           
-          // Use quiz history (includes both regular and adaptive quizzes)
-          if (historyResult.success && historyResult.history) {
-            recentQuizzes = historyResult.history.slice(0, 10);
-            totalQuizzes = historyResult.history.length;
-            
-            // Calculate average score from all quizzes
-            if (totalQuizzes > 0) {
-              const totalPercentage = historyResult.history.reduce((sum, q) => sum + (q.percentage || 0), 0);
-              averageScore = Math.round(totalPercentage / totalQuizzes);
-            }
-          }
-
-          setProgressData({
-            ...progressResult.progressData,
-            currentProfile: adaptiveLevel, // ✅ USE QUIZ JOURNEY LEVEL
-            unlockedLevels: unlockedLevels.length,
-            totalQuizzes,
-            averageScore,
-            recentQuizzes,
-          });
-        } else {
-          setError('Failed to load progress data');
-          setProgressData({
-            currentProfile: adaptiveLevel,
-            unlockedLevels: unlockedLevels.length,
-            profileProgress: 0,
-            totalQuizzes: 0,
-            streak: 0,
-            totalPoints: 0,
-            profileHistory: [],
-            recentQuizzes: [],
-          });
+          recentQuizzes = adaptiveQuizzes.slice(0, 10);
+          totalQuizzes = adaptiveQuizzes.length;
+          
+          console.log('✅ Loaded adaptive quizzes:', recentQuizzes);
         }
+
+        const progressDataObj = progressResult.success ? progressResult.progressData : {};
+
+        setProgressData({
+          currentProfile: adaptiveLevel,
+          totalQuizzes,
+          streak: progressDataObj.streak || 0,
+          totalPoints: progressDataObj.totalPoints || 0,
+          recentQuizzes,
+        });
       } catch (err) {
         console.error('Load progress error:', err);
         setError('Failed to load progress data');
         setProgressData({
           currentProfile: 1,
-          unlockedLevels: 1,
-          profileProgress: 0,
           totalQuizzes: 0,
           streak: 0,
           totalPoints: 0,
-          profileHistory: [],
           recentQuizzes: [],
         });
       } finally {
@@ -127,11 +110,7 @@ export default function TrackProgress() {
 
     let maxPct = 0;
     for (const q of quizzes) {
-      const total = Number(q?.totalQuestions) || Number(q?.total) || 0;
-      const score = Number(q?.score) || 0;
-      if (total <= 0) continue;
-
-      const pct = Math.round((score / total) * 100);
+      const pct = Number(q?.percentage) || 0;
       if (pct > maxPct) maxPct = pct;
     }
     return maxPct;
@@ -354,16 +333,17 @@ export default function TrackProgress() {
           <h2 style={styles.cardTitle}>Recent Quiz Attempts</h2>
           {progressData?.recentQuizzes && progressData.recentQuizzes.length > 0 ? (
             progressData.recentQuizzes.map((quiz, idx) => {
-              const total = Number(quiz?.totalQuestions) || Number(quiz?.total) || 0;
+              // ✅ Use the same data structure as ViewResults.js
               const score = Number(quiz?.score) || 0;
-              const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+              const total = Number(quiz?.totalQuestions) || 0;
+              const percentage = Number(quiz?.percentage) || 0;
               const scoreColor = percentage >= 70 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
 
               return (
                 <div key={idx} style={styles.quizItem}>
                   <div style={styles.quizInfo}>
                     <div style={styles.quizDate}>{quiz.date}</div>
-                    <div style={styles.quizProfile}>{quiz.quizTitle || `Level ${quiz.profile} Quiz`}</div>
+                    <div style={styles.quizProfile}>Profile {quiz.profile} Math Quiz</div>
                   </div>
                   <div style={{ ...styles.quizScore, color: scoreColor }}>
                     {score}/{total} ({percentage}%)
