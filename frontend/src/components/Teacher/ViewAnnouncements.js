@@ -1,5 +1,5 @@
 // frontend/src/components/Teacher/ViewAnnouncements.js
-// ✅ FIXED VERSION - Uses teacher API endpoint with schoolId filtering
+// ✅ FIXED - Uses school-admin public announcements endpoint (same as main)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -26,14 +26,12 @@ const ViewAnnouncements = () => {
   const fetchAnnouncements = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
-      // ✅ Uses teacher endpoint with schoolId filtering
-      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/announcements`, {
+      // ✅ Uses school-admin public endpoint with teacher audience
+      const response = await fetch(`${API_BASE_URL}/school-admin/announcements/public?audience=teacher`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         }
       });
 
