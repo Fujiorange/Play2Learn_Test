@@ -28,7 +28,12 @@ export default function RegisterPage() {
     if (error) setError('');
   };
 
-
+  // Email validation function
+  const isValidEmail = (email) => {
+    // Regular expression for email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleSubmit = async () => {
     setError('');
@@ -37,6 +42,12 @@ export default function RegisterPage() {
     // Validation
     if (!formData.email || !formData.password) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    // Email format validation
+    if (!isValidEmail(formData.email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
