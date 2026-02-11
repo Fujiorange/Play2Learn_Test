@@ -586,6 +586,36 @@ router.get("/math-skills", async (req, res) => {
   }
 });
 
+
+// ==================== PLACEMENT QUIZ - STATUS ====================
+router.get("/placement-quiz/status", async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+
+    let mathProfile = await MathProfile.findOne({ student_id: studentId });
+    
+    if (!mathProfile) {
+      // If no profile exists, placement is not completed
+      return res.json({
+        success: true,
+        placementCompleted: false,
+        placement_completed: false
+      });
+    }
+
+    // Return placement status
+    res.json({
+      success: true,
+      placementCompleted: mathProfile.placement_completed || false,
+      placement_completed: mathProfile.placement_completed || false,
+      current_profile: mathProfile.current_profile
+    });
+  } catch (error) {
+    console.error("❌ Get placement status error:", error);
+    res.status(500).json({ success: false, error: "Failed to get placement status" });
+  }
+});
+
 // ==================== PLACEMENT QUIZ - GENERATE ====================
 router.post("/placement-quiz/generate", async (req, res) => {
   try {
@@ -602,14 +632,13 @@ router.post("/placement-quiz/generate", async (req, res) => {
       });
     }
 
-    // REMOVED: No longer block placement quiz if already completed
-    // Students can retake placement quiz multiple times
-    // if (mathProfile.placement_completed) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     error: "Placement quiz already completed",
-    //   });
-    // }
+    // BLOCK: Only allow placement quiz once per student
+    if (mathProfile.placement_completed) {
+      return res.status(400).json({
+        success: false,
+        error: "Placement quiz already completed",
+      });
+    }
 
     // Pull 20 random questions from the shared question bank
     const Question = mongoose.model('Question');

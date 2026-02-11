@@ -76,6 +76,26 @@ const studentService = {
   },
 
   // ==================== PLACEMENT QUIZ ====================
+    /**
+     * Checks if the student has already completed the placement quiz.
+     * Returns: { success: true, placementCompleted: true/false, ... }
+     */
+    async getPlacementStatus() {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return { success: false, error: 'Not authenticated' };
+
+        const response = await fetch(`${API_URL}/mongo/student/placement-quiz/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch placement status');
+        return await response.json();
+      } catch (error) {
+        console.error('getPlacementStatus error:', error);
+        return { success: false, error: 'Failed to load placement status' };
+      }
+    },
   async generatePlacementQuiz() {
     try {
       const token = localStorage.getItem('token');

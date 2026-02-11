@@ -1,4 +1,4 @@
-// PlacementQuiz.js - Placement Quiz (First Time)
+// PlacementQuiz.js - Placement Quiz (First Time) - WITH COMPLETION CHECK
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -21,6 +21,19 @@ export default function PlacementQuiz() {
       }
 
       try {
+        // ✅ FIRST: Check if placement is already completed
+        console.log('📡 Checking placement status...');
+        const statusResult = await studentService.getPlacementStatus();
+        console.log('📥 Placement status:', statusResult);
+
+        if (statusResult.success && statusResult.placementCompleted) {
+          setError('✅ You have already completed the placement quiz!');
+          setTimeout(() => navigate('/student/quiz/attempt'), 2000);
+          setLoading(false);
+          return;
+        }
+
+        // THEN: Generate placement quiz
         console.log('📡 Generating placement quiz...');
         const result = await studentService.generatePlacementQuiz();
         console.log('📥 Quiz result:', result);
@@ -122,6 +135,7 @@ export default function PlacementQuiz() {
     progressFill: { height: '100%', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', transition: 'width 0.3s' },
     
     errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
+    successMessage: { padding: '12px 16px', background: '#d1fae5', color: '#065f46', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
     
     quizCard: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
     
@@ -159,8 +173,8 @@ export default function PlacementQuiz() {
     return (
       <div style={styles.container}>
         <div style={styles.content}>
-          <div style={styles.errorMessage}>
-            ⚠️ {error || 'Failed to load quiz'}
+          <div style={error.includes('✅') ? styles.successMessage : styles.errorMessage}>
+            {error || '⚠️ Failed to load quiz'}
           </div>
         </div>
       </div>

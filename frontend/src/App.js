@@ -56,6 +56,7 @@ import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
 import StudentCreateSupportTicket from './components/Student/CreateSupportTicket';
 import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
+import QuizJourney from './components/Student/QuizJourney';
 
 // ⭐ NEW IMPORT - Student Announcements
 import StudentViewAnnouncements from './components/Student/ViewAnnouncements';
@@ -219,6 +220,8 @@ function App() {
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
           <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
+          {/* Dedicated Adaptive Quiz Journey route */}
+          <Route path="/student/quiz-journey" element={<QuizJourney />} />
 
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
