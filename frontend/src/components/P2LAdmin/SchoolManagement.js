@@ -118,10 +118,30 @@ function SchoolManagement() {
     setShowPinModal(true);
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = async (pin) => {
     try {
-      await deleteSchool(schoolToDelete);
-      alert('School deleted successfully');
+      // Get the school to check license type before deleting
+      const schoolToDeleteData = schools.find(s => s._id === schoolToDelete);
+      
+      // Validate license type on frontend too
+      if (schoolToDeleteData?.licenseId?.type !== 'free') {
+        alert('Can only delete schools with free license type.');
+        setShowPinModal(false);
+        setSchoolToDelete(null);
+        return;
+      }
+      
+      // Check if license is still active (not expired)
+      if (schoolToDeleteData?.licenseExpiresAt && new Date(schoolToDeleteData.licenseExpiresAt) > new Date()) {
+        alert('Cannot delete school with active license. License must be expired before deletion.');
+        setShowPinModal(false);
+        setSchoolToDelete(null);
+        return;
+      }
+      
+      // PIN is passed from the modal component
+      await deleteSchool(schoolToDelete, pin);
+      alert('School and all associated users deleted successfully');
       setShowPinModal(false);
       setSchoolToDelete(null);
       fetchSchools();
@@ -185,29 +205,42 @@ function SchoolManagement() {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>License *</label>
-                {loadingLicenses ? (
-                  <div>Loading licenses...</div>
-                ) : licenses.length > 0 ? (
-                  <select
-                    name="licenseId"
-                    value={formData.licenseId}
-                    onChange={handleInputChange}
-                    required
-                  >
-                    {licenses.map(license => (
-                      <option key={license._id} value={license._id}>
-                        {license.name} ({license.type}) - {license.maxTeachers} Teachers, {license.maxStudents} Students, {license.maxClasses} Classes
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
-                    ⚠️ No licenses found. Please create licenses in License Management first.
+              {/* License field - only show when creating, not when editing */}
+              {!editingSchool && (
+                <div className="form-group">
+                  <label>License *</label>
+                  {loadingLicenses ? (
+                    <div>Loading licenses...</div>
+                  ) : licenses.length > 0 ? (
+                    <select
+                      name="licenseId"
+                      value={formData.licenseId}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      {licenses.map(license => (
+                        <option key={license._id} value={license._id}>
+                          {license.name} ({license.type}) - {license.maxTeachers} Teachers, {license.maxStudents} Students, {license.maxClasses} Classes
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
+                      ⚠️ No licenses found. Please create licenses in License Management first.
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Show current license when editing (read-only) */}
+              {editingSchool && editingSchool.licenseId && (
+                <div className="form-group">
+                  <label>Current License (cannot be changed)</label>
+                  <div style={{ padding: '10px', background: '#f3f4f6', borderRadius: '4px', color: '#374151' }}>
+                    {editingSchool.licenseId.name} ({editingSchool.licenseId.type}) - {editingSchool.licenseId.maxTeachers} Teachers, {editingSchool.licenseId.maxStudents} Students, {editingSchool.licenseId.maxClasses} Classes
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Contact Info</label>

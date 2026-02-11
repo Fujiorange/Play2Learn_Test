@@ -136,9 +136,10 @@ export const updateSchool = async (id, schoolData) => {
   });
 };
 
-export const deleteSchool = async (id) => {
+export const deleteSchool = async (id, pin) => {
   return apiCall(`/api/p2ladmin/schools/${id}`, {
     method: 'DELETE',
+    body: JSON.stringify({ pin }),
   });
 };
 
