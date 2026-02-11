@@ -92,7 +92,7 @@ function calculateProgressiveScore(attempt, quiz, timeElapsedSeconds) {
   };
 }
 
-// ==================== LEVEL PROGRESSION (OPTION A - ACCURACY FIRST) ====================
+// ==================== LEVEL PROGRESSION (ACCURACY FIRST) ====================
 /**
  * Determines next quiz level based on performance
  * PRIMARY RULE: Must have 70%+ accuracy to level up
@@ -652,7 +652,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
-      // ✅ CRITICAL: Update student's adaptive_quiz_level in MathProfile
+      // ✅ CRITICAL FIX: Update student's adaptive_quiz_level in MathProfile (both UP and DOWN)
       let confirmedLevel = currentLevel;
       try {
         console.log(`📊 Attempting to update student level from ${currentLevel} to ${levelDecision.nextLevel}`);
@@ -661,18 +661,23 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         if (mathProfile) {
           const targetLevel = levelDecision.nextLevel;
           
-          if (targetLevel > (mathProfile.adaptive_quiz_level || 1)) {
+          // ✅ FIX: Update level regardless of whether it goes up or down
+          if (targetLevel !== mathProfile.adaptive_quiz_level) {
+            const direction = targetLevel > mathProfile.adaptive_quiz_level ? 'UP' : 'DOWN';
+            console.log(`🔄 Updating level ${direction}: ${mathProfile.adaptive_quiz_level} → ${targetLevel}`);
+            
             mathProfile.adaptive_quiz_level = targetLevel;
             mathProfile.current_profile = targetLevel; // Keep in sync
             await mathProfile.save();
             
+            // Verify the save worked
             const verifiedProfile = await MathProfile.findOne({ student_id: userId });
             confirmedLevel = verifiedProfile.adaptive_quiz_level;
             
             console.log(`✅ VERIFIED: Student quiz level updated to ${confirmedLevel}`);
           } else {
             confirmedLevel = mathProfile.adaptive_quiz_level;
-            console.log(`ℹ️ Student already at level ${confirmedLevel}`);
+            console.log(`ℹ️ Student staying at level ${confirmedLevel} (no change)`);
           }
         }
       } catch (error) {
@@ -820,11 +825,12 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
+      // ✅ FIX: Update level both UP and DOWN
       let confirmedLevel = currentLevel;
       try {
         const mathProfile = await MathProfile.findOne({ student_id: userId });
         if (mathProfile) {
-          if (levelDecision.nextLevel > (mathProfile.adaptive_quiz_level || 1)) {
+          if (levelDecision.nextLevel !== mathProfile.adaptive_quiz_level) {
             mathProfile.adaptive_quiz_level = levelDecision.nextLevel;
             mathProfile.current_profile = levelDecision.nextLevel;
             await mathProfile.save();
