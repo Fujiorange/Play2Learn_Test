@@ -383,7 +383,7 @@ export default function StudentDashboard() {
         <div style={styles.menuGrid}>
           {menuItems
             // ✅ Hide Placement Quiz if already completed
-            .filter(item => item.id !== 'quiz' || !dashboardData.placementCompleted)
+            .filter(item => item.id !== 'quiz' || !placementCompleted)
             .map((item) => (
             <div
               key={item.id}
