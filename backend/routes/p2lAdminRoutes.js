@@ -300,7 +300,8 @@ router.post('/schools', authenticateP2LAdmin, async (req, res) => {
 // Update school
 router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, licenseId, contact, is_active } = req.body;
+    // License modification is no longer allowed - extract only allowed fields
+    const { organization_name, organization_type, contact, is_active } = req.body;
     
     const school = await School.findById(req.params.id);
     if (!school) {
@@ -310,16 +311,7 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    // REMOVED: License modification is no longer allowed for P2L Admin
-    // P2L Admin cannot change the license plan
-    if (licenseId && licenseId !== school.licenseId.toString()) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'License modification is not allowed. School admins should manage their own license upgrades.' 
-      });
-    }
-
-    // Update fields if provided (except licenseId)
+    // Update fields if provided (licenseId cannot be changed)
     if (organization_name) school.organization_name = organization_name;
     if (organization_type) school.organization_type = organization_type;
     if (contact !== undefined) school.contact = contact;
@@ -388,14 +380,34 @@ router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
     const studentsInSchool = usersToDelete.filter(u => u.role === 'Student');
     const studentIds = studentsInSchool.map(s => s._id);
     
-    // Delete all parent accounts linked to students in this school
-    // Parents are linked via the linkedStudents array
+    // Delete parent accounts linked to students in this school
+    // BUT only if they don't have students in other schools
     if (studentIds.length > 0) {
-      const parentsDeleted = await User.deleteMany({
+      // Find all parents linked to these students
+      const parentsLinkedToTheseStudents = await User.find({
         role: 'Parent',
-        linkedStudents: { $in: studentIds }
+        'linkedStudents.studentId': { $in: studentIds }
       });
-      console.log(`Deleted ${parentsDeleted.deletedCount} parent accounts linked to students`);
+      
+      let parentsDeletedCount = 0;
+      for (const parent of parentsLinkedToTheseStudents) {
+        // Check if this parent has any students in other schools
+        const allLinkedStudentIds = parent.linkedStudents.map(ls => ls.studentId);
+        const studentsInOtherSchools = await User.find({
+          _id: { $in: allLinkedStudentIds },
+          schoolId: { $ne: school._id } // Students NOT in this school
+        });
+        
+        // Only delete parent if they have NO students in other schools
+        if (studentsInOtherSchools.length === 0) {
+          await User.findByIdAndDelete(parent._id);
+          parentsDeletedCount++;
+          console.log(`Deleted parent account: ${parent.name} (${parent.email})`);
+        } else {
+          console.log(`Kept parent account: ${parent.name} (has ${studentsInOtherSchools.length} students in other schools)`);
+        }
+      }
+      console.log(`Deleted ${parentsDeletedCount} parent accounts (kept parents with students in other schools)`);
     }
     
     // Delete all users with this school_id

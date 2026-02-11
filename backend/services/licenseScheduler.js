@@ -108,13 +108,14 @@ async function handleCapacityDowngrade(schoolId, limits) {
       
       console.log(`   Keeping ${classesToKeep.length} class(es): ${classesToKeep.map(c => c.className).join(', ')}`);
       
-      // Deactivate extra classes by removing students from them
+      // Deactivate extra classes by removing students from them (bulk operation)
       // (We don't delete classes to preserve data)
-      for (const cls of classesToDeactivate) {
-        cls.students = [];
-        await cls.save();
-        console.log(`   ⚠️  Deactivated class: ${cls.className} (removed all students)`);
-      }
+      const classIdsToDeactivate = classesToDeactivate.map(c => c._id);
+      await Class.updateMany(
+        { _id: { $in: classIdsToDeactivate } },
+        { $set: { students: [] } }
+      );
+      console.log(`   ⚠️  Deactivated ${classesToDeactivate.length} classes (removed all students)`);
     }
     
     // Get all teachers for this school
@@ -133,13 +134,14 @@ async function handleCapacityDowngrade(schoolId, limits) {
       
       console.log(`   Keeping ${teachersToKeep.length} teacher(s): ${teachersToKeep.map(t => t.name).join(', ')}`);
       
-      // Deactivate extra teachers by marking them as inactive
+      // Deactivate extra teachers using bulk operation
       // (We don't delete users to preserve data and allow reactivation if they upgrade)
-      for (const teacher of teachersToDeactivate) {
-        teacher.accountActive = false;
-        await teacher.save();
-        console.log(`   ⚠️  Deactivated teacher: ${teacher.name} (${teacher.email})`);
-      }
+      const teacherIdsToDeactivate = teachersToDeactivate.map(t => t._id);
+      await User.updateMany(
+        { _id: { $in: teacherIdsToDeactivate } },
+        { $set: { accountActive: false } }
+      );
+      console.log(`   ⚠️  Deactivated ${teachersToDeactivate.length} teachers`);
     }
     
     // Get all students for this school
@@ -158,12 +160,13 @@ async function handleCapacityDowngrade(schoolId, limits) {
       
       console.log(`   Keeping ${studentsToKeep.length} student(s)`);
       
-      // Deactivate extra students by marking them as inactive
-      for (const student of studentsToDeactivate) {
-        student.accountActive = false;
-        await student.save();
-        console.log(`   ⚠️  Deactivated student: ${student.name} (${student.email})`);
-      }
+      // Deactivate extra students using bulk operation
+      const studentIdsToDeactivate = studentsToDeactivate.map(s => s._id);
+      await User.updateMany(
+        { _id: { $in: studentIdsToDeactivate } },
+        { $set: { accountActive: false } }
+      );
+      console.log(`   ⚠️  Deactivated ${studentsToDeactivate.length} students`);
     }
     
     console.log(`   ✅ Capacity downgrade completed`);
