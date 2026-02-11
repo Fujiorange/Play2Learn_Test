@@ -99,6 +99,9 @@ const User = require('./models/User');
 const School = require('./models/School');
 const License = require('./models/License');
 
+// Import license scheduler
+const { initLicenseScheduler } = require('./services/licenseScheduler');
+
 // Cache for landing page data to reduce database load and provide rate limiting
 let landingPageCache = {
   data: null,
@@ -475,6 +478,9 @@ async function startServer() {
         '                   ║');
       console.log('╚═══════════════════════════════════════════════╝');
       console.log('✅ Ready to accept connections');
+      
+      // Initialize license scheduler after server is running
+      initLicenseScheduler();
     });
     
     // Graceful shutdown
