@@ -42,7 +42,7 @@ function PinConfirmationModal({ isOpen, onConfirm, onCancel, title = 'Confirm De
 
     setIsSubmitting(true);
     try {
-      await onConfirm();
+      await onConfirm(pin); // Pass the PIN to the onConfirm callback
     } catch (err) {
       setError('Operation failed. Please try again.');
       setIsSubmitting(false);

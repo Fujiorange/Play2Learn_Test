@@ -310,21 +310,18 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    // Verify license exists if being updated
+    // REMOVED: License modification is no longer allowed for P2L Admin
+    // P2L Admin cannot change the license plan
     if (licenseId && licenseId !== school.licenseId.toString()) {
-      const license = await License.findById(licenseId);
-      if (!license) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'License not found' 
-        });
-      }
+      return res.status(403).json({ 
+        success: false, 
+        error: 'License modification is not allowed. School admins should manage their own license upgrades.' 
+      });
     }
 
-    // Update fields if provided
+    // Update fields if provided (except licenseId)
     if (organization_name) school.organization_name = organization_name;
     if (organization_type) school.organization_type = organization_type;
-    if (licenseId) school.licenseId = licenseId;
     if (contact !== undefined) school.contact = contact;
     if (is_active !== undefined) school.is_active = is_active;
 
@@ -350,7 +347,17 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
 // Delete school
 router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const school = await School.findByIdAndDelete(req.params.id);
+    const { pin } = req.body;
+    
+    // Verify PIN
+    if (pin !== USER_DELETION_PIN) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Invalid PIN. School deletion requires correct PIN verification.' 
+      });
+    }
+    
+    const school = await School.findById(req.params.id).populate('licenseId');
     if (!school) {
       return res.status(404).json({ 
         success: false, 
@@ -358,9 +365,53 @@ router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Check if school has active license (not expired)
+    if (school.licenseExpiresAt && new Date(school.licenseExpiresAt) > new Date()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Cannot delete school with active license. License must be expired before deletion.' 
+      });
+    }
+
+    // Check if license is free type
+    if (school.licenseId && school.licenseId.type !== 'free') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Can only delete schools with free license type. School must be on free trial plan.' 
+      });
+    }
+
+    // Delete all users associated with this school
+    const usersToDelete = await User.find({ schoolId: school._id });
+    
+    // Find all students in this school
+    const studentsInSchool = usersToDelete.filter(u => u.role === 'Student');
+    const studentIds = studentsInSchool.map(s => s._id);
+    
+    // Delete all parent accounts linked to students in this school
+    // Parents are linked via the linkedStudents array
+    if (studentIds.length > 0) {
+      const parentsDeleted = await User.deleteMany({
+        role: 'Parent',
+        linkedStudents: { $in: studentIds }
+      });
+      console.log(`Deleted ${parentsDeleted.deletedCount} parent accounts linked to students`);
+    }
+    
+    // Delete all users with this school_id
+    const usersDeleted = await User.deleteMany({ schoolId: school._id });
+    console.log(`Deleted ${usersDeleted.deletedCount} users from school ${school.organization_name}`);
+    
+    // Finally, delete the school itself
+    await School.findByIdAndDelete(req.params.id);
+
     res.json({
       success: true,
-      message: 'School deleted successfully'
+      message: 'School and all associated users deleted successfully',
+      details: {
+        usersDeleted: usersDeleted.deletedCount,
+        parentsDeleted: studentIds.length > 0 ? 'Yes' : 'No'
+      }
     });
   } catch (error) {
     console.error('Delete school error:', error);
