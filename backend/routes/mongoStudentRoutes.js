@@ -617,6 +617,7 @@ router.get("/math-profile", async (req, res) => {
       success: true,
       mathProfile: {
         current_profile: mathProfile.current_profile,
+        adaptive_quiz_level: mathProfile.adaptive_quiz_level,
         placement_completed: mathProfile.placement_completed,
         total_points: mathProfile.total_points,
         consecutive_fails: mathProfile.consecutive_fails,
