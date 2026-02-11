@@ -840,10 +840,16 @@ router.post("/quiz/submit-placement", async (req, res) => {
     else if (quiz.percentage >= 10) startingProfile = 2;
     else startingProfile = 1;
 
+    // Set BOTH fields for adaptive journey integration
     mathProfile.current_profile = startingProfile;
+    mathProfile.adaptive_quiz_level = startingProfile;
     mathProfile.placement_completed = true;
     mathProfile.total_points += quiz.points_earned;
     await mathProfile.save();
+
+    // Verify database update
+    const verifiedProfile = await MathProfile.findOne({ student_id: studentId });
+    console.log(`✅ Placement completed: Student starts at Level ${verifiedProfile.adaptive_quiz_level} (Score: ${quiz.percentage}%)`);
 
     await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, startingProfile);
 
