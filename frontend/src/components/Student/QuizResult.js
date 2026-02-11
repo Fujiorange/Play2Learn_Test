@@ -44,7 +44,7 @@ export default function QuizResult() {
       return {
         icon: '🎯',
         title: 'Placement Complete!',
-        message: `Great job! You'll start your Quiz Journey at Level ${result.assigned_profile}. All levels 1-${result.assigned_profile} are now unlocked!`,
+        message: `Great job! You'll start your Quiz Journey at Profile ${result.assigned_profile}. All profiles 1-${result.assigned_profile} are now unlocked!`,
         color: '#3b82f6'
       };
     }

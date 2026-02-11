@@ -847,9 +847,7 @@ router.post("/quiz/submit-placement", async (req, res) => {
     mathProfile.total_points += quiz.points_earned;
     await mathProfile.save();
 
-    // Verify database update
-    const verifiedProfile = await MathProfile.findOne({ student_id: studentId });
-    console.log(`✅ Placement completed: Student starts at Level ${verifiedProfile.adaptive_quiz_level} (Score: ${quiz.percentage}%)`);
+    console.log(`✅ Placement completed: Student starts at Profile ${startingProfile} (Score: ${quiz.percentage}%)`);
 
     await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, startingProfile);
 
