@@ -131,6 +131,7 @@ import UserManagement from './components/P2LAdmin/UserManagement';
 import SupportTicketManagement from './components/P2LAdmin/SupportTicketManagement';
 import SkillPointsConfig from './components/P2LAdmin/SkillPointsConfig';
 import LicenseManagement from './components/P2LAdmin/LicenseManagement';
+import MarketSurvey from './components/P2LAdmin/MarketSurvey';
 
 // Maintenance Banner
 import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner';
@@ -294,6 +295,7 @@ function App() {
           <Route path="/p2ladmin/users" element={<UserManagement />} />
           <Route path="/p2ladmin/support-tickets" element={<SupportTicketManagement />} />
           <Route path="/p2ladmin/skill-points" element={<SkillPointsConfig />} />
+          <Route path="/p2ladmin/market-survey" element={<MarketSurvey />} />
 
         </Routes>
       </div>

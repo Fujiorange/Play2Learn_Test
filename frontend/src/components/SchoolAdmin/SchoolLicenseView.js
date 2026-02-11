@@ -26,6 +26,9 @@ function SchoolLicenseView() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showAutoRenewalModal, setShowAutoRenewalModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelOtherReason, setCancelOtherReason] = useState('');
+  const [autoRenewalReason, setAutoRenewalReason] = useState('');
+  const [autoRenewalOtherReason, setAutoRenewalOtherReason] = useState('');
   const [processingAction, setProcessingAction] = useState(false);
 
   useEffect(() => {
@@ -320,7 +323,8 @@ function SchoolLicenseView() {
     // If turning OFF auto-renewal, show confirmation modal
     if (licenseInfo.autoRenew) {
       setShowAutoRenewalModal(true);
-      setCancelReason('');
+      setAutoRenewalReason('');
+      setAutoRenewalOtherReason('');
     } else {
       // If turning ON, just toggle directly
       confirmToggleAutoRenewal();
@@ -329,8 +333,14 @@ function SchoolLicenseView() {
 
   const confirmToggleAutoRenewal = async () => {
     // If disabling, require a reason
-    if (licenseInfo.autoRenew && !cancelReason.trim()) {
-      setError('Please provide a reason for disabling auto-renewal');
+    if (licenseInfo.autoRenew && !autoRenewalReason) {
+      setError('Please select a reason for disabling auto-renewal');
+      return;
+    }
+
+    // If "other" is selected, require the other reason text
+    if (licenseInfo.autoRenew && autoRenewalReason === 'other' && !autoRenewalOtherReason.trim()) {
+      setError('Please provide details for your reason');
       return;
     }
 
@@ -349,7 +359,8 @@ function SchoolLicenseView() {
         },
         body: JSON.stringify({
           autoRenew: !licenseInfo.autoRenew,
-          reason: licenseInfo.autoRenew ? cancelReason : undefined
+          reason: licenseInfo.autoRenew ? autoRenewalReason : undefined,
+          otherReason: licenseInfo.autoRenew && autoRenewalReason === 'other' ? autoRenewalOtherReason : undefined
         })
       });
 
@@ -364,7 +375,8 @@ function SchoolLicenseView() {
         
         alert(`Auto-renewal ${data.autoRenew ? 'enabled' : 'disabled'} successfully!`);
         setShowAutoRenewalModal(false);
-        setCancelReason('');
+        setAutoRenewalReason('');
+        setAutoRenewalOtherReason('');
       } else {
         setError(data.error || 'Failed to update auto-renewal setting');
       }
@@ -377,6 +389,18 @@ function SchoolLicenseView() {
   };
 
   const handleCancelSubscription = async () => {
+    // Validate reason is selected
+    if (!cancelReason) {
+      setError('Please select a reason for cancelling your subscription');
+      return;
+    }
+
+    // If "other" is selected, require the other reason text
+    if (cancelReason === 'other' && !cancelOtherReason.trim()) {
+      setError('Please provide details for your reason');
+      return;
+    }
+
     setProcessingAction(true);
     setError('');
 
@@ -387,13 +411,19 @@ function SchoolLicenseView() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({
+          reason: cancelReason,
+          otherReason: cancelReason === 'other' ? cancelOtherReason : undefined
+        })
       });
 
       const data = await response.json();
 
       if (data.success) {
         setShowCancelModal(false);
+        setCancelReason('');
+        setCancelOtherReason('');
         
         // Refresh license info
         await fetchLicenseInfo();
@@ -941,10 +971,65 @@ function SchoolLicenseView() {
               but it will not automatically renew.
             </p>
             
+            <div className="form-group" style={{ marginBottom: '20px', marginTop: '20px' }}>
+              <label htmlFor="cancelReason" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                Please tell us why you're cancelling: *
+              </label>
+              <select
+                id="cancelReason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: 'white'
+                }}
+                disabled={processingAction}
+              >
+                <option value="">Select a reason</option>
+                <option value="too-expensive">Too expensive</option>
+                <option value="not-using-features">Not using enough features</option>
+                <option value="switching-platform">Switching to another platform</option>
+                <option value="technical-issues">Technical issues</option>
+                <option value="lack-of-support">Lack of support</option>
+                <option value="school-closure">School closure or restructuring</option>
+                <option value="trial-only">Just wanted to try it out</option>
+                <option value="other">Other</option>
+              </select>
+              
+              {cancelReason === 'other' && (
+                <textarea
+                  value={cancelOtherReason}
+                  onChange={(e) => setCancelOtherReason(e.target.value)}
+                  placeholder="Please provide more details..."
+                  rows="3"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    resize: 'vertical',
+                    marginTop: '10px'
+                  }}
+                  disabled={processingAction}
+                />
+              )}
+              {error && <div className="field-error" style={{ color: '#ef4444', fontSize: '14px', marginTop: '4px' }}>{error}</div>}
+            </div>
+            
             <div className="modal-actions" style={{ marginTop: '24px' }}>
               <button 
                 className="btn-secondary" 
-                onClick={() => setShowCancelModal(false)}
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelReason('');
+                  setCancelOtherReason('');
+                  setError('');
+                }}
                 disabled={processingAction}
               >
                 Keep Subscription
@@ -952,7 +1037,7 @@ function SchoolLicenseView() {
               <button 
                 className="btn-primary"
                 onClick={handleCancelSubscription}
-                disabled={processingAction}
+                disabled={processingAction || !cancelReason}
                 style={{ backgroundColor: '#ef4444' }}
               >
                 {processingAction ? 'Cancelling...' : 'Yes, Cancel Subscription'}
@@ -972,25 +1057,52 @@ function SchoolLicenseView() {
             </p>
             
             <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label htmlFor="cancelReason" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+              <label htmlFor="autoRenewalReason" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                 Please tell us why you're disabling auto-renewal: *
               </label>
-              <textarea
-                id="cancelReason"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="E.g., switching to a different plan, cost concerns, not using features, etc."
-                rows="4"
+              <select
+                id="autoRenewalReason"
+                value={autoRenewalReason}
+                onChange={(e) => setAutoRenewalReason(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px',
                   border: '1px solid #d1d5db',
                   borderRadius: '6px',
                   fontSize: '14px',
-                  resize: 'vertical'
+                  backgroundColor: 'white'
                 }}
                 disabled={processingAction}
-              />
+              >
+                <option value="">Select a reason</option>
+                <option value="switching-to-different-plan">Switching to a different plan</option>
+                <option value="cost-concerns">Cost concerns</option>
+                <option value="not-using-features">Not using features enough</option>
+                <option value="seasonal-usage">Seasonal usage (e.g., school holidays)</option>
+                <option value="trying-alternatives">Trying alternative solutions</option>
+                <option value="budget-constraints">Budget constraints</option>
+                <option value="prefer-manual-renewal">Prefer manual renewal</option>
+                <option value="other">Other</option>
+              </select>
+              
+              {autoRenewalReason === 'other' && (
+                <textarea
+                  value={autoRenewalOtherReason}
+                  onChange={(e) => setAutoRenewalOtherReason(e.target.value)}
+                  placeholder="Please provide more details..."
+                  rows="3"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    resize: 'vertical',
+                    marginTop: '10px'
+                  }}
+                  disabled={processingAction}
+                />
+              )}
               {error && <div className="field-error" style={{ color: '#ef4444', fontSize: '14px', marginTop: '4px' }}>{error}</div>}
             </div>
 
@@ -999,7 +1111,8 @@ function SchoolLicenseView() {
                 className="btn-secondary" 
                 onClick={() => {
                   setShowAutoRenewalModal(false);
-                  setCancelReason('');
+                  setAutoRenewalReason('');
+                  setAutoRenewalOtherReason('');
                   setError('');
                 }}
                 disabled={processingAction}
@@ -1009,7 +1122,7 @@ function SchoolLicenseView() {
               <button 
                 className="btn-primary"
                 onClick={confirmToggleAutoRenewal}
-                disabled={processingAction || !cancelReason.trim()}
+                disabled={processingAction || !autoRenewalReason}
                 style={{ backgroundColor: '#ef4444' }}
               >
                 {processingAction ? 'Processing...' : 'Disable Auto-Renewal'}

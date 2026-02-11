@@ -8,6 +8,7 @@ const User = require('../models/User');
 const School = require('../models/School');
 const Class = require('../models/Class');
 const SupportTicket = require('../models/SupportTicket');
+const MarketSurvey = require('../models/MarketSurvey');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
@@ -4306,7 +4307,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
 // POST /api/mongo/school-admin/toggle-auto-renewal - Toggle auto-renewal setting
 router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) => {
   try {
-    const { autoRenew } = req.body;
+    const { autoRenew, reason, otherReason } = req.body;
 
     if (typeof autoRenew !== 'boolean') {
       return res.status(400).json({ 
@@ -4328,6 +4329,20 @@ router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) =>
     school.autoRenew = autoRenew;
     await school.save();
 
+    // If disabling auto-renewal and reason is provided, save to market survey
+    if (!autoRenew && reason) {
+      const surveyEntry = new MarketSurvey({
+        type: 'auto_renewal_disable',
+        reason: reason,
+        otherReason: reason === 'other' ? otherReason : null,
+        schoolId: school._id,
+        schoolName: school.organization_name,
+        userEmail: user.email
+      });
+      await surveyEntry.save();
+      console.log(`📊 Market survey recorded: Auto-renewal disabled - Reason: ${reason}${reason === 'other' ? ` (${otherReason})` : ''}`);
+    }
+
     console.log(`✅ Auto-renewal ${autoRenew ? 'enabled' : 'disabled'} for school ${school.organization_name}`);
 
     return res.json({
@@ -4344,6 +4359,8 @@ router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) =>
 // POST /api/mongo/school-admin/cancel-subscription - Cancel subscription
 router.post('/cancel-subscription', authenticateSchoolAdmin, async (req, res) => {
   try {
+    const { reason, otherReason } = req.body;
+
     const user = await User.findById(req.user.userId);
     if (!user || !user.schoolId) {
       return res.status(404).json({ success: false, error: 'School not found' });
@@ -4368,6 +4385,20 @@ router.post('/cancel-subscription', authenticateSchoolAdmin, async (req, res) =>
     school.cancelledAt = new Date();
     
     await school.save();
+
+    // Save to market survey if reason is provided
+    if (reason) {
+      const surveyEntry = new MarketSurvey({
+        type: 'subscription_cancel',
+        reason: reason,
+        otherReason: reason === 'other' ? otherReason : null,
+        schoolId: school._id,
+        schoolName: school.organization_name,
+        userEmail: user.email
+      });
+      await surveyEntry.save();
+      console.log(`📊 Market survey recorded: Subscription cancelled - Reason: ${reason}${reason === 'other' ? ` (${otherReason})` : ''}`);
+    }
 
     console.log(`✅ Subscription cancelled for school ${school.organization_name}`);
     console.log(`License will remain active until ${school.licenseExpiresAt}`);
