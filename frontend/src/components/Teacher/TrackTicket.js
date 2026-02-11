@@ -306,54 +306,10 @@ export default function TrackTicket() {
             ))}
           </div>
         ) : (
-          <div style={styles.ticketList}>
-            {filteredTickets.map((ticket) => {
-              const statusStyle = getStatusColor(ticket.status);
-              return (
-                <div key={ticket._id} style={styles.ticketCard}>
-                  <div style={styles.ticketHeader}>
-                    <div>
-                      <h3 style={styles.ticketSubject}>{ticket.subject}</h3>
-                      <span style={styles.ticketId}>Ticket #{ticket._id?.slice(-6) || 'N/A'}</span>
-                    </div>
-                  </div>
-                  <div style={styles.ticketMeta}>
-                    <span style={{
-                      ...styles.badge,
-                      background: statusStyle.bg,
-                      color: statusStyle.text
-                    }}>
-                      {statusStyle.label}
-                    </span>
-                    <span style={{
-                      ...styles.badge,
-                      background: `${getPriorityColor(ticket.priority)}20`,
-                      color: getPriorityColor(ticket.priority)
-                    }}>
-                      {ticket.priority || 'medium'} priority
-                    </span>
-                    <span style={{
-                      ...styles.badge,
-                      background: '#f3f4f6',
-                      color: '#6b7280'
-                    }}>
-                      {ticket.category || 'general'}
-                    </span>
-                  </div>
-                  <p style={styles.ticketDescription}>
-                    {ticket.description?.length > 200 
-                      ? ticket.description.substring(0, 200) + '...' 
-                      : ticket.description}
-                  </p>
-                  <div style={styles.ticketFooter}>
-                    <span>Created: {formatDate(ticket.createdAt)}</span>
-                    {ticket.updatedAt && ticket.updatedAt !== ticket.createdAt && (
-                      <span>Updated: {formatDate(ticket.updatedAt)}</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div style={styles.emptyState}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No tickets found</div>
+            <div>You haven't created any support tickets yet.</div>
           </div>
         )}
       </div>

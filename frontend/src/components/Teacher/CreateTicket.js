@@ -18,17 +18,6 @@ export default function CreateTicket() {
     description: '',
   });
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
-      setLoading(false);
-    };
-    loadData();
-  }, [navigate]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
