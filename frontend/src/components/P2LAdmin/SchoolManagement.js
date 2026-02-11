@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSchools, createSchool, updateSchool, deleteSchool } from '../../services/p2lAdminService';
+import PinConfirmationModal from '../common/PinConfirmationModal';
 import './SchoolManagement.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 
@@ -14,6 +15,8 @@ function SchoolManagement() {
   const [editingSchool, setEditingSchool] = useState(null);
   const [licenses, setLicenses] = useState([]);
   const [loadingLicenses, setLoadingLicenses] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [schoolToDelete, setSchoolToDelete] = useState(null);
   const [formData, setFormData] = useState({
     organization_name: '',
     organization_type: 'school',
@@ -110,17 +113,23 @@ function SchoolManagement() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this school?')) {
-      return;
-    }
+  const handleDelete = (id) => {
+    setSchoolToDelete(id);
+    setShowPinModal(true);
+  };
+
+  const confirmDelete = async () => {
     try {
-      await deleteSchool(id);
+      await deleteSchool(schoolToDelete);
       alert('School deleted successfully');
+      setShowPinModal(false);
+      setSchoolToDelete(null);
       fetchSchools();
     } catch (error) {
       console.error('Failed to delete school:', error);
       alert(error.message || 'Failed to delete school');
+      setShowPinModal(false);
+      setSchoolToDelete(null);
     }
   };
 
@@ -300,6 +309,17 @@ function SchoolManagement() {
           })
         )}
       </div>
+
+      {/* PIN Confirmation Modal */}
+      <PinConfirmationModal
+        isOpen={showPinModal}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowPinModal(false);
+          setSchoolToDelete(null);
+        }}
+        title="Confirm School Deletion"
+      />
     </div>
   );
 }

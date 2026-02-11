@@ -2,25 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import schoolAdminService from '../../services/schoolAdminService';
-
-// Generate random password using crypto API for better security
-const generateRandomPassword = (userType) => {
-  // Ensure userType has at least 3 characters, default to 'USR'
-  const prefix = (userType && userType.length >= 3) 
-    ? userType.substring(0, 3).toUpperCase() 
-    : 'USR';
-  
-  // Use crypto API for secure random generation
-  const array = new Uint32Array(2);
-  window.crypto.getRandomValues(array);
-  const random = array[0].toString(16).substring(0, 4);
-  
-  const specialChars = '!@#$%^&*';
-  const specialIndex = array[1] % specialChars.length;
-  const special = specialChars[specialIndex];
-  
-  return `${prefix}${random}${special}`;
-};
+import { generateStrongPassword } from '../../utils/passwordValidator';
 
 // Convert dd/mm/yyyy to ISO date string with proper validation
 const parseDateDDMMYYYY = (dateStr) => {
@@ -156,8 +138,8 @@ export default function ManualAddUser() {
   };
 
   const handleGeneratePassword = () => {
-    const rolePrefix = formData.role || 'user';
-    const newPassword = generateRandomPassword(rolePrefix);
+    // Generate a strong password that meets security requirements
+    const newPassword = generateStrongPassword(12);
     setGeneratedPassword(newPassword);
     setShowPassword(false);
     setPasswordViewed(false);
@@ -198,8 +180,7 @@ export default function ManualAddUser() {
 
     try {
       // Auto-generate password if not already generated
-      const rolePrefix = formData.role || 'user';
-      const password = generatedPassword || generateRandomPassword(rolePrefix);
+      const password = generatedPassword || generateStrongPassword(12);
       if (!generatedPassword) {
         setGeneratedPassword(password);
       }

@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
 const User = require('../models/User');
+const MarketSurvey = require('../models/MarketSurvey');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 function normalizeRole(role) {
@@ -176,6 +177,17 @@ router.post('/register-school-admin', async (req, res) => {
     // Log referral source if provided (for analytics)
     if (referralSource) {
       console.log(`📊 New institute registration - Referral source: ${referralSource}`);
+      
+      // Save to market survey
+      const surveyEntry = new MarketSurvey({
+        type: 'registration_referral',
+        reason: referralSource,
+        otherReason: null, // Registration dropdown doesn't have "Other" option currently
+        schoolId: newSchool._id,
+        schoolName: newSchool.organization_name,
+        userEmail: email.toLowerCase()
+      });
+      await surveyEntry.save();
     }
 
     console.log(`✅ New institute registered: ${email} for ${institutionName}`);

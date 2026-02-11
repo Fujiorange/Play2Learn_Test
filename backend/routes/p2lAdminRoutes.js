@@ -14,6 +14,7 @@ const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
 const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
+const MarketSurvey = require('../models/MarketSurvey');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
@@ -2632,6 +2633,88 @@ router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update skill points configuration' 
+    });
+  }
+});
+
+// ==================== MARKET SURVEY ====================
+
+// GET /api/p2ladmin/market-survey - Get market survey data
+router.get('/market-survey', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { type, startDate, endDate } = req.query;
+
+    // Build query
+    const query = {};
+    if (type) {
+      query.type = type;
+    }
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        query.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        query.createdAt.$lte = new Date(endDate);
+      }
+    }
+
+    // Fetch all survey data
+    const surveys = await MarketSurvey.find(query).sort({ createdAt: -1 });
+
+    // Aggregate statistics by type and reason
+    const stats = {
+      registration_referral: {},
+      auto_renewal_disable: {},
+      subscription_cancel: {},
+      total: surveys.length
+    };
+
+    surveys.forEach(survey => {
+      if (!stats[survey.type]) {
+        stats[survey.type] = {};
+      }
+      
+      const displayReason = survey.reason === 'other' && survey.otherReason 
+        ? `Other: ${survey.otherReason}` 
+        : survey.reason;
+      
+      if (!stats[survey.type][displayReason]) {
+        stats[survey.type][displayReason] = 0;
+      }
+      stats[survey.type][displayReason]++;
+    });
+
+    // Convert to arrays for easier frontend consumption
+    const formattedStats = {
+      registrationReferrals: Object.entries(stats.registration_referral).map(([reason, count]) => ({
+        reason,
+        count
+      })).sort((a, b) => b.count - a.count),
+      
+      autoRenewalDisableReasons: Object.entries(stats.auto_renewal_disable).map(([reason, count]) => ({
+        reason,
+        count
+      })).sort((a, b) => b.count - a.count),
+      
+      subscriptionCancelReasons: Object.entries(stats.subscription_cancel).map(([reason, count]) => ({
+        reason,
+        count
+      })).sort((a, b) => b.count - a.count),
+      
+      total: stats.total,
+      recentSurveys: surveys.slice(0, 50) // Last 50 surveys
+    };
+
+    res.json({
+      success: true,
+      data: formattedStats
+    });
+  } catch (error) {
+    console.error('Error fetching market survey data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch market survey data'
     });
   }
 });

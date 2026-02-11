@@ -24,6 +24,11 @@ function SchoolLicenseView() {
   const [paymentErrors, setPaymentErrors] = useState({});
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showAutoRenewalModal, setShowAutoRenewalModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelOtherReason, setCancelOtherReason] = useState('');
+  const [autoRenewalReason, setAutoRenewalReason] = useState('');
+  const [autoRenewalOtherReason, setAutoRenewalOtherReason] = useState('');
   const [processingAction, setProcessingAction] = useState(false);
 
   useEffect(() => {
@@ -94,6 +99,66 @@ function SchoolLicenseView() {
   const handleLicenseSelect = (license) => {
     setSelectedLicense(license);
     setShowPaymentForm(true);
+  };
+
+  // Calculate pro-rated price for upgrades
+  const calculateProRatedPrice = () => {
+    if (!selectedLicense || !licenseInfo) return null;
+    
+    const newPrice = billingCycle === 'monthly' ? selectedLicense.priceMonthly : selectedLicense.priceYearly;
+    const currentPrice = billingCycle === 'monthly' ? 
+      (licenseInfo.priceMonthly || 0) : 
+      (licenseInfo.priceYearly || 0);
+    
+    // If current license is free, pay full price
+    if (licenseInfo.type === 'free') {
+      return {
+        fullPrice: newPrice,
+        proRatedAmount: newPrice,
+        isProRated: false,
+        message: `Full price for ${billingCycle} billing`
+      };
+    }
+
+    // If downgrading or same price, return full price
+    if (newPrice <= currentPrice) {
+      return {
+        fullPrice: newPrice,
+        proRatedAmount: newPrice,
+        isProRated: false,
+        message: `Full price for ${billingCycle} billing`
+      };
+    }
+
+    // Calculate days remaining in current period
+    const today = new Date();
+    const nextBilling = licenseInfo.nextBillingDate ? new Date(licenseInfo.nextBillingDate) : null;
+    
+    if (!nextBilling) {
+      return {
+        fullPrice: newPrice,
+        proRatedAmount: newPrice,
+        isProRated: false,
+        message: `Full price for ${billingCycle} billing`
+      };
+    }
+
+    const daysRemaining = Math.ceil((nextBilling - today) / (1000 * 60 * 60 * 24));
+    const totalDays = billingCycle === 'monthly' ? 30 : 365;
+    
+    // Calculate pro-rated difference
+    const priceDifference = newPrice - currentPrice;
+    const proRatedDifference = (priceDifference * daysRemaining) / totalDays;
+    
+    return {
+      fullPrice: newPrice,
+      currentPrice: currentPrice,
+      priceDifference: priceDifference,
+      proRatedAmount: proRatedDifference,
+      daysRemaining: daysRemaining,
+      isProRated: true,
+      message: `Pro-rated for ${daysRemaining} days remaining in current cycle`
+    };
   };
 
   const handlePaymentInputChange = (e) => {
@@ -254,7 +319,31 @@ function SchoolLicenseView() {
     setError('');
   };
 
-  const handleToggleAutoRenewal = async () => {
+  const handleToggleAutoRenewal = () => {
+    // If turning OFF auto-renewal, show confirmation modal
+    if (licenseInfo.autoRenew) {
+      setShowAutoRenewalModal(true);
+      setAutoRenewalReason('');
+      setAutoRenewalOtherReason('');
+    } else {
+      // If turning ON, just toggle directly
+      confirmToggleAutoRenewal();
+    }
+  };
+
+  const confirmToggleAutoRenewal = async () => {
+    // If disabling, require a reason
+    if (licenseInfo.autoRenew && !autoRenewalReason) {
+      setError('Please select a reason for disabling auto-renewal');
+      return;
+    }
+
+    // If "other" is selected, require the other reason text
+    if (licenseInfo.autoRenew && autoRenewalReason === 'other' && !autoRenewalOtherReason.trim()) {
+      setError('Please provide details for your reason');
+      return;
+    }
+
     if (processingAction) return;
     
     setProcessingAction(true);
@@ -269,7 +358,9 @@ function SchoolLicenseView() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          autoRenew: !licenseInfo.autoRenew
+          autoRenew: !licenseInfo.autoRenew,
+          reason: licenseInfo.autoRenew ? autoRenewalReason : undefined,
+          otherReason: licenseInfo.autoRenew && autoRenewalReason === 'other' ? autoRenewalOtherReason : undefined
         })
       });
 
@@ -283,6 +374,9 @@ function SchoolLicenseView() {
         }));
         
         alert(`Auto-renewal ${data.autoRenew ? 'enabled' : 'disabled'} successfully!`);
+        setShowAutoRenewalModal(false);
+        setAutoRenewalReason('');
+        setAutoRenewalOtherReason('');
       } else {
         setError(data.error || 'Failed to update auto-renewal setting');
       }
@@ -295,6 +389,18 @@ function SchoolLicenseView() {
   };
 
   const handleCancelSubscription = async () => {
+    // Validate reason is selected
+    if (!cancelReason) {
+      setError('Please select a reason for cancelling your subscription');
+      return;
+    }
+
+    // If "other" is selected, require the other reason text
+    if (cancelReason === 'other' && !cancelOtherReason.trim()) {
+      setError('Please provide details for your reason');
+      return;
+    }
+
     setProcessingAction(true);
     setError('');
 
@@ -305,13 +411,19 @@ function SchoolLicenseView() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({
+          reason: cancelReason,
+          otherReason: cancelReason === 'other' ? cancelOtherReason : undefined
+        })
       });
 
       const data = await response.json();
 
       if (data.success) {
         setShowCancelModal(false);
+        setCancelReason('');
+        setCancelOtherReason('');
         
         // Refresh license info
         await fetchLicenseInfo();
@@ -376,14 +488,13 @@ function SchoolLicenseView() {
           </span>
         </div>
         
-        {licenseInfo.type === 'free' && (
-          <button 
-            className="btn-upgrade"
-            onClick={handleUpgradeClick}
-          >
-            ⬆️ Upgrade License
-          </button>
-        )}
+        {/* Show upgrade button for free licenses and paid licenses that might want to upgrade */}
+        <button 
+          className="btn-upgrade"
+          onClick={handleUpgradeClick}
+        >
+          ⬆️ {licenseInfo.type === 'free' ? 'Upgrade License' : 'Change Plan'}
+        </button>
       </div>
 
       {/* Free License Expiry Warning */}
@@ -721,9 +832,46 @@ function SchoolLicenseView() {
                 <div className="payment-summary">
                   <p><strong>Selected Plan:</strong> {selectedLicense.name}</p>
                   <p><strong>Billing Cycle:</strong> {billingCycle === 'monthly' ? 'Monthly' : 'Yearly'}</p>
-                  <p className="payment-amount">
-                    <strong>Amount:</strong> ${billingCycle === 'monthly' ? selectedLicense.priceMonthly.toFixed(2) : selectedLicense.priceYearly.toFixed(2)}
-                  </p>
+                  
+                  {(() => {
+                    const pricingInfo = calculateProRatedPrice();
+                    if (!pricingInfo) return null;
+                    
+                    return (
+                      <>
+                        {pricingInfo.isProRated && (
+                          <>
+                            <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '12px' }}>
+                              <strong>Current Plan Price:</strong> ${pricingInfo.currentPrice.toFixed(2)}/{billingCycle === 'monthly' ? 'month' : 'year'}
+                            </p>
+                            <p style={{ fontSize: '14px', color: '#6b7280' }}>
+                              <strong>New Plan Price:</strong> ${pricingInfo.fullPrice.toFixed(2)}/{billingCycle === 'monthly' ? 'month' : 'year'}
+                            </p>
+                            <p style={{ fontSize: '14px', color: '#6b7280' }}>
+                              <strong>Price Difference:</strong> ${pricingInfo.priceDifference.toFixed(2)}/{billingCycle === 'monthly' ? 'month' : 'year'}
+                            </p>
+                            <p style={{ fontSize: '14px', color: '#10b981', fontStyle: 'italic' }}>
+                              {pricingInfo.message}
+                            </p>
+                          </>
+                        )}
+                        <p className="payment-amount" style={{ 
+                          marginTop: '16px', 
+                          padding: '12px', 
+                          backgroundColor: '#f3f4f6',
+                          borderRadius: '8px',
+                          fontSize: '18px'
+                        }}>
+                          <strong>Amount to Pay Now:</strong> <span style={{ color: '#10b981', fontSize: '24px' }}>${pricingInfo.proRatedAmount.toFixed(2)}</span>
+                        </p>
+                        {pricingInfo.isProRated && (
+                          <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
+                            * After this payment, you'll be charged ${pricingInfo.fullPrice.toFixed(2)} every {billingCycle === 'monthly' ? 'month' : 'year'} with auto-renewal {licenseInfo.autoRenew !== false ? 'enabled' : 'disabled'}.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {error && <div className="payment-error">{error}</div>}
@@ -823,10 +971,65 @@ function SchoolLicenseView() {
               but it will not automatically renew.
             </p>
             
+            <div className="form-group" style={{ marginBottom: '20px', marginTop: '20px' }}>
+              <label htmlFor="cancelReason" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                Please tell us why you're cancelling: *
+              </label>
+              <select
+                id="cancelReason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: 'white'
+                }}
+                disabled={processingAction}
+              >
+                <option value="">Select a reason</option>
+                <option value="too-expensive">Too expensive</option>
+                <option value="not-using-features">Not using enough features</option>
+                <option value="switching-platform">Switching to another platform</option>
+                <option value="technical-issues">Technical issues</option>
+                <option value="lack-of-support">Lack of support</option>
+                <option value="school-closure">School closure or restructuring</option>
+                <option value="trial-only">Just wanted to try it out</option>
+                <option value="other">Other</option>
+              </select>
+              
+              {cancelReason === 'other' && (
+                <textarea
+                  value={cancelOtherReason}
+                  onChange={(e) => setCancelOtherReason(e.target.value)}
+                  placeholder="Please provide more details..."
+                  rows="3"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    resize: 'vertical',
+                    marginTop: '10px'
+                  }}
+                  disabled={processingAction}
+                />
+              )}
+              {error && <div className="field-error" style={{ color: '#ef4444', fontSize: '14px', marginTop: '4px' }}>{error}</div>}
+            </div>
+            
             <div className="modal-actions" style={{ marginTop: '24px' }}>
               <button 
                 className="btn-secondary" 
-                onClick={() => setShowCancelModal(false)}
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelReason('');
+                  setCancelOtherReason('');
+                  setError('');
+                }}
                 disabled={processingAction}
               >
                 Keep Subscription
@@ -834,10 +1037,95 @@ function SchoolLicenseView() {
               <button 
                 className="btn-primary"
                 onClick={handleCancelSubscription}
-                disabled={processingAction}
+                disabled={processingAction || !cancelReason}
                 style={{ backgroundColor: '#ef4444' }}
               >
                 {processingAction ? 'Cancelling...' : 'Yes, Cancel Subscription'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Renewal Disable Confirmation Modal */}
+      {showAutoRenewalModal && (
+        <div className="modal-overlay" onClick={() => setShowAutoRenewalModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <h3>⚠️ Disable Auto-Renewal?</h3>
+            <p style={{ marginBottom: '16px', color: '#6b7280' }}>
+              Are you sure you want to disable auto-renewal? Your subscription will end on {licenseInfo.nextBillingDate && new Date(licenseInfo.nextBillingDate).toLocaleDateString('en-SG')}.
+            </p>
+            
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label htmlFor="autoRenewalReason" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                Please tell us why you're disabling auto-renewal: *
+              </label>
+              <select
+                id="autoRenewalReason"
+                value={autoRenewalReason}
+                onChange={(e) => setAutoRenewalReason(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: 'white'
+                }}
+                disabled={processingAction}
+              >
+                <option value="">Select a reason</option>
+                <option value="switching-to-different-plan">Switching to a different plan</option>
+                <option value="cost-concerns">Cost concerns</option>
+                <option value="not-using-features">Not using features enough</option>
+                <option value="seasonal-usage">Seasonal usage (e.g., school holidays)</option>
+                <option value="trying-alternatives">Trying alternative solutions</option>
+                <option value="budget-constraints">Budget constraints</option>
+                <option value="prefer-manual-renewal">Prefer manual renewal</option>
+                <option value="other">Other</option>
+              </select>
+              
+              {autoRenewalReason === 'other' && (
+                <textarea
+                  value={autoRenewalOtherReason}
+                  onChange={(e) => setAutoRenewalOtherReason(e.target.value)}
+                  placeholder="Please provide more details..."
+                  rows="3"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    resize: 'vertical',
+                    marginTop: '10px'
+                  }}
+                  disabled={processingAction}
+                />
+              )}
+              {error && <div className="field-error" style={{ color: '#ef4444', fontSize: '14px', marginTop: '4px' }}>{error}</div>}
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                className="btn-secondary" 
+                onClick={() => {
+                  setShowAutoRenewalModal(false);
+                  setAutoRenewalReason('');
+                  setAutoRenewalOtherReason('');
+                  setError('');
+                }}
+                disabled={processingAction}
+              >
+                Keep Auto-Renewal
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={confirmToggleAutoRenewal}
+                disabled={processingAction || !autoRenewalReason}
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                {processingAction ? 'Processing...' : 'Disable Auto-Renewal'}
               </button>
             </div>
           </div>
