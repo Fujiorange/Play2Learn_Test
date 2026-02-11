@@ -45,6 +45,7 @@ import ViewLeaderboard from './components/Student/ViewLeaderboard';
 import DisplaySkillMatrix from './components/Student/DisplaySkillMatrix';
 import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
+import QuizResult from './components/Student/QuizResult';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
@@ -177,6 +178,7 @@ function App() {
           {/* ========== QUIZ ROUTES ========== */}
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
+          <Route path="/student/quiz/result" element={<QuizResult />} />
           <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
           <Route path="/student/quiz-journey" element={<QuizJourney />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
