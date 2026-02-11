@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
+import { validatePassword } from '../utils/passwordValidator';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -62,8 +63,10 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+    // Enhanced password validation
+    const passwordValidation = validatePassword(formData.password, formData.email);
+    if (!passwordValidation.valid) {
+      setError(passwordValidation.errors[0]); // Show first error
       return;
     }
 
@@ -264,6 +267,16 @@ export default function RegisterPage() {
       color: '#dc2626',
       fontSize: '14px',
       fontWeight: '500',
+    },
+    passwordHint: {
+      marginTop: '8px',
+      padding: '8px 12px',
+      background: '#f0f9ff',
+      border: '1px solid #bfdbfe',
+      borderRadius: '6px',
+      fontSize: '12px',
+      color: '#1e40af',
+      lineHeight: '1.5',
     },
     successMessage: {
       marginTop: '15px',
@@ -475,6 +488,9 @@ export default function RegisterPage() {
                     </svg>
                   )}
                 </button>
+              </div>
+              <div style={styles.passwordHint}>
+                💡 Password must: be 8+ characters, include at least 2 types (uppercase, lowercase, numbers, special chars), avoid common passwords and sequential/repeated characters
               </div>
             </div>
 
