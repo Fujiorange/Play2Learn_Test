@@ -169,10 +169,16 @@ export default function UpdatePicture() {
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>📸 Update Picture</h1>
-          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back</button>
+          <h1 style={styles.title}>My Profile</h1>
+          <button
+            style={styles.backBtn}
+            onClick={() => navigate('/teacher')}
+            onMouseEnter={(e) => e.target.style.background = '#4b5563'}
+            onMouseLeave={(e) => e.target.style.background = '#6b7280'}
+          >
+            ← Back to Dashboard
+          </button>
         </div>
-
         {message.text && (
           <div style={{ ...styles.message, ...(message.type === 'success' ? styles.success : styles.error) }}>
             {message.text}

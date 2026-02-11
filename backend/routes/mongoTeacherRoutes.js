@@ -15,6 +15,7 @@ const QuizAttempt = require('../models/QuizAttempt');
 const MathProfile = require('../models/MathProfile');
 const MathSkill = require('../models/MathSkill');
 const SupportTicket = require('../models/SupportTicket');
+const Class = require('../models/Class');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
@@ -79,7 +80,6 @@ router.get('/dashboard', async (req, res) => {
     const assignedSubjects = teacher.assignedSubjects || [];
 
     // === FIX: Convert class IDs to names for display ===
-    const Class = require('../models/Class');
     let assignedClassNames = assignedClasses; // Default to what we have
 
     if (assignedClasses.length > 0 && /^[a-f\d]{24}$/i.test(assignedClasses[0].toString())) {
@@ -114,15 +114,54 @@ router.get('/dashboard', async (req, res) => {
       console.log('📊 Using schoolId fallback, found', totalStudents, 'students');
     }
 
-    // Count active quizzes launched by this teacher
-    const activeQuizzes = await Quiz.countDocuments({
-      launched_by: teacherId,
+    // Count active quizzes visible to this teacher (launched for their school/classes)
+    let teacherClassNames = [];
+    
+    if (assignedClasses.length > 0) {
+      const isObjectId = /^[a-f\d]{24}$/i.test(assignedClasses[0].toString());
+      if (isObjectId) {
+        const classDocs = await Class.find({
+          _id: { $in: assignedClasses }
+        }).select('class_name');
+        teacherClassNames = classDocs.map(c => c.class_name);
+      } else {
+        teacherClassNames = assignedClasses;
+      }
+    }
+
+    // Count quizzes that are active and visible to this teacher
+    let quizQuery = {
+      is_active: true,
       is_launched: true,
       $or: [
         { launch_end_date: null },
         { launch_end_date: { $gte: new Date() } }
       ]
-    });
+    };
+
+    // Filter by teacher's school/classes if they have any
+    if (teacher.schoolId || teacherClassNames.length > 0) {
+      quizQuery.$and = [
+        quizQuery.$or ? { $or: quizQuery.$or } : {},
+        {
+          $or: [
+            { launched_for_school: teacher.schoolId?.toString() },
+            { launched_for_classes: { $in: teacherClassNames } },
+            // Launched for ALL (no restrictions)
+            { 
+              $and: [
+                { $or: [{ launched_for_classes: { $size: 0 } }, { launched_for_classes: { $exists: false } }] },
+                { $or: [{ launched_for_school: null }, { launched_for_school: { $exists: false } }] }
+              ]
+            }
+          ]
+        }
+      ];
+      delete quizQuery.$or;
+    }
+
+    const activeQuizzes = await Quiz.countDocuments(quizQuery);
+    console.log('📊 Active quizzes for teacher:', activeQuizzes);
 
     // Get recent quiz attempts from students
     let studentQuery = { role: 'Student' };
@@ -497,15 +536,63 @@ router.get('/class-performance', async (req, res) => {
 
 // ==================== QUIZ MANAGEMENT ====================
 
-// Get available quizzes (created by P2L admin)
+// Get available quizzes (created by P2L admin) - FIXED: Filter by teacher's school/classes
 router.get('/available-quizzes', async (req, res) => {
   try {
-    const quizzes = await Quiz.find({
+    const teacher = req.teacher;
+    
+    // Get teacher's class names (for matching launched_for_classes)
+    let teacherClassNames = [];
+    
+    if (teacher.assignedClasses?.length > 0) {
+      const firstClass = teacher.assignedClasses[0];
+      const isObjectId = /^[a-f\d]{24}$/i.test(firstClass.toString());
+      
+      if (isObjectId) {
+        const classDocs = await Class.find({
+          _id: { $in: teacher.assignedClasses }
+        }).select('class_name');
+        teacherClassNames = classDocs.map(c => c.class_name);
+      } else {
+        teacherClassNames = teacher.assignedClasses;
+      }
+    }
+
+    console.log('🎯 Teacher school:', teacher.schoolId);
+    console.log('🎯 Teacher classes:', teacherClassNames);
+
+    // Build query - show quizzes that are relevant to this teacher
+    let query = {
       is_active: true,
       quiz_type: 'adaptive'
-    })
-      .select('title description quiz_type adaptive_config is_launched launched_by launched_for_classes createdAt')
+    };
+
+    // If teacher has school/classes, filter by them
+    // Otherwise show all active quizzes
+    if (teacher.schoolId || teacherClassNames.length > 0) {
+      query.$or = [
+        // Launched for this teacher's school
+        { launched_for_school: teacher.schoolId?.toString() },
+        // Launched for teacher's classes (case-insensitive match)
+        { launched_for_classes: { $in: teacherClassNames } },
+        // Not launched yet (available to all)
+        { is_launched: false },
+        // Launched for ALL (empty arrays/null school means everyone)
+        { 
+          is_launched: true,
+          $and: [
+            { $or: [{ launched_for_classes: { $size: 0 } }, { launched_for_classes: { $exists: false } }] },
+            { $or: [{ launched_for_school: null }, { launched_for_school: { $exists: false } }] }
+          ]
+        }
+      ];
+    }
+
+    const quizzes = await Quiz.find(query)
+      .select('title description quiz_type adaptive_config is_launched launched_by launched_for_classes launched_for_school launch_start_date launch_end_date createdAt')
       .sort({ createdAt: -1 });
+
+    console.log('📚 Found', quizzes.length, 'quizzes for teacher');
 
     // Mark which ones are launched by this teacher
     const quizzesWithStatus = quizzes.map(quiz => ({
@@ -561,7 +648,6 @@ router.post('/launch-quiz', async (req, res) => {
     console.log('🔍 Request classes (names):', classes);
 
     // Get the Class model
-    const Class = require('../models/Class');
 
     // Step 1: Look up what classes these IDs represent
     const classDocs = await Class.find({
@@ -683,7 +769,6 @@ router.get('/my-classes', async (req, res) => {
       const isObjectId = typeof firstClass === 'string' && /^[a-f\d]{24}$/i.test(firstClass);
 
       if (isObjectId) {
-        const Class = require('../models/Class');
         const objectIds = assignedClassIds.map(id => {
           try { return new mongoose.Types.ObjectId(id); }
           catch (e) { return null; }

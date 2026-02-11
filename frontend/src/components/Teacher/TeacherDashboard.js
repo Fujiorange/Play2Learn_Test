@@ -338,17 +338,12 @@ export default function TeacherDashboard() {
               <h2 style={styles.sectionTitle}>Quiz Management</h2>
             </div>
             <ul style={styles.menuList}>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'launch-quiz' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('launch-quiz')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/quiz-assignment')}>
-                <span>Launch Adaptive Quiz</span><span style={styles.arrow}>→</span>
-              </li>
+              
               <li style={{ ...styles.menuItem, ...(hoveredItem === 'view-quizzes' ? styles.menuItemHover : {}) }}
                 onMouseEnter={() => setHoveredItem('view-quizzes')}
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => navigate('/teacher/quiz-assignment')}>
-                <span>View Launched Quizzes</span><span style={styles.arrow}>→</span>
+                <span>View Active Quizzes</span><span style={styles.arrow}>→</span>
               </li>
             </ul>
           </div>

@@ -9,6 +9,7 @@ export default function EditProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [contactError, setContactError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -19,18 +20,28 @@ export default function EditProfile() {
 
   const getToken = () => localStorage.getItem('token');
 
+  // Validate: 8 digits
+  const validateContact = (value) => {
+    if (!value || value.trim() === '') return '';
+    const digitsOnly = value.replace(/\D/g, '');
+    if (digitsOnly.length === 8) return '';
+    return 'Must be 8 digits phone number';
+  };
+
+  const handleContactChange = (e) => {
+    const value = e.target.value.replace(/[^\d\s\-+]/g, '');
+    setFormData(prev => ({ ...prev, contact: value }));
+    setContactError(validateContact(value));
+  };
+
   useEffect(() => {
     const loadProfile = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
+      if (!authService.isAuthenticated()) { navigate('/login'); return; }
       try {
-        const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile`, {
+        const res = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile`, {
           headers: { 'Authorization': `Bearer ${getToken()}` }
         });
-        const data = await response.json();
-        
+        const data = await res.json();
         if (data.success && data.user) {
           setFormData({
             name: data.user.name || '',
@@ -39,69 +50,38 @@ export default function EditProfile() {
             assignedClasses: data.user.assignedClasses || [],
             assignedSubjects: data.user.assignedSubjects || [],
           });
-        } else {
-          const user = authService.getCurrentUser();
-          if (user) {
-            setFormData({
-              name: user.name || '',
-              email: user.email || '',
-              contact: user.contact || '',
-              assignedClasses: user.assignedClasses || [],
-              assignedSubjects: user.assignedSubjects || [],
-            });
-          }
         }
-      } catch (error) {
-        console.error('Error:', error);
-        const user = authService.getCurrentUser();
-        if (user) {
-          setFormData({
-            name: user.name || '',
-            email: user.email || '',
-            contact: user.contact || '',
-            assignedClasses: user.assignedClasses || [],
-            assignedSubjects: user.assignedSubjects || [],
-          });
-        }
-      } finally {
-        setLoading(false);
-      }
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
     };
     loadProfile();
   }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage({ type: '', text: '' });
+    const error = validateContact(formData.contact);
+    if (error) { setContactError(error); setMessage({ type: 'error', text: error }); return; }
+    
     setSaving(true);
+    setMessage({ type: '', text: '' });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile`, {
+      const res = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ contact: formData.contact })
       });
-
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success) {
-        const currentUser = authService.getCurrentUser();
-        const updatedUser = { ...currentUser, contact: formData.contact };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setMessage({ type: 'success', text: 'Contact updated successfully!' });
-        setTimeout(() => navigate('/teacher/profile'), 1500);
+        const user = authService.getCurrentUser();
+        localStorage.setItem('user', JSON.stringify({ ...user, contact: formData.contact }));
+        setMessage({ type: 'success', text: 'Profile updated successfully!' });
+        setTimeout(() => navigate('/teacher'), 1500);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update.' });
+        setMessage({ type: 'error', text: data.error || 'Failed to update' });
       }
-    } catch (error) {
-      console.error('Error:', error);
-      setMessage({ type: 'error', text: 'Failed to connect to server.' });
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { setMessage({ type: 'error', text: 'Connection error' }); }
+    finally { setSaving(false); }
   };
 
   const styles = {
@@ -111,38 +91,36 @@ export default function EditProfile() {
     title: { fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backBtn: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     form: { display: 'flex', flexDirection: 'column', gap: '20px' },
-    formGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
+    formGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
     label: { fontSize: '14px', fontWeight: '600', color: '#374151' },
-    input: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' },
-    inputDisabled: { background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' },
-    infoBox: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' },
-    tagContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
-    classTag: { padding: '4px 12px', background: '#dbeafe', color: '#1e40af', borderRadius: '16px', fontSize: '13px', fontWeight: '500' },
-    subjectTag: { padding: '4px 12px', background: '#fef3c7', color: '#92400e', borderRadius: '16px', fontSize: '13px', fontWeight: '500' },
+    input: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', width: '100%', boxSizing: 'border-box' },
+    inputError: { borderColor: '#ef4444' },
+    inputDisabled: { background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' },
+    errorText: { color: '#ef4444', fontSize: '13px', marginTop: '4px' },
+    hintText: { color: '#6b7280', fontSize: '12px', marginTop: '4px' },
     buttonGroup: { display: 'flex', gap: '12px', marginTop: '8px' },
-    saveBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
-    cancelBtn: { flex: 1, padding: '12px', background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
+    saveBtn: { flex: 1, padding: '14px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
+    cancelBtn: { flex: 1, padding: '14px', background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
     message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
     success: { background: '#d1fae5', color: '#065f46' },
     error: { background: '#fee2e2', color: '#991b1b' },
-    disabled: { opacity: 0.6, cursor: 'not-allowed' },
-    hint: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
-    loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
+    disabled: { opacity: 0.5, cursor: 'not-allowed' },
+    infoBox: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' },
   };
 
-  if (loading) return <div style={styles.loading}><div>Loading...</div></div>;
+  if (loading) return <div style={styles.container}><div style={styles.content}>Loading...</div></div>;
 
   return (
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
           <h1 style={styles.title}>✏️ Edit Profile</h1>
-          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back</button>
+          <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
         </div>
 
         <div style={styles.infoBox}>
           <p style={{ fontSize: '14px', color: '#166534', margin: 0 }}>
-            ℹ️ Only your contact number can be updated here. For other changes, please contact your School Admin.
+            ℹ️ Only contact number can be updated. For other changes, contact School Admin.
           </p>
         </div>
 
@@ -156,7 +134,6 @@ export default function EditProfile() {
           <div style={styles.formGroup}>
             <label style={styles.label}>Full Name</label>
             <input type="text" value={formData.name} disabled style={{ ...styles.input, ...styles.inputDisabled }} />
-            <span style={styles.hint}>Managed by School Admin</span>
           </div>
 
           <div style={styles.formGroup}>
@@ -169,40 +146,23 @@ export default function EditProfile() {
             <input
               type="tel"
               value={formData.contact}
-              onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-              placeholder="Enter your phone number"
+              onChange={handleContactChange}
+              placeholder="e.g., 91234567 or +6591234567"
               disabled={saving}
-              style={styles.input}
+              style={{ ...styles.input, ...(contactError ? styles.inputError : {}) }}
             />
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Assigned Classes</label>
-            <div style={styles.tagContainer}>
-              {formData.assignedClasses.length > 0 ? (
-                formData.assignedClasses.map((cls, i) => <span key={i} style={styles.classTag}>{cls}</span>)
-              ) : (
-                <span style={{ color: '#6b7280', fontSize: '14px' }}>No classes assigned</span>
-              )}
-            </div>
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Assigned Subjects</label>
-            <div style={styles.tagContainer}>
-              {formData.assignedSubjects.length > 0 ? (
-                formData.assignedSubjects.map((subj, i) => <span key={i} style={styles.subjectTag}>{subj}</span>)
-              ) : (
-                <span style={{ color: '#6b7280', fontSize: '14px' }}>No subjects assigned</span>
-              )}
-            </div>
+            {contactError ? (
+              <span style={styles.errorText}>⚠️ {contactError}</span>
+            ) : (
+              <span style={styles.hintText}>Enter a 8 digit phone number</span>
+            )}
           </div>
 
           <div style={styles.buttonGroup}>
-            <button type="submit" disabled={saving} style={{ ...styles.saveBtn, ...(saving ? styles.disabled : {}) }}>
+            <button type="submit" disabled={saving || !!contactError} style={{ ...styles.saveBtn, ...((saving || contactError) ? styles.disabled : {}) }}>
               {saving ? 'Saving...' : '💾 Save Changes'}
             </button>
-            <button type="button" onClick={() => navigate('/teacher/profile')} disabled={saving} style={styles.cancelBtn}>
+            <button type="button" onClick={() => navigate('/teacher')} disabled={saving} style={styles.cancelBtn}>
               Cancel
             </button>
           </div>
