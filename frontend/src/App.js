@@ -43,7 +43,6 @@ import ViewResults from './components/Student/ViewResults';
 import TrackProgress from './components/Student/TrackProgress';
 import ViewLeaderboard from './components/Student/ViewLeaderboard';
 import DisplaySkillMatrix from './components/Student/DisplaySkillMatrix';
-import ViewDetailedSubjectInfo from './components/Student/ViewDetailedSubjectInfo';
 import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
 import QuizResult from './components/Student/QuizResult';
@@ -171,7 +170,6 @@ function App() {
           <Route path="/student/progress" element={<TrackProgress />} />
           <Route path="/student/leaderboard" element={<ViewLeaderboard />} />
           <Route path="/student/skills" element={<DisplaySkillMatrix />} />
-          <Route path="/student/subject-info" element={<ViewDetailedSubjectInfo />} />
           <Route path="/student/quiz/attempt" element={<AttemptQuiz />} />
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
