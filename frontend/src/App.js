@@ -211,7 +211,7 @@ function App() {
           {/* ⭐ NEW ROUTE - Student News & Updates */}
           <Route path="/student/news" element={<StudentViewNewsUpdates />} />
 
-          {/* â­ NEW ROUTES - Student Rewards System */}
+          {/* ⭐ NEW ROUTES - Student Rewards System */}
           <Route path="/student/shop" element={<StudentViewRewardShop />} />
           <Route path="/student/badges" element={<StudentViewBadges />} />
 
@@ -220,7 +220,8 @@ function App() {
           <Route path="/student/quiz/placement" element={<PlacementQuiz />} />
           <Route path="/student/quiz/result" element={<QuizResult />} />
           <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
-          {/* Dedicated Adaptive Quiz Journey route */}
+          
+          {/* 🆕 UPDATED: Dedicated Adaptive Quiz Journey route */}
           <Route path="/student/quiz-journey" element={<QuizJourney />} />
 
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
