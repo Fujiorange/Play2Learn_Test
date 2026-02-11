@@ -132,6 +132,7 @@ import MaintenanceBanner from './components/MaintenanceBanner/MaintenanceBanner'
 
 // Student Adaptive Quiz Components
 import AdaptiveQuizzes from './components/Student/AdaptiveQuizzes';
+import LevelQuizzes from './components/Student/LevelQuizzes';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
 
 function App() {
@@ -198,8 +199,13 @@ function App() {
           <Route path="/student/quiz/result" element={<QuizResult />} />
 
           {/* ========== ADAPTIVE QUIZ ROUTES ========== */}
+          {/* Keep old adaptive quizzes for backward compatibility */}
           <Route path="/student/adaptive-quizzes" element={<AdaptiveQuizzes />} />
           <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
+
+          {/* ========== LEVEL QUIZ ROUTES (NEW) ========== */}
+          {/* Level-based quizzes 1-10 for post-placement students */}
+          <Route path="/student/level-quizzes" element={<LevelQuizzes />} />
 
           <Route path="/student/assignment/attempt" element={<AttemptAssignment />} />
           <Route path="/student/results/history" element={<ViewResultHistory />} />
