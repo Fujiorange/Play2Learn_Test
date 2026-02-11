@@ -109,6 +109,7 @@ export default function StudentDashboard() {
           rank: '#-',
           completedQuizzes: 0,
           grade_level: 'Primary 1',
+          placementCompleted: false,
         });
       }
     } catch (error) {
@@ -121,6 +122,7 @@ export default function StudentDashboard() {
         rank: '#-',
         completedQuizzes: 0,
         grade_level: 'Primary 1',
+        placementCompleted: false,
       });
     } finally {
       setLoading(false);
