@@ -1,11 +1,60 @@
 // backend/routes/emailDiagnosticRoutes.js
+// 
+// Email Diagnostic Endpoints
+// These endpoints help diagnose email configuration issues on Render.
+// 
+// Security measures:
+// - Rate limiting: Max 10 requests per IP per 10 minutes
+// - Email passwords are never exposed (shown as "SET (hidden)")
+// - Test email endpoint limited to 3 different recipients per IP per 10 minutes
+// - Basic email validation to prevent abuse
+// 
+// These endpoints are intentionally public (no auth) to allow easy troubleshooting,
+// but rate limiting prevents abuse. They expose no sensitive data.
+//
 const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 
+// Simple rate limiting to prevent abuse
+const requestCounts = new Map();
+const RATE_LIMIT = 10; // Max 10 requests per IP per 10 minutes
+const RATE_WINDOW = 10 * 60 * 1000; // 10 minutes
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const record = requestCounts.get(ip) || { count: 0, resetAt: now + RATE_WINDOW };
+  
+  if (now > record.resetAt) {
+    // Reset the counter
+    record.count = 0;
+    record.resetAt = now + RATE_WINDOW;
+  }
+  
+  record.count++;
+  requestCounts.set(ip, record);
+  
+  return record.count <= RATE_LIMIT;
+}
+
+// Middleware to add rate limiting
+function rateLimitMiddleware(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  
+  if (!checkRateLimit(ip)) {
+    return res.status(429).json({
+      success: false,
+      error: 'Rate limit exceeded. Please wait before trying again.',
+      message: 'Too many requests. Try again in 10 minutes.'
+    });
+  }
+  
+  next();
+}
+
 // Simple diagnostic endpoint to test email configuration
-// Only accessible when NODE_ENV is not production for security
-router.get('/test-email-config', async (req, res) => {
+// Rate-limited to prevent abuse
+router.get('/test-email-config', rateLimitMiddleware, async (req, res) => {
   try {
     // Check if all environment variables are set
     const config = {
@@ -107,7 +156,8 @@ router.get('/test-email-config', async (req, res) => {
 
 // Send a test email to verify email sending works
 // Query param: ?to=recipient@example.com
-router.get('/send-test-email', async (req, res) => {
+// Rate-limited to prevent abuse
+router.get('/send-test-email', rateLimitMiddleware, async (req, res) => {
   try {
     const recipient = req.query.to;
     
@@ -124,6 +174,28 @@ router.get('/send-test-email', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid email address format'
+      });
+    }
+    
+    // Additional security: Prevent sending to too many different recipients
+    const ip = req.ip || req.connection.remoteAddress;
+    const recipientKey = `${ip}:recipients`;
+    const recentRecipients = requestCounts.get(recipientKey) || { set: new Set(), resetAt: Date.now() + RATE_WINDOW };
+    
+    if (Date.now() > recentRecipients.resetAt) {
+      recentRecipients.set = new Set();
+      recentRecipients.resetAt = Date.now() + RATE_WINDOW;
+    }
+    
+    recentRecipients.set.add(recipient);
+    requestCounts.set(recipientKey, recentRecipients);
+    
+    // Limit to 3 different recipients per IP per window
+    if (recentRecipients.set.size > 3) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many different recipients. You can test with up to 3 email addresses per 10 minutes.',
+        message: 'This limit prevents abuse. Try again later.'
       });
     }
 
