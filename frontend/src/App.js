@@ -47,7 +47,6 @@ import AttemptQuiz from './components/Student/AttemptQuiz';
 import PlacementQuiz from './components/Student/PlacementQuiz';
 import QuizResult from './components/Student/QuizResult';
 import AttemptAdaptiveQuiz from './components/Student/AttemptAdaptiveQuiz';
-import ViewResultHistory from './components/Student/ViewResultHistory';
 import StudentWriteTestimonial from './components/Student/WriteTestimonial';
 import StudentCreateSupportTicket from './components/Student/CreateSupportTicket';
 import StudentTrackSupportTicket from './components/Student/TrackSupportTicket';
@@ -181,7 +180,6 @@ function App() {
           <Route path="/student/quiz/result" element={<QuizResult />} />
           <Route path="/student/adaptive-quiz/:quizId" element={<AttemptAdaptiveQuiz />} />
           <Route path="/student/quiz-journey" element={<QuizJourney />} />
-          <Route path="/student/results/history" element={<ViewResultHistory />} />
           <Route path="/student/testimonial" element={<StudentWriteTestimonial />} />
 
           {/* Student Support */}
