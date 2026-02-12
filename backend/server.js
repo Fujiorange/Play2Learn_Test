@@ -17,6 +17,7 @@ const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
 const p2lAdminRoutes = require('./routes/p2lAdminRoutes');
 const adaptiveQuizRoutes = require('./routes/adaptiveQuizRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
+const emailDiagnosticRoutes = require('./routes/emailDiagnosticRoutes');
 
 // ==================== CORS CONFIGURATION ====================
 const corsOptions = {
@@ -363,6 +364,7 @@ try {
   app.use('/api/p2ladmin', p2lAdminRoutes); // P2lAdmin routes
   app.use('/api/adaptive-quiz', adaptiveQuizRoutes); // Adaptive quiz routes
   app.use('/api', licenseRoutes); // License management routes
+  app.use('/api/email-diagnostic', emailDiagnosticRoutes); // Email diagnostic routes
   console.log('✅ Registered all routes successfully.');
 } catch (error) {
   console.error('❌ Error registering routes:', error.message);
