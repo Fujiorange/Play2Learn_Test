@@ -88,6 +88,7 @@ Play2Learn is an adaptive learning platform that combines gamification with pers
 **📧 Email Setup:** 
 - Quick Reference: [EMAIL_SETUP_QUICKREF.md](EMAIL_SETUP_QUICKREF.md)
 - Detailed Guide: [EMAIL_SETUP_GUIDE.md](EMAIL_SETUP_GUIDE.md)
+- **Not Receiving Emails?** [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md)
 
 **🚨 Troubleshooting:** See [RENDER_QUICK_FIX.md](RENDER_QUICK_FIX.md)
 

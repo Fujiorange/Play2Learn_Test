@@ -2,6 +2,8 @@
 
 This guide will help you set up email functionality for your Play2Learn platform deployed on Render. You'll be able to send welcome emails and credentials to newly created teacher, student, and parent accounts.
 
+> **🚨 Not receiving emails after setup?** See [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md) for detailed troubleshooting steps and diagnostic tools.
+
 ## 📋 Overview
 
 Your Play2Learn platform is already configured with email functionality using **Nodemailer**. You just need to configure the SMTP settings in your Render environment.
@@ -155,7 +157,52 @@ EMAIL_FROM="Play2Learn <your-email@outlook.com>"
 
 ## 🧪 Testing Your Email Configuration
 
-### Method 1: Use the Test Script (Local Testing)
+### Method 1: Use Diagnostic Endpoints (Recommended - On Render)
+
+**NEW! Use these endpoints to test your email configuration directly on Render:**
+
+**Step 1: Check Configuration**
+```
+https://your-app.onrender.com/api/email-diagnostic/test-email-config
+```
+- Shows if all 6 email variables are set correctly
+- Tests SMTP connection
+- Provides helpful error messages if something is wrong
+
+**Step 2: Send Test Email**
+```
+https://your-app.onrender.com/api/email-diagnostic/send-test-email?to=your-email@example.com
+```
+- Replace `your-email@example.com` with your actual email
+- Sends a real test email immediately
+- Check your inbox (and spam folder!) within 5 minutes
+
+**Example Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Email configuration is valid and SMTP connection successful!",
+  "config": {
+    "EMAIL_HOST": "smtp.gmail.com",
+    "EMAIL_PORT": "587",
+    "EMAIL_USER": "your-email@gmail.com"
+  }
+}
+```
+
+**If there are issues, you'll get detailed help:**
+```json
+{
+  "success": false,
+  "message": "SMTP connection failed",
+  "errorCode": "EAUTH",
+  "help": "Authentication failed. For Gmail: Use App Password, not regular password."
+}
+```
+
+> **💡 Tip:** Use these diagnostic endpoints first before trying to send actual user credentials!
+
+### Method 2: Use the Test Script (Local Testing)
 
 If you have the code locally:
 
@@ -179,7 +226,7 @@ node test-email.js
 
 4. Check your inbox (and spam folder) for the test email
 
-### Method 2: Test on Render (Production Testing)
+### Method 3: Test on Render (Production Testing)
 
 1. Log in to your deployed app at: `https://play2learn-test.onrender.com`
 2. Create a test account (Teacher, Student, or Parent)
@@ -187,14 +234,15 @@ node test-email.js
 4. Click "Send Credentials" for a test user
 5. Check the recipient's email inbox
 
-### Method 3: Check Render Logs
+### Method 4: Check Render Logs
 
 1. Go to Render Dashboard
 2. Select your play2learn service
 3. Click on **Logs**
 4. Look for these messages after redeployment:
-   - `✅ Email service ready` - Email is configured correctly
-   - `❌ Email service error:` - There's a configuration issue
+   - `✅ Email service ready - SMTP connection verified` - Email is configured correctly
+   - `❌ Email service SMTP connection failed` - There's a configuration issue
+   - Detailed error messages will help you identify the problem
 
 ---
 
@@ -243,6 +291,13 @@ node test-email.js
 ---
 
 ## ⚠️ Troubleshooting
+
+> **📖 For comprehensive troubleshooting, see [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md)**
+>
+> **Quick Diagnosis:**
+> 1. Visit `/api/email-diagnostic/test-email-config` to check configuration
+> 2. Visit `/api/email-diagnostic/send-test-email?to=your-email` to test sending
+> 3. Check Render logs for detailed error messages
 
 ### Problem: "Email service error" in Render logs
 

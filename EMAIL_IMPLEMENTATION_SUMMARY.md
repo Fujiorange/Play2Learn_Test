@@ -10,6 +10,7 @@ This PR provides comprehensive documentation and tools to help you set up email 
    - Detailed instructions for Gmail, SendGrid, Outlook, and Mailgun
    - Step-by-step Render environment variable configuration
    - Testing methods (local and production)
+   - Diagnostic endpoints for easy testing
    - Troubleshooting section with solutions
    - Security best practices
 
@@ -18,16 +19,31 @@ This PR provides comprehensive documentation and tools to help you set up email 
    - Ready-to-use examples
    - Quick testing commands
 
-3. **backend/verify-email-config.js** - Configuration validator
+3. **EMAIL_TROUBLESHOOTING.md** - Comprehensive troubleshooting guide (NEW!)
+   - Step-by-step diagnosis for "not receiving emails"
+   - Provider-specific checks (Gmail, SendGrid, Outlook)
+   - Common error codes and solutions
+   - Complete troubleshooting checklist
+   - Instructions for using diagnostic tools
+
+4. **backend/verify-email-config.js** - Configuration validator
    - Validates email environment variables
    - Detects configuration issues
    - Provides helpful guidance
 
+5. **backend/routes/emailDiagnosticRoutes.js** - Diagnostic API endpoints (NEW!)
+   - `/api/email-diagnostic/test-email-config` - Check if email is configured correctly
+   - `/api/email-diagnostic/send-test-email?to=email` - Send a test email instantly
+   - No authentication required for easy testing
+   - Provides detailed error messages and help
+
 ### Files Updated
 
 1. **backend/.env.example** - Enhanced with detailed email examples
-2. **RENDER_DEPLOYMENT_GUIDE.md** - Added email setup references
-3. **README.md** - Added email guide links and testing utilities
+2. **backend/services/emailService.js** - Enhanced logging and error messages (NEW!)
+3. **backend/server.js** - Added diagnostic routes (NEW!)
+4. **RENDER_DEPLOYMENT_GUIDE.md** - Added email setup references
+5. **README.md** - Added email guide links and testing utilities
 
 ---
 
@@ -115,23 +131,64 @@ Your Play2Learn platform already has a complete email system built-in using **No
 
 ### Step 3: Verify Email is Working
 
-1. **Check Render Logs**
-   - Go to Render Dashboard → Your Service → Logs
-   - Look for: `✅ Email service ready`
-   - If you see `❌ Email service error:`, check your configuration
+**NEW! Use Diagnostic Endpoints (Easiest Way):**
 
-2. **Test Sending Emails**
+1. **Check Configuration:**
+   ```
+   https://your-app.onrender.com/api/email-diagnostic/test-email-config
+   ```
+   - Shows if all 6 variables are set
+   - Tests SMTP connection
+   - Provides helpful error messages
+
+2. **Send Test Email:**
+   ```
+   https://your-app.onrender.com/api/email-diagnostic/send-test-email?to=your-email@example.com
+   ```
+   - Replace with your actual email
+   - Sends test email immediately
+   - Check inbox (and spam folder!)
+
+3. **Check Render Logs**
+   - Go to Render Dashboard → Your Service → Logs
+   - Look for: `✅ Email service ready - SMTP connection verified`
+   - If you see `❌ Email service SMTP connection failed`, check configuration
+
+4. **Test with Real Users**
    - Log in to your deployed app as School Admin
    - Navigate to: `https://play2learn-test.onrender.com/school-admin/users/pending-credentials`
-   - You'll see users with pending credentials
    - Click "Send Credentials" for a test user
    - Check the recipient's email (and spam folder)
+
+> **💡 Not receiving emails?** See [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md) for detailed help!
 
 ---
 
 ## 🛠️ Testing Tools
 
-### 1. Verify Configuration (Local)
+### 1. Diagnostic Endpoints (On Render - NEW!)
+
+**Check Email Configuration:**
+```
+GET https://your-app.onrender.com/api/email-diagnostic/test-email-config
+```
+Returns JSON showing:
+- Which environment variables are set/missing
+- SMTP connection status
+- Specific error messages and solutions
+
+**Send Test Email:**
+```
+GET https://your-app.onrender.com/api/email-diagnostic/send-test-email?to=recipient@example.com
+```
+Returns JSON showing:
+- Whether email was sent successfully
+- Message ID if successful
+- Specific error and help if failed
+
+These endpoints work without authentication - just visit them in your browser!
+
+### 2. Verify Configuration (Local)
 
 Before deploying, test your email configuration locally:
 
