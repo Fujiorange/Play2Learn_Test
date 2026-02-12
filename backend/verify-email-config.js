@@ -5,7 +5,7 @@
 require('dotenv').config();
 
 console.log('🔍 Email Configuration Verification\n');
-console.log('=' .repeat(50));
+console.log('='.repeat(50));
 
 // Check if all required environment variables are set
 const requiredVars = [
@@ -35,7 +35,7 @@ requiredVars.forEach(varName => {
   }
 });
 
-console.log('\n' + '=' .repeat(50));
+console.log('\n' + '='.repeat(50));
 
 // Additional validation
 if (allPresent) {
@@ -102,7 +102,7 @@ if (allPresent) {
   }
 }
 
-console.log('\n' + '=' .repeat(50));
+console.log('\n' + '='.repeat(50));
 
 // Final summary
 if (!allPresent) {
