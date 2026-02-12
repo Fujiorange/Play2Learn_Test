@@ -85,6 +85,11 @@ Play2Learn is an adaptive learning platform that combines gamification with pers
 
 **📘 Full Instructions:** See [RENDER_DEPLOYMENT_GUIDE.md](RENDER_DEPLOYMENT_GUIDE.md)
 
+**📧 Email Setup:** 
+- Quick Reference: [EMAIL_SETUP_QUICKREF.md](EMAIL_SETUP_QUICKREF.md)
+- Detailed Guide: [EMAIL_SETUP_GUIDE.md](EMAIL_SETUP_GUIDE.md)
+- **Not Receiving Emails?** [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md)
+
 **🚨 Troubleshooting:** See [RENDER_QUICK_FIX.md](RENDER_QUICK_FIX.md)
 
 ### Required Environment Variables for Production
@@ -147,6 +152,10 @@ FYP-25-S4-14P_Play2Learn/
 cd backend
 npm start           # Start server
 npm run dev         # Start with nodemon (auto-reload)
+
+# Email testing utilities
+node verify-email-config.js  # Verify email configuration
+node test-email.js           # Send test email
 ```
 
 ### Frontend
