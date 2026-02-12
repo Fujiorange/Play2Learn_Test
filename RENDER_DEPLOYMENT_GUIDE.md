@@ -18,12 +18,21 @@ This guide provides step-by-step instructions for deploying the Play2Learn appli
    mongodb+srv://username:password@cluster.mongodb.net/play2learn?retryWrites=true&w=majority
    ```
 
-## Step 2: Prepare Email Service (Gmail Example)
+## Step 2: Prepare Email Service
 
-If using Gmail:
-1. Enable 2-Factor Authentication on your Google account
-2. Generate an App Password at: [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-3. Save the generated password for later use
+**📧 See [EMAIL_SETUP_GUIDE.md](EMAIL_SETUP_GUIDE.md) for complete email setup instructions**
+
+Quick reference - choose one option:
+- **Gmail**: Free, 500 emails/day (requires App Password)
+- **SendGrid**: Free tier 100 emails/day, better for production
+- **Outlook/Hotmail**: Free, 300 emails/day
+- **Mailgun**: Free tier 5,000 emails/month
+
+The EMAIL_SETUP_GUIDE.md provides:
+- Detailed setup steps for each service
+- Environment variable configuration
+- Testing instructions
+- Troubleshooting tips
 
 ## Step 3: Deploy to Render
 
@@ -70,6 +79,10 @@ In Render Dashboard → Environment tab, add these variables:
 
 ### Email Configuration Variables
 
+**📧 For detailed setup instructions, see [EMAIL_SETUP_GUIDE.md](EMAIL_SETUP_GUIDE.md)**
+
+Required email variables (6 total):
+
 | Variable | Example Value | Description |
 |----------|---------------|-------------|
 | `EMAIL_HOST` | `smtp.gmail.com` | SMTP server hostname |
@@ -79,22 +92,33 @@ In Render Dashboard → Environment tab, add these variables:
 | `EMAIL_PASSWORD` | `your-app-password` | SMTP password (use App Password for Gmail) |
 | `EMAIL_FROM` | `"Play2Learn <noreply@play2learn.com>"` | From address for emails |
 
-### Optional Variables
+**Quick Examples:**
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `USER_DELETION_PIN` | (none) | PIN for user deletion confirmation |
-
-### Example Gmail Configuration
-
+Gmail:
 ```
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_SECURE=false
 EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=abcd efgh ijkl mnop  # Your 16-character App Password
+EMAIL_PASSWORD=your-16-char-app-password
 EMAIL_FROM="Play2Learn <your-email@gmail.com>"
 ```
+
+SendGrid (Recommended for Production):
+```
+EMAIL_HOST=smtp.sendgrid.net
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=apikey
+EMAIL_PASSWORD=SG.your-api-key
+EMAIL_FROM="Play2Learn <verified-sender@yourdomain.com>"
+```
+
+### Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USER_DELETION_PIN` | (none) | PIN for user deletion confirmation |
 
 ## Step 5: Deploy
 
