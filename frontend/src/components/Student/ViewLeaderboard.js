@@ -4,44 +4,71 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import studentService from '../../services/studentService';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function ViewLeaderboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserLevel, setCurrentUserLevel] = useState(null);
   const [error, setError] = useState('');
+  const [viewMode, setViewMode] = useState('class'); // 'class' or 'school'
 
-  useEffect(() => {
-    const loadLeaderboard = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
+  const getToken = () => localStorage.getItem('token');
 
-      const user = authService.getCurrentUser();
-      setCurrentUser(user);
+  const loadLeaderboard = async (mode) => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
 
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+
+    try {
+      setLoading(true);
+      
+      // ✅ Fetch YOUR Quiz Journey level
       try {
-        // REAL API CALL - Get leaderboard filtered by current user's school & class
-        const result = await studentService.getLeaderboard(user.schoolId, user.class);
-
-        if (result.success) {
-          setLeaderboard(result.leaderboard || []);
-        } else {
-          setError('Failed to load leaderboard');
-          setLeaderboard([]);
+        const levelResponse = await fetch(`${API_BASE_URL}/api/adaptive-quiz/student/current-level`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const levelData = await levelResponse.json();
+        
+        if (levelData.success) {
+          setCurrentUserLevel(levelData.currentLevel || 1);
+          console.log('✅ Your Quiz Journey level:', levelData.currentLevel);
         }
-      } catch (error) {
-        console.error('Load leaderboard error:', error);
+      } catch (levelError) {
+        console.warn('⚠️ Could not fetch your quiz journey level:', levelError);
+      }
+      
+      // Get leaderboard - if mode is 'school', pass only schoolId; if 'class', pass both
+      const result = mode === 'school' 
+        ? await studentService.getLeaderboard(user.schoolId, null)
+        : await studentService.getLeaderboard(user.schoolId, user.class);
+
+      if (result.success) {
+        setLeaderboard(result.leaderboard || []);
+      } else {
         setError('Failed to load leaderboard');
         setLeaderboard([]);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Load leaderboard error:', error);
+      setError('Failed to load leaderboard');
+      setLeaderboard([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadLeaderboard();
-  }, [navigate]);
+  useEffect(() => {
+    loadLeaderboard(viewMode);
+  }, [navigate, viewMode]);
 
   const getRankBadgeStyle = (rank) => {
     if (rank === 1) return { background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', color: 'white' };
@@ -56,6 +83,10 @@ export default function ViewLeaderboard() {
     header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' },
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
     backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    toggleContainer: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '16px' },
+    toggleButton: { padding: '8px 16px', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s' },
+    toggleButtonActive: { background: '#10b981', color: 'white' },
+    toggleButtonInactive: { background: '#e5e7eb', color: '#6b7280' },
     errorMessage: { padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', width: '100%' },
     podium: { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '16px', marginBottom: '32px', padding: '32px', background: 'white', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' },
     podiumPlace: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '150px' },
@@ -84,6 +115,27 @@ export default function ViewLeaderboard() {
         <div style={styles.header}>
           <h1 style={styles.title}>🏆 Leaderboard</h1>
           <button style={styles.backButton} onClick={() => navigate('/student')}>← Back to Dashboard</button>
+          <div style={styles.toggleContainer}>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>View:</span>
+            <button 
+              style={{
+                ...styles.toggleButton,
+                ...(viewMode === 'class' ? styles.toggleButtonActive : styles.toggleButtonInactive)
+              }}
+              onClick={() => setViewMode('class')}
+            >
+              My Class
+            </button>
+            <button 
+              style={{
+                ...styles.toggleButton,
+                ...(viewMode === 'school' ? styles.toggleButtonActive : styles.toggleButtonInactive)
+              }}
+              onClick={() => setViewMode('school')}
+            >
+              My School
+            </button>
+          </div>
           {error && (
             <div style={styles.errorMessage}>
               ⚠️ {error}
@@ -145,7 +197,9 @@ export default function ViewLeaderboard() {
                     </td>
                     <td style={styles.td}><strong>{player.name}</strong>{player.isCurrentUser && ' (You)'}</td>
                     <td style={styles.td}><strong style={{ color: '#10b981' }}>{player.points?.toLocaleString() || 0}</strong></td>
-                    <td style={styles.td}>Level {player.level || 1}</td>
+                    <td style={styles.td}>
+                      Level {player.isCurrentUser && currentUserLevel !== null ? currentUserLevel : (player.level || 1)}
+                    </td>
                     <td style={styles.td}>🏆 {player.achievements || 0}</td>
                   </tr>
                 ))}

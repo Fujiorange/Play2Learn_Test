@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getQuestions, createQuestion, updateQuestion, deleteQuestion, uploadQuestionsCSV, getQuestionSubjects, getQuestionTopics, getQuestionGrades, getQuestionQuizLevels, bulkDeleteQuestions } from '../../services/p2lAdminService';
+import PinConfirmationModal from '../common/PinConfirmationModal';
 import './QuestionBank.css';
 
 function QuestionBank() {
@@ -15,6 +16,8 @@ function QuestionBank() {
   const [grades, setGrades] = useState([]);
   const [quizLevels, setQuizLevels] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [deleteAction, setDeleteAction] = useState(null); // { type: 'single' | 'bulk', id?: string }
   const [formData, setFormData] = useState({
     text: '',
     choices: ['', '', '', ''],
@@ -150,39 +153,44 @@ function QuestionBank() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this question?')) {
-      return;
-    }
-    try {
-      await deleteQuestion(id);
-      alert('Question deleted successfully');
-      fetchQuestions();
-    } catch (error) {
-      console.error('Failed to delete question:', error);
-      alert(error.message || 'Failed to delete question');
-    }
+  const handleDelete = (id) => {
+    setDeleteAction({ type: 'single', id });
+    setShowPinModal(true);
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedQuestions.length === 0) {
       alert('Please select questions to delete');
       return;
     }
-    
-    if (!window.confirm(`Are you sure you want to delete ${selectedQuestions.length} question(s)?`)) {
-      return;
+    setDeleteAction({ type: 'bulk' });
+    setShowPinModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteAction.type === 'single') {
+      try {
+        await deleteQuestion(deleteAction.id);
+        alert('Question deleted successfully');
+        fetchQuestions();
+      } catch (error) {
+        console.error('Failed to delete question:', error);
+        alert(error.message || 'Failed to delete question');
+      }
+    } else if (deleteAction.type === 'bulk') {
+      try {
+        await bulkDeleteQuestions(selectedQuestions);
+        alert(`${selectedQuestions.length} question(s) deleted successfully`);
+        setSelectedQuestions([]);
+        fetchQuestions();
+      } catch (error) {
+        console.error('Failed to delete questions:', error);
+        alert(error.message || 'Failed to delete questions');
+      }
     }
     
-    try {
-      await bulkDeleteQuestions(selectedQuestions);
-      alert(`${selectedQuestions.length} question(s) deleted successfully`);
-      setSelectedQuestions([]);
-      fetchQuestions();
-    } catch (error) {
-      console.error('Failed to delete questions:', error);
-      alert(error.message || 'Failed to delete questions');
-    }
+    setShowPinModal(false);
+    setDeleteAction(null);
   };
 
   const handleSelectAll = () => {
@@ -727,6 +735,19 @@ function QuestionBank() {
           ))
         )}
       </div>
+
+      {/* PIN Confirmation Modal */}
+      <PinConfirmationModal
+        isOpen={showPinModal}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowPinModal(false);
+          setDeleteAction(null);
+        }}
+        title={deleteAction?.type === 'bulk' 
+          ? `Confirm Bulk Deletion (${selectedQuestions.length} questions)` 
+          : 'Confirm Question Deletion'}
+      />
     </div>
   );
 }

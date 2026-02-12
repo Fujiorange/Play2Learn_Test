@@ -1,8 +1,7 @@
 // frontend/src/components/Teacher/ViewAnnouncements.js
-// ✅ FIXED VERSION - Uses teacher API endpoint with schoolId filtering
+// ✅ TEACHER VIEW - Uses existing school admin backend
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authService from '../../services/authService';
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
@@ -16,20 +15,17 @@ const ViewAnnouncements = () => {
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
     fetchAnnouncements();
-  }, [navigate]);
+  }, []);
 
   const fetchAnnouncements = async () => {
     try {
       setLoading(true);
+      
       const token = localStorage.getItem('token');
       
-      // ✅ Uses teacher endpoint with schoolId filtering
-      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/announcements`, {
+      // ✅ Uses existing school admin endpoint with teachers audience
+      const response = await fetch(`${API_BASE_URL}/api/mongo/school-admin/announcements/public?audience=teachers`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +90,6 @@ const ViewAnnouncements = () => {
             <p style={{ color: '#6b7280', fontSize: '16px' }}>Loading announcements...</p>
           </div>
         </div>
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -282,7 +277,7 @@ const ViewAnnouncements = () => {
                     textTransform: 'uppercase',
                     marginBottom: '12px'
                   }}>
-                    {priorityStyle.icon} {announcement.priority || 'info'}
+                    {priorityStyle.icon} {announcement.priority}
                   </div>
 
                   {/* Title */}
@@ -349,6 +344,13 @@ const ViewAnnouncements = () => {
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

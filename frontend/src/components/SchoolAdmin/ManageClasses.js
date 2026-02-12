@@ -31,6 +31,7 @@ export default function ManageClasses() {
   const [students, setStudents] = useState([]);
   const csvFileInputRef = React.useRef(null);
   
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
     grade: 'Primary 1',
@@ -79,16 +80,17 @@ export default function ManageClasses() {
 
   const loadTeachersAndStudents = async () => {
     try {
-      const [teachersResult, studentsResult] = await Promise.all([
-        schoolAdminService.getAvailableTeachers(),
-        schoolAdminService.getAvailableStudents(false) // Get ALL students
-      ]);
+       const [teachersResult, studentsResult] = await Promise.all([
+         schoolAdminService.getAvailableTeachers(),
+         schoolAdminService.getAvailableStudents(true)
+       ]);
       
       if (teachersResult.success) {
         setTeachers(teachersResult.teachers || []);
       }
       if (studentsResult.success) {
-        setStudents(studentsResult.students || []);
+       // include only unassigned or currently assigned students
+       setStudents(studentsResult.students || []);
       }
     } catch (error) {
       console.error('Error loading teachers/students:', error);
@@ -176,34 +178,32 @@ export default function ManageClasses() {
     }
   };
 
-  const openEditModal = async (cls) => {
-    setSelectedClass(cls);
-    setFormData({
-      name: cls.name,
-      grade: cls.grade || 'Primary 1',
-      subjects: cls.subjects || ['Mathematics'],
-      teachers: cls.teachers?.map(t => t.id || t._id) || [],
-      students: cls.students?.map(s => s.id || s._id) || []
-    });
-    
-    // Refresh teachers and students
-    try {
-      const [teachersResult, studentsResult] = await Promise.all([
-        schoolAdminService.getAvailableTeachers(cls.id),
-        schoolAdminService.getAvailableStudents(false, cls.id)
-      ]);
-      if (teachersResult.success) {
-        setTeachers(teachersResult.teachers || []);
-      }
-      if (studentsResult.success) {
-        setStudents(studentsResult.students || []);
-      }
-    } catch (err) {
-      console.error('Error refreshing teachers/students for edit:', err);
-    }
-    
-    setShowEditModal(true);
-  };
+   const openEditModal = async (cls) => {
+     setSelectedClass(cls);
+     setFormData({
+       name: cls.name,
+       grade: cls.grade,
+       subjects: cls.subjects || ['Mathematics'],
+       teachers: cls.teacherList ? cls.teacherList.map(t => t._id) : [],
+       students: cls.studentList ? cls.studentList.map(s => s._id) : []
+     });
+     // Refresh both teachers and students to include currently assigned ones
+     try {
+       const [teachersResult, studentsResult] = await Promise.all([
+         schoolAdminService.getAvailableTeachers(cls.id),
+         schoolAdminService.getAvailableStudents(true, cls.id)
+       ]);
+       if (teachersResult.success) {
+         setTeachers(teachersResult.teachers || []);
+       }
+       if (studentsResult.success) {
+         setStudents(studentsResult.students || []);
+       }
+     } catch (err) {
+       console.error('Error refreshing teachers/students for edit:', err);
+     }
+     setShowEditModal(true);
+   };
 
   const openDeleteModal = (cls) => {
     setSelectedClass(cls);
@@ -701,7 +701,7 @@ Primary 1A,Primary 1,Mathematics,,,,,
       <header style={styles.header}>
         <div style={styles.headerContent}>
           <div style={styles.logo}>
-            <div style={styles.logoIcon}>P2L</div>
+            <div style={styles.logoIcon}>P</div>
             <span style={styles.logoText}>Play2Learn</span>
           </div>
           <button style={styles.backButton} onClick={() => navigate('/school-admin')}>
@@ -711,16 +711,16 @@ Primary 1A,Primary 1,Mathematics,,,,,
       </header>
 
       <main style={styles.main}>
-        <h1 style={styles.pageTitle}>Class Management</h1>
-        <p style={styles.pageSubtitle}>Create and manage classes, assign teachers and students</p>
-
-        {message.text && (
-          <div style={message.type === 'success' ? {...styles.message, ...styles.successMessage} : {...styles.message, ...styles.errorMessage}}>
-            {message.text}
-          </div>
-        )}
+        <h1 style={styles.pageTitle}>Manage Classes</h1>
+        <p style={styles.pageSubtitle}>Create and manage classes. Assign teachers and students to each class.</p>
 
         <div style={styles.card}>
+          {message.text && (
+            <div style={{ ...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage) }}>
+              {message.type === 'success' ? '✅' : '⚠️'} {message.text}
+            </div>
+          )}
+
           <div style={styles.headerRow}>
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
               All Classes ({classes.length})
@@ -747,9 +747,9 @@ Primary 1A,Primary 1,Mathematics,,,,,
                   <tr>
                     <th style={styles.th}>Class Name</th>
                     <th style={styles.th}>Grade</th>
-                    <th style={styles.th}>Subjects</th>
+                    <th style={styles.th}>Subject</th>
                     <th style={styles.th}>Students</th>
-                    <th style={styles.th}>Teachers</th>
+                    <th style={styles.th}>Teacher(s)</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
                 </thead>
@@ -760,9 +760,9 @@ Primary 1A,Primary 1,Mathematics,,,,,
                       <td style={styles.td}>
                         <span style={styles.badge}>{cls.grade}</span>
                       </td>
-                      <td style={styles.td}>{cls.subjects?.join(', ') || 'Mathematics'}</td>
-                      <td style={styles.td}>{cls.students?.length || 0}</td>
-                      <td style={styles.td}>{cls.teachers?.length || 0}</td>
+                      <td style={styles.td}>{cls.subject}</td>
+                      <td style={styles.td}>{cls.students}</td>
+                      <td style={styles.td}>{cls.teacher}</td>
                       <td style={styles.td}>
                         <button 
                           style={{ ...styles.actionButton, ...styles.editButton }}
@@ -792,24 +792,30 @@ Primary 1A,Primary 1,Mathematics,,,,,
         </div>
       </main>
 
-      {/* Modals */}
       {showAddModal && renderModal(false)}
       {showEditModal && renderModal(true)}
       {showCSVUploadModal && renderCSVUploadModal()}
-      
-      {showDeleteModal && (
+
+      {showDeleteModal && selectedClass && (
         <div style={styles.modal} onClick={() => setShowDeleteModal(false)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.modalTitle}>Delete Class</h2>
-            <p>Are you sure you want to delete <strong>{selectedClass?.name}</strong>?</p>
-            <p style={{ color: '#6b7280', marginTop: '8px', fontSize: '14px' }}>
-              This will unassign all teachers and students from this class.
+            <p style={{ marginBottom: '24px', color: '#374151' }}>
+              Are you sure you want to delete the class "<strong>{selectedClass.name}</strong>"? 
+              This will unassign all {selectedClass.students} students and teachers from this class.
+              This action cannot be undone.
             </p>
             <div style={styles.modalButtons}>
-              <button style={styles.cancelButton} onClick={() => setShowDeleteModal(false)}>
+              <button 
+                style={styles.cancelButton} 
+                onClick={() => setShowDeleteModal(false)}
+              >
                 Cancel
               </button>
-              <button style={styles.dangerButton} onClick={handleDeleteClass}>
+              <button 
+                style={styles.dangerButton} 
+                onClick={handleDeleteClass}
+              >
                 Delete Class
               </button>
             </div>

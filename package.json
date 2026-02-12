@@ -7,7 +7,7 @@
     "build": "CI=false npm run build --prefix frontend",
     "start": "npm start --prefix backend",
     "dev": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix frontend\"",
-    "render-build": "npm run install-all && npm run build"
+    "render-build": "npm run install-all && CI=false npm run build --prefix frontend"
   },
   "devDependencies": {
     "concurrently": "^8.0.0"

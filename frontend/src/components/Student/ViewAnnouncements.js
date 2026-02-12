@@ -22,11 +22,14 @@ const ViewAnnouncements = () => {
     try {
       setLoading(true);
       
+      const token = localStorage.getItem('token');
+      
       // ✅ Uses your colleague's existing endpoint
-      const response = await fetch(`${API_BASE_URL}/school-admin/announcements/public?audience=students`, {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/school-admin/announcements/public?audience=students`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
 

@@ -200,4 +200,128 @@ describe('RegisterPage', () => {
     
     expect(screen.getByText('✨ FREE TRIAL')).toBeInTheDocument();
   });
+
+  // Email validation tests
+  it('validates email format - rejects email without @', async () => {
+    render(
+      <BrowserRouter>
+        <RegisterPage />
+      </BrowserRouter>
+    );
+    
+    const institutionInput = screen.getByPlaceholderText(/school or organization name/i);
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('Min. 8 characters');
+    const confirmPasswordInput = screen.getByPlaceholderText('Re-enter password');
+    const submitButton = screen.getByText('Start Free Trial');
+    
+    fireEvent.change(institutionInput, { target: { value: 'Test School' } });
+    fireEvent.change(emailInput, { target: { value: 'invalidemail.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
+    });
+  });
+
+  it('validates email format - rejects email without domain', async () => {
+    render(
+      <BrowserRouter>
+        <RegisterPage />
+      </BrowserRouter>
+    );
+    
+    const institutionInput = screen.getByPlaceholderText(/school or organization name/i);
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('Min. 8 characters');
+    const confirmPasswordInput = screen.getByPlaceholderText('Re-enter password');
+    const submitButton = screen.getByText('Start Free Trial');
+    
+    fireEvent.change(institutionInput, { target: { value: 'Test School' } });
+    fireEvent.change(emailInput, { target: { value: 'test@' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
+    });
+  });
+
+  it('validates email format - rejects email without TLD', async () => {
+    render(
+      <BrowserRouter>
+        <RegisterPage />
+      </BrowserRouter>
+    );
+    
+    const institutionInput = screen.getByPlaceholderText(/school or organization name/i);
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('Min. 8 characters');
+    const confirmPasswordInput = screen.getByPlaceholderText('Re-enter password');
+    const submitButton = screen.getByText('Start Free Trial');
+    
+    fireEvent.change(institutionInput, { target: { value: 'Test School' } });
+    fireEvent.change(emailInput, { target: { value: 'test@example' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
+    });
+  });
+
+  it('validates email format - rejects email with spaces', async () => {
+    render(
+      <BrowserRouter>
+        <RegisterPage />
+      </BrowserRouter>
+    );
+    
+    const institutionInput = screen.getByPlaceholderText(/school or organization name/i);
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('Min. 8 characters');
+    const confirmPasswordInput = screen.getByPlaceholderText('Re-enter password');
+    const submitButton = screen.getByText('Start Free Trial');
+    
+    fireEvent.change(institutionInput, { target: { value: 'Test School' } });
+    fireEvent.change(emailInput, { target: { value: 'test user@example.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
+    });
+  });
+
+  it('accepts valid email format', async () => {
+    const authService = require('../services/authService');
+    authService.registerSchoolAdmin.mockResolvedValue({ success: true });
+    
+    render(
+      <BrowserRouter>
+        <RegisterPage />
+      </BrowserRouter>
+    );
+    
+    const institutionInput = screen.getByPlaceholderText(/school or organization name/i);
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('Min. 8 characters');
+    const confirmPasswordInput = screen.getByPlaceholderText('Re-enter password');
+    const submitButton = screen.getByText('Start Free Trial');
+    
+    fireEvent.change(institutionInput, { target: { value: 'Test School' } });
+    fireEvent.change(emailInput, { target: { value: 'valid.email@example.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+    
+    await waitFor(() => {
+      expect(authService.registerSchoolAdmin).toHaveBeenCalled();
+    });
+  });
 });

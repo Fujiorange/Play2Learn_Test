@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSchools, createSchool, updateSchool, deleteSchool } from '../../services/p2lAdminService';
+import PinConfirmationModal from '../common/PinConfirmationModal';
 import './SchoolManagement.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 
@@ -14,6 +15,8 @@ function SchoolManagement() {
   const [editingSchool, setEditingSchool] = useState(null);
   const [licenses, setLicenses] = useState([]);
   const [loadingLicenses, setLoadingLicenses] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [schoolToDelete, setSchoolToDelete] = useState(null);
   const [formData, setFormData] = useState({
     organization_name: '',
     organization_type: 'school',
@@ -110,17 +113,43 @@ function SchoolManagement() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this school?')) {
-      return;
-    }
+  const handleDelete = (id) => {
+    setSchoolToDelete(id);
+    setShowPinModal(true);
+  };
+
+  const confirmDelete = async (pin) => {
     try {
-      await deleteSchool(id);
-      alert('School deleted successfully');
+      // Get the school to check license type before deleting
+      const schoolToDeleteData = schools.find(s => s._id === schoolToDelete);
+      
+      // Validate license type on frontend too
+      if (schoolToDeleteData?.licenseId?.type !== 'free') {
+        alert('Can only delete schools with free license type.');
+        setShowPinModal(false);
+        setSchoolToDelete(null);
+        return;
+      }
+      
+      // Check if license is still active (not expired)
+      if (schoolToDeleteData?.licenseExpiresAt && new Date(schoolToDeleteData.licenseExpiresAt) > new Date()) {
+        alert('Cannot delete school with active license. License must be expired before deletion.');
+        setShowPinModal(false);
+        setSchoolToDelete(null);
+        return;
+      }
+      
+      // PIN is passed from the modal component
+      await deleteSchool(schoolToDelete, pin);
+      alert('School and all associated users deleted successfully');
+      setShowPinModal(false);
+      setSchoolToDelete(null);
       fetchSchools();
     } catch (error) {
       console.error('Failed to delete school:', error);
       alert(error.message || 'Failed to delete school');
+      setShowPinModal(false);
+      setSchoolToDelete(null);
     }
   };
 
@@ -176,29 +205,42 @@ function SchoolManagement() {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>License *</label>
-                {loadingLicenses ? (
-                  <div>Loading licenses...</div>
-                ) : licenses.length > 0 ? (
-                  <select
-                    name="licenseId"
-                    value={formData.licenseId}
-                    onChange={handleInputChange}
-                    required
-                  >
-                    {licenses.map(license => (
-                      <option key={license._id} value={license._id}>
-                        {license.name} ({license.type}) - {license.maxTeachers} Teachers, {license.maxStudents} Students, {license.maxClasses} Classes
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
-                    ⚠️ No licenses found. Please create licenses in License Management first.
+              {/* License field - only show when creating, not when editing */}
+              {!editingSchool && (
+                <div className="form-group">
+                  <label>License *</label>
+                  {loadingLicenses ? (
+                    <div>Loading licenses...</div>
+                  ) : licenses.length > 0 ? (
+                    <select
+                      name="licenseId"
+                      value={formData.licenseId}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      {licenses.map(license => (
+                        <option key={license._id} value={license._id}>
+                          {license.name} ({license.type}) - {license.maxTeachers} Teachers, {license.maxStudents} Students, {license.maxClasses} Classes
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
+                      ⚠️ No licenses found. Please create licenses in License Management first.
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Show current license when editing (read-only) */}
+              {editingSchool && editingSchool.licenseId && (
+                <div className="form-group">
+                  <label>Current License (cannot be changed)</label>
+                  <div style={{ padding: '10px', background: '#f3f4f6', borderRadius: '4px', color: '#374151' }}>
+                    {editingSchool.licenseId.name} ({editingSchool.licenseId.type}) - {editingSchool.licenseId.maxTeachers} Teachers, {editingSchool.licenseId.maxStudents} Students, {editingSchool.licenseId.maxClasses} Classes
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Contact Info</label>
@@ -242,6 +284,45 @@ function SchoolManagement() {
                       <p><strong>Students:</strong> {school.current_students || 0} / {license.maxStudents === -1 ? 'Unlimited' : license.maxStudents}</p>
                       <p><strong>Classes:</strong> {school.current_classes || 0} / {license.maxClasses === -1 ? 'Unlimited' : license.maxClasses}</p>
                       <p><strong>Price:</strong> ${license.priceMonthly.toLocaleString()}/month, ${license.priceYearly.toLocaleString()}/year</p>
+                      
+                      {/* Subscription & Renewal Information */}
+                      {school.billingCycle && (
+                        <p><strong>Billing Cycle:</strong> {school.billingCycle === 'monthly' ? 'Monthly' : 'Yearly'}</p>
+                      )}
+                      {school.licenseExpiresAt && (
+                        <p>
+                          <strong>{school.subscriptionStatus === 'cancelled' ? 'Expires On:' : 'Renews On:'}</strong>{' '}
+                          {new Date(school.licenseExpiresAt).toLocaleDateString('en-SG', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      )}
+                      {school.subscriptionStatus && (
+                        <p>
+                          <strong>Status:</strong>{' '}
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            backgroundColor: 
+                              school.subscriptionStatus === 'active' ? '#d1fae5' :
+                              school.subscriptionStatus === 'cancelled' ? '#fed7aa' : '#fee2e2',
+                            color:
+                              school.subscriptionStatus === 'active' ? '#065f46' :
+                              school.subscriptionStatus === 'cancelled' ? '#92400e' : '#991b1b'
+                          }}>
+                            {school.subscriptionStatus}
+                          </span>
+                          {school.autoRenew !== undefined && school.subscriptionStatus === 'active' && (
+                            <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
+                              (Auto-renew: {school.autoRenew ? 'ON' : 'OFF'})
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </>
                   ) : (
                     <p style={{ color: 'red' }}>⚠️ No license assigned</p>
@@ -261,6 +342,17 @@ function SchoolManagement() {
           })
         )}
       </div>
+
+      {/* PIN Confirmation Modal */}
+      <PinConfirmationModal
+        isOpen={showPinModal}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowPinModal(false);
+          setSchoolToDelete(null);
+        }}
+        title="Confirm School Deletion"
+      />
     </div>
   );
 }

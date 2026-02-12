@@ -1,6 +1,57 @@
 // backend/services/emailService.js
 const nodemailer = require('nodemailer');
 
+// Log email configuration (without sensitive data) for debugging
+console.log('📧 Email Configuration:');
+console.log(`   HOST: ${process.env.EMAIL_HOST || '❌ NOT SET'}`);
+console.log(`   PORT: ${process.env.EMAIL_PORT || '❌ NOT SET'}`);
+console.log(`   SECURE: ${process.env.EMAIL_SECURE || '❌ NOT SET'}`);
+console.log(`   USER: ${process.env.EMAIL_USER || '❌ NOT SET'}`);
+console.log(`   PASSWORD: ${process.env.EMAIL_PASSWORD ? '✅ SET (hidden)' : '❌ NOT SET'}`);
+console.log(`   FROM: ${process.env.EMAIL_FROM || '❌ NOT SET'}`);
+
+// Check if all required environment variables are set
+const requiredVars = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM'];
+const missingVars = requiredVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('❌ CRITICAL: Missing email environment variables:', missingVars.join(', '));
+  console.error('   Email functionality will NOT work until these are set in Render environment.');
+  console.error('   See EMAIL_SETUP_GUIDE.md for configuration instructions.');
+}
+
+// Validate EMAIL_FROM format
+if (process.env.EMAIL_FROM) {
+  const emailFrom = process.env.EMAIL_FROM;
+  // EMAIL_FROM should contain an email address in angle brackets or just be an email
+  // Valid formats: "Name <email@domain.com>" or "email@domain.com"
+  const hasAngleBrackets = emailFrom.includes('<') && emailFrom.includes('>');
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  const hasEmail = emailRegex.test(emailFrom);
+  
+  if (!hasEmail) {
+    console.error('❌ CRITICAL: EMAIL_FROM is invalid - missing email address');
+    console.error(`   Current value: "${emailFrom}"`);
+    console.error('   EMAIL_FROM must contain a valid email address.');
+    console.error('   Correct formats:');
+    console.error('   - "Play2Learn <your-email@gmail.com>"');
+    console.error('   - "your-email@gmail.com"');
+    console.error('   Please update EMAIL_FROM in Render environment variables.');
+  } else if (hasAngleBrackets) {
+    // Extract email from angle brackets to validate
+    const emailMatch = emailFrom.match(/<([^>]+)>/);
+    if (emailMatch && emailMatch[1]) {
+      console.log(`✅ EMAIL_FROM format validated: ${emailFrom}`);
+    } else {
+      console.error('❌ WARNING: EMAIL_FROM has angle brackets but email is malformed');
+      console.error(`   Current value: "${emailFrom}"`);
+      console.error('   Expected format: "Display Name <email@domain.com>"');
+    }
+  } else {
+    console.log(`✅ EMAIL_FROM format validated: ${emailFrom}`);
+  }
+}
+
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -15,9 +66,18 @@ const transporter = nodemailer.createTransport({
 // Verify connection on startup
 transporter.verify((error, success) => {
   if (error) {
-    console.error('❌ Email service error:', error);
+    console.error('❌ Email service SMTP connection failed:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   This means emails CANNOT be sent.');
+    console.error('   Common causes:');
+    console.error('   - Wrong EMAIL_HOST or EMAIL_PORT');
+    console.error('   - Invalid EMAIL_USER or EMAIL_PASSWORD');
+    console.error('   - For Gmail: Must use App Password, not regular password');
+    console.error('   - For SendGrid: EMAIL_USER must be "apikey"');
+    console.error('   See EMAIL_SETUP_GUIDE.md for troubleshooting.');
   } else {
-    console.log('✅ Email service ready');
+    console.log('✅ Email service ready - SMTP connection verified');
+    console.log(`   Emails will be sent from: ${process.env.EMAIL_FROM}`);
   }
 });
 
@@ -82,12 +142,30 @@ async function sendStudentCredentialsToParent(student, tempPassword, parentEmail
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Student credentials sent to parent: ${parentEmail}`);
-    return { success: true };
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`❌ Failed to send email to ${parentEmail}:`, error);
-    return { success: false, error: error.message };
+    console.error(`❌ Failed to send email to ${parentEmail}`);
+    console.error(`   Error: ${error.message}`);
+    console.error(`   Error code: ${error.code || 'N/A'}`);
+    console.error(`   Command: ${error.command || 'N/A'}`);
+    
+    // Provide helpful error messages
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  AUTHENTICATION FAILED - Check EMAIL_USER and EMAIL_PASSWORD');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   ⚠️  CONNECTION FAILED - Check EMAIL_HOST and EMAIL_PORT');
+    } else if (error.code === 'ETIMEDOUT') {
+      console.error('   ⚠️  TIMEOUT - SMTP server not responding');
+    } else if (error.message && error.message.includes('invalid address')) {
+      console.error('   ⚠️  INVALID EMAIL ADDRESS - Check EMAIL_FROM format');
+      console.error('   EMAIL_FROM must be: "Display Name <email@domain.com>" or "email@domain.com"');
+    }
+    
+    return { success: false, error: error.message, errorCode: error.code };
   }
 }
 
@@ -141,12 +219,26 @@ async function sendTeacherWelcomeEmail(teacher, tempPassword, schoolName) {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Welcome email sent to ${teacher.email}`);
-    return { success: true };
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`❌ Failed to send email to ${teacher.email}:`, error);
-    return { success: false, error: error.message };
+    console.error(`❌ Failed to send email to ${teacher.email}`);
+    console.error(`   Error: ${error.message}`);
+    console.error(`   Error code: ${error.code || 'N/A'}`);
+    
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  AUTHENTICATION FAILED - Check EMAIL_USER and EMAIL_PASSWORD');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   ⚠️  CONNECTION FAILED - Check EMAIL_HOST and EMAIL_PORT');
+    } else if (error.message && error.message.includes('invalid address')) {
+      console.error('   ⚠️  INVALID EMAIL ADDRESS - Check EMAIL_FROM format');
+      console.error('   EMAIL_FROM must be: "Display Name <email@domain.com>" or "email@domain.com"');
+    }
+    
+    return { success: false, error: error.message, errorCode: error.code };
   }
 }
 
@@ -200,12 +292,26 @@ async function sendParentWelcomeEmail(parent, tempPassword, studentName, schoolN
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Welcome email sent to ${parent.email}`);
-    return { success: true };
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`❌ Failed to send email to ${parent.email}:`, error);
-    return { success: false, error: error.message };
+    console.error(`❌ Failed to send email to ${parent.email}`);
+    console.error(`   Error: ${error.message}`);
+    console.error(`   Error code: ${error.code || 'N/A'}`);
+    
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  AUTHENTICATION FAILED - Check EMAIL_USER and EMAIL_PASSWORD');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   ⚠️  CONNECTION FAILED - Check EMAIL_HOST and EMAIL_PORT');
+    } else if (error.message && error.message.includes('invalid address')) {
+      console.error('   ⚠️  INVALID EMAIL ADDRESS - Check EMAIL_FROM format');
+      console.error('   EMAIL_FROM must be: "Display Name <email@domain.com>" or "email@domain.com"');
+    }
+    
+    return { success: false, error: error.message, errorCode: error.code };
   }
 }
 
@@ -272,12 +378,26 @@ async function sendSchoolAdminWelcomeEmail(admin, tempPassword, schoolName) {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ School admin welcome email sent to ${admin.email}`);
-    return { success: true };
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`❌ Failed to send email to ${admin.email}:`, error);
-    return { success: false, error: error.message };
+    console.error(`❌ Failed to send email to ${admin.email}`);
+    console.error(`   Error: ${error.message}`);
+    console.error(`   Error code: ${error.code || 'N/A'}`);
+    
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  AUTHENTICATION FAILED - Check EMAIL_USER and EMAIL_PASSWORD');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   ⚠️  CONNECTION FAILED - Check EMAIL_HOST and EMAIL_PORT');
+    } else if (error.message && error.message.includes('invalid address')) {
+      console.error('   ⚠️  INVALID EMAIL ADDRESS - Check EMAIL_FROM format');
+      console.error('   EMAIL_FROM must be: "Display Name <email@domain.com>" or "email@domain.com"');
+    }
+    
+    return { success: false, error: error.message, errorCode: error.code };
   }
 }
 

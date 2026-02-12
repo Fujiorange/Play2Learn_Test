@@ -185,28 +185,11 @@ export default function TrackTicket() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loading}>
-          <div style={{
-            width: '50px',
-            height: '50px',
-            border: '5px solid #e5e7eb',
-            borderTop: '5px solid #10b981',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-          }}></div>
-        </div>
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+  if (loading) return (<div style={styles.loadingContainer}><div style={styles.loadingText}>Loading tickets...</div></div>);
 
   return (
     <div style={styles.container}>
       <div style={styles.content}>
-        {/* Header */}
         <div style={styles.header}>
           <div style={styles.headerTop}>
             <h1 style={styles.title}>
@@ -306,54 +289,10 @@ export default function TrackTicket() {
             ))}
           </div>
         ) : (
-          <div style={styles.ticketList}>
-            {filteredTickets.map((ticket) => {
-              const statusStyle = getStatusColor(ticket.status);
-              return (
-                <div key={ticket._id} style={styles.ticketCard}>
-                  <div style={styles.ticketHeader}>
-                    <div>
-                      <h3 style={styles.ticketSubject}>{ticket.subject}</h3>
-                      <span style={styles.ticketId}>Ticket #{ticket._id?.slice(-6) || 'N/A'}</span>
-                    </div>
-                  </div>
-                  <div style={styles.ticketMeta}>
-                    <span style={{
-                      ...styles.badge,
-                      background: statusStyle.bg,
-                      color: statusStyle.text
-                    }}>
-                      {statusStyle.label}
-                    </span>
-                    <span style={{
-                      ...styles.badge,
-                      background: `${getPriorityColor(ticket.priority)}20`,
-                      color: getPriorityColor(ticket.priority)
-                    }}>
-                      {ticket.priority || 'medium'} priority
-                    </span>
-                    <span style={{
-                      ...styles.badge,
-                      background: '#f3f4f6',
-                      color: '#6b7280'
-                    }}>
-                      {ticket.category || 'general'}
-                    </span>
-                  </div>
-                  <p style={styles.ticketDescription}>
-                    {ticket.description?.length > 200 
-                      ? ticket.description.substring(0, 200) + '...' 
-                      : ticket.description}
-                  </p>
-                  <div style={styles.ticketFooter}>
-                    <span>Created: {formatDate(ticket.createdAt)}</span>
-                    {ticket.updatedAt && ticket.updatedAt !== ticket.createdAt && (
-                      <span>Updated: {formatDate(ticket.updatedAt)}</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div style={styles.emptyState}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎫</div>
+            <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No tickets found</p>
+            <p>You don't have any {filter === 'all' ? '' : filter} support tickets</p>
           </div>
         )}
       </div>

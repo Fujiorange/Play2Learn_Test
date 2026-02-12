@@ -1,5 +1,5 @@
 // src/pages/student/AttemptQuiz.js
-// AttemptQuiz.js - Works with backend { success, mathProfile: {...} }
+// AttemptQuiz.js - Shows both Placement Quiz and Quiz Journey options
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,40 +10,55 @@ export default function AttemptQuiz() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState(null);
-  const [requiresPlacement, setRequiresPlacement] = useState(false);
+  const [placementCompleted, setPlacementCompleted] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const loadQuizData = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate("/login");
+    loadQuizData();
+    
+    // ✅ AUTO-REFRESH when user navigates back to this page
+    const handleFocus = () => {
+      console.log('🔄 Page focus detected, refreshing quiz data...');
+      loadQuizData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [navigate]);
+
+  const loadQuizData = async () => {
+    if (!authService.isAuthenticated()) {
+      navigate("/login");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log("📡 Fetching placement status and math profile...");
+      
+      // Check placement status first
+      const placementResult = await studentService.getPlacementStatus();
+      const isPlacementDone = placementResult?.success && (placementResult?.placementCompleted || placementResult?.placement_completed);
+      setPlacementCompleted(isPlacementDone);
+      
+      console.log("📥 Placement completed:", isPlacementDone);
+
+      // Then fetch math profile for daily limits
+      const result = await studentService.getMathProfile();
+      console.log("📥 Profile result:", result);
+
+      if (!result?.success) {
+        setError("Failed to load quiz data");
+        setProfileData(null);
         return;
       }
 
-      try {
-        console.log("📡 Fetching math profile...");
-        const result = await studentService.getMathProfile();
-        console.log("📥 Profile result:", result);
+      const mp = result.mathProfile || null;
 
-        if (!result?.success) {
-          setError("Failed to load quiz data");
-          setProfileData(null);
-          setRequiresPlacement(false);
-          return;
-        }
-
-        const mp = result.mathProfile || null;
-
-        // If no profile yet OR placement not completed -> placement required
-        if (!mp || mp.placement_completed === false) {
-          setRequiresPlacement(true);
-          setProfileData(null);
-          return;
-        }
-
-        // Backend daily limit is 2 quizzes/day in your mongoStudentRoutes.js
+      if (mp) {
+        // Backend daily limit is 2 quizzes/day
         const dailyLimit = 2;
-
         const quizzesToday = Number.isFinite(mp.quizzes_today) ? mp.quizzes_today : 0;
         const attemptsRemaining = Number.isFinite(mp.quizzes_remaining)
           ? mp.quizzes_remaining
@@ -51,12 +66,6 @@ export default function AttemptQuiz() {
 
         const currentProfile = Number.isFinite(mp.current_profile) ? mp.current_profile : 1;
 
-        const operations =
-          currentProfile >= 6
-            ? ["addition", "subtraction", "multiplication", "division"]
-            : ["addition", "subtraction"];
-
-        setRequiresPlacement(false);
         setProfileData({
           current_profile: currentProfile,
           profile_name: `Profile ${currentProfile}`,
@@ -65,53 +74,46 @@ export default function AttemptQuiz() {
           attemptsRemaining,
           attemptsUsed: dailyLimit - attemptsRemaining,
           dailyLimit,
-          operations,
-          // optional display fields (safe defaults)
-          recommendedFocus:
-            currentProfile >= 6
-              ? "Mixed operations (× ÷ + -)"
-              : "Addition & Subtraction",
-          nextProfile: Math.min(10, currentProfile + 1),
         });
-      } catch (e) {
-        console.error("❌ Load quiz data error:", e);
-        setError("Failed to load quiz data");
-        setProfileData(null);
-        setRequiresPlacement(false);
-      } finally {
-        setLoading(false);
+      } else {
+        // No profile yet - set defaults
+        setProfileData({
+          current_profile: 1,
+          profile_name: "Profile 1",
+          total_points: 0,
+          quizzes_today: 0,
+          attemptsRemaining: 2,
+          attemptsUsed: 0,
+          dailyLimit: 2,
+        });
       }
-    };
-
-    loadQuizData();
-  }, [navigate]);
-
-  const formatOperations = (operations) => {
-    if (!operations || !Array.isArray(operations)) return "";
-
-    const opSymbols = {
-      addition: "➕ Addition",
-      subtraction: "➖ Subtraction",
-      multiplication: "✖️ Multiplication",
-      division: "➗ Division",
-    };
-
-    return operations.map((op) => opSymbols[op] || op).join(", ");
+    } catch (e) {
+      console.error("❌ Load quiz data error:", e);
+      setError("Failed to load quiz data");
+      setProfileData(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const canTakeQuiz = profileData && profileData.attemptsRemaining > 0;
+  // ✅ UNLIMITED ATTEMPTS - No restrictions on quiz taking
+  const canTakeQuiz = true; // Always allow quiz attempts
 
-  const handleStartQuiz = () => {
-    if (!canTakeQuiz) {
-      alert(
-        `You have used all ${profileData?.dailyLimit ?? 3} attempts for today. Come back tomorrow at 12:00 AM SGT!`
-      );
+  const handleStartQuizJourney = () => {
+    if (!placementCompleted) {
+      alert("⚠️ Please complete the Placement Quiz first before starting the Quiz Journey!");
       return;
     }
-    navigate("/student/adaptive-quizzes");
+    // ✅ REMOVED DAILY LIMIT CHECK - Users can take unlimited quizzes
+    // Navigate to Quiz Journey
+    navigate("/student/quiz-journey");
   };
 
   const handleStartPlacement = () => {
+    if (placementCompleted) {
+      alert("✅ You have already completed the Placement Quiz!");
+      return;
+    }
     navigate("/student/quiz/placement");
   };
 
@@ -155,92 +157,90 @@ export default function AttemptQuiz() {
       fontSize: "14px",
       width: "100%",
     },
-
-    placementCard: {
-      background: "white",
-      borderRadius: "16px",
-      padding: "48px 32px",
-      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-      textAlign: "center",
-    },
-    placementIcon: { fontSize: "64px", marginBottom: "24px" },
-    placementTitle: { fontSize: "28px", fontWeight: "700", color: "#1f2937", marginBottom: "16px" },
-    placementText: {
-      fontSize: "16px",
-      color: "#6b7280",
-      lineHeight: "1.6",
-      marginBottom: "32px",
-      maxWidth: "600px",
-      margin: "0 auto 32px",
-    },
-    placementButton: {
-      padding: "16px 48px",
-      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-      color: "white",
-      border: "none",
-      borderRadius: "12px",
-      fontSize: "18px",
-      fontWeight: "700",
-      cursor: "pointer",
-      transition: "all 0.3s",
-    },
-
-    profileCard: {
-      background: "white",
-      borderRadius: "16px",
-      padding: "32px",
-      marginBottom: "24px",
-      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-    },
-    profileBadge: {
-      display: "inline-block",
-      padding: "12px 24px",
-      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-      color: "white",
-      borderRadius: "12px",
-      fontSize: "24px",
-      fontWeight: "700",
-      marginBottom: "24px",
-    },
-    infoGrid: {
+    cardsContainer: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-      gap: "16px",
-      marginBottom: "24px",
+      gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+      gap: "24px",
+      marginTop: "24px",
     },
-    infoBox: {
-      padding: "16px",
-      background: "#f9fafb",
-      borderRadius: "12px",
-      border: "2px solid #e5e7eb",
-    },
-    infoLabel: { fontSize: "13px", color: "#6b7280", fontWeight: "600", marginBottom: "8px", textTransform: "uppercase" },
-    infoValue: { fontSize: "20px", color: "#1f2937", fontWeight: "700" },
-    attemptsBox: { padding: "20px", borderRadius: "12px", marginBottom: "24px", border: "2px solid" },
-    attemptsText: { fontSize: "18px", fontWeight: "600", textAlign: "center" },
-
     quizCard: {
       background: "white",
       borderRadius: "16px",
       padding: "32px",
       boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
       textAlign: "center",
+      transition: "transform 0.3s, box-shadow 0.3s",
+      cursor: "pointer",
     },
-    quizTitle: { fontSize: "24px", fontWeight: "700", color: "#1f2937", marginBottom: "16px" },
-    quizDetails: { fontSize: "16px", color: "#6b7280", marginBottom: "24px", lineHeight: "1.6" },
+    quizCardHover: {
+      transform: "translateY(-4px)",
+      boxShadow: "0 8px 16px rgba(0, 0, 0, 0.15)",
+    },
+    quizIcon: { fontSize: "64px", marginBottom: "16px" },
+    quizTitle: { fontSize: "24px", fontWeight: "700", color: "#1f2937", marginBottom: "12px" },
+    quizDescription: { fontSize: "14px", color: "#6b7280", marginBottom: "20px", lineHeight: "1.6" },
+    statusBadge: {
+      display: "inline-block",
+      padding: "6px 16px",
+      borderRadius: "20px",
+      fontSize: "12px",
+      fontWeight: "600",
+      marginBottom: "16px",
+    },
+    completedBadge: {
+      background: "#d1fae5",
+      color: "#065f46",
+    },
+    pendingBadge: {
+      background: "#fef3c7",
+      color: "#92400e",
+    },
     startButton: {
-      padding: "16px 48px",
+      padding: "14px 32px",
       background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
       color: "white",
       border: "none",
       borderRadius: "12px",
-      fontSize: "18px",
+      fontSize: "16px",
       fontWeight: "700",
       cursor: "pointer",
       transition: "all 0.3s",
+      width: "100%",
     },
-    disabledButton: { cursor: "not-allowed", opacity: 0.5 },
-
+    placementButton: {
+      padding: "14px 32px",
+      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+      color: "white",
+      border: "none",
+      borderRadius: "12px",
+      fontSize: "16px",
+      fontWeight: "700",
+      cursor: "pointer",
+      transition: "all 0.3s",
+      width: "100%",
+    },
+    disabledButton: {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+    infoBox: {
+      background: "#f9fafb",
+      borderRadius: "12px",
+      padding: "16px",
+      marginTop: "16px",
+      fontSize: "13px",
+      color: "#4b5563",
+      border: "2px solid #e5e7eb",
+    },
+    attemptsBox: {
+      padding: "16px",
+      borderRadius: "12px",
+      marginTop: "16px",
+      border: "2px solid",
+      fontSize: "14px",
+      fontWeight: "600",
+      textAlign: "center",
+    },
     loadingContainer: {
       minHeight: "100vh",
       display: "flex",
@@ -272,96 +272,120 @@ export default function AttemptQuiz() {
           >
             ← Back to Dashboard
           </button>
-
-          {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
         </div>
 
-        {requiresPlacement && (
-          <div style={styles.placementCard}>
-            <div style={styles.placementIcon}>🎯</div>
-            <h2 style={styles.placementTitle}>Complete Your Placement Quiz First!</h2>
-            <p style={styles.placementText}>
-              Before you can start regular quizzes, complete the placement quiz so we can assign the right profile.
-            </p>
-            <button
-              style={styles.placementButton}
-              onClick={handleStartPlacement}
-              onMouseEnter={(e) => (e.target.style.transform = "translateY(-2px)")}
-              onMouseLeave={(e) => (e.target.style.transform = "translateY(0)")}
+        {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
+
+        <div style={styles.cardsContainer}>
+          {/* PLACEMENT QUIZ CARD */}
+          <div
+            style={styles.quizCard}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 16px rgba(0, 0, 0, 0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
+            }}
+          >
+            <div style={styles.quizIcon}>🎯</div>
+            <h2 style={styles.quizTitle}>Placement Quiz</h2>
+            
+            <span
+              style={{
+                ...styles.statusBadge,
+                ...(placementCompleted ? styles.completedBadge : styles.pendingBadge),
+              }}
             >
-              🚀 Start Placement Quiz
+              {placementCompleted ? "✅ Completed" : "⏳ Pending"}
+            </span>
+
+            <p style={styles.quizDescription}>
+              {placementCompleted
+                ? "You have completed the placement quiz! Your skill level has been assessed."
+                : "Take this quiz first to assess your current math skill level. This helps us personalize your learning journey."}
+            </p>
+
+            <button
+              style={{
+                ...styles.placementButton,
+                ...(placementCompleted ? styles.disabledButton : {}),
+              }}
+              onClick={handleStartPlacement}
+              disabled={placementCompleted}
+              onMouseEnter={(e) => {
+                if (!placementCompleted) e.target.style.transform = "scale(1.02)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "scale(1)";
+              }}
+            >
+              {placementCompleted ? "✅ Already Completed" : "🚀 Start Placement Quiz"}
             </button>
+
+            {!placementCompleted && (
+              <div style={styles.infoBox}>
+                📌 Complete this first to unlock the Quiz Journey!
+              </div>
+            )}
           </div>
-        )}
 
-        {!requiresPlacement && profileData && (
-          <>
-            <div style={styles.profileCard}>
-              <div style={styles.profileBadge}>🎯 {profileData.profile_name}</div>
+          {/* QUIZ JOURNEY CARD */}
+          <div
+            style={styles.quizCard}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 16px rgba(0, 0, 0, 0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
+            }}
+          >
+            <div style={styles.quizIcon}>🎮</div>
+            <h2 style={styles.quizTitle}>Adaptive Quiz Journey</h2>
+            
+            <span
+              style={{
+                ...styles.statusBadge,
+                ...(placementCompleted ? styles.completedBadge : styles.pendingBadge),
+              }}
+            >
+              {placementCompleted ? "🔓 Unlocked" : "🔒 Locked"}
+            </span>
 
-              <div style={styles.infoGrid}>
-                <div style={styles.infoBox}>
-                  <div style={styles.infoLabel}>Current Profile</div>
-                  <div style={styles.infoValue}>{profileData.current_profile}</div>
-                </div>
-                <div style={styles.infoBox}>
-                  <div style={styles.infoLabel}>Total Points</div>
-                  <div style={styles.infoValue}>{profileData.total_points}</div>
-                </div>
-                <div style={styles.infoBox}>
-                  <div style={styles.infoLabel}>Operations</div>
-                  <div style={styles.infoValue}>{formatOperations(profileData.operations)}</div>
-                </div>
-                <div style={styles.infoBox}>
-                  <div style={styles.infoLabel}>Next Profile</div>
-                  <div style={styles.infoValue}>Profile {profileData.nextProfile}</div>
-                </div>
+            <p style={styles.quizDescription}>
+              Progress through 10 levels of adaptive quizzes! Each level adapts to your skill and gets progressively challenging.
+            </p>
+
+            <button
+              style={{
+                ...styles.startButton,
+                ...(!placementCompleted ? styles.disabledButton : {}),
+              }}
+              onClick={handleStartQuizJourney}
+              disabled={!placementCompleted}
+              onMouseEnter={(e) => {
+                if (placementCompleted) e.target.style.transform = "scale(1.02)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "scale(1)";
+              }}
+            >
+              {!placementCompleted
+                ? "🔒 Complete Placement First"
+                : "🚀 Start Quiz Journey"}
+            </button>
+
+            {!placementCompleted && (
+              <div style={styles.infoBox}>
+                🔒 Complete the Placement Quiz to unlock this!
               </div>
-
-              <div
-                style={{
-                  ...styles.attemptsBox,
-                  background: canTakeQuiz ? "#ecfdf5" : "#fef2f2",
-                  borderColor: canTakeQuiz ? "#10b981" : "#ef4444",
-                }}
-              >
-                <div
-                  style={{
-                    ...styles.attemptsText,
-                    color: canTakeQuiz ? "#065f46" : "#991b1b",
-                  }}
-                >
-                  Attempts remaining today: {profileData.attemptsRemaining} / {profileData.dailyLimit}
-                </div>
-              </div>
-
-              <div style={styles.quizCard}>
-                <h2 style={styles.quizTitle}>Ready for your quiz?</h2>
-                <p style={styles.quizDetails}>
-                  You’ll get 15 questions based on your current profile. Complete at least 1 quiz today to keep your streak going.
-                </p>
-                <button
-                  style={{
-                    ...styles.startButton,
-                    ...(canTakeQuiz ? {} : styles.disabledButton),
-                  }}
-                  onClick={handleStartQuiz}
-                  disabled={!canTakeQuiz}
-                  onMouseEnter={(e) => {
-                    if (canTakeQuiz) e.target.style.transform = "translateY(-2px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = "translateY(0)";
-                  }}
-                >
-                  🚀 Start Quiz
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-

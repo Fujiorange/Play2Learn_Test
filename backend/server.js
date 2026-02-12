@@ -17,17 +17,28 @@ const schoolAdminRoutes = require('./routes/schoolAdminRoutes');
 const p2lAdminRoutes = require('./routes/p2lAdminRoutes');
 const adaptiveQuizRoutes = require('./routes/adaptiveQuizRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
+const emailDiagnosticRoutes = require('./routes/emailDiagnosticRoutes');
 
 // ==================== CORS CONFIGURATION ====================
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
+    
+    // Build allowed origins list dynamically
     const allowedOrigins = [
-      'https://play2learn-test.onrender.com',
       'http://localhost:3000',
       'http://localhost:5000',
       'http://localhost:5173',
     ];
+    
+    // Add production frontend URL from environment if available
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    
+    // Add hardcoded production URL as fallback
+    allowedOrigins.push('https://play2learn-test.onrender.com');
+    
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -88,6 +99,9 @@ const Testimonial = require('./models/Testimonial');
 const User = require('./models/User');
 const School = require('./models/School');
 const License = require('./models/License');
+
+// Import license scheduler
+const { initLicenseScheduler } = require('./services/licenseScheduler');
 
 // Cache for landing page data to reduce database load and provide rate limiting
 let landingPageCache = {
@@ -350,6 +364,7 @@ try {
   app.use('/api/p2ladmin', p2lAdminRoutes); // P2lAdmin routes
   app.use('/api/adaptive-quiz', adaptiveQuizRoutes); // Adaptive quiz routes
   app.use('/api', licenseRoutes); // License management routes
+  app.use('/api/email-diagnostic', emailDiagnosticRoutes); // Email diagnostic routes
   console.log('✅ Registered all routes successfully.');
 } catch (error) {
   console.error('❌ Error registering routes:', error.message);
@@ -465,6 +480,9 @@ async function startServer() {
         '                   ║');
       console.log('╚═══════════════════════════════════════════════╝');
       console.log('✅ Ready to accept connections');
+      
+      // Initialize license scheduler after server is running
+      initLicenseScheduler();
     });
     
     // Graceful shutdown

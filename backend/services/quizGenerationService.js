@@ -100,9 +100,23 @@ function generateUniqueHash(studentId, quizLevel, timestamp) {
  * @param {Number} quizLevel - Quiz level (1-10)
  * @param {String} studentId - Optional student ID for personalization
  * @param {String} triggerReason - Reason for generation (e.g., 'manual', 'enrollment', 'completion')
+ * @param {Boolean} skipDuplicateCheck - Skip checking for existing quiz (default: false)
  * @returns {Object} - Generated quiz
  */
-async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual') {
+async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual', skipDuplicateCheck = false) {
+  // Step 0: Check if quiz already exists for this level (unless skipDuplicateCheck is true)
+  if (!skipDuplicateCheck) {
+    const existingQuiz = await Quiz.findOne({
+      quiz_level: quizLevel,
+      is_auto_generated: true,
+      is_active: true
+    });
+    
+    if (existingQuiz) {
+      throw new Error(`Quiz for level ${quizLevel} already exists. Delete the existing quiz before generating a new one.`);
+    }
+  }
+  
   // Step 1: Verify criteria - need at least 40 questions in quiz_level
   const questionsPool = await Question.find({
     quiz_level: quizLevel,

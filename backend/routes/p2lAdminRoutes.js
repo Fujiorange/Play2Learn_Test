@@ -14,6 +14,7 @@ const Quiz = require('../models/Quiz');
 const LandingPage = require('../models/LandingPage');
 const Testimonial = require('../models/Testimonial');
 const Maintenance = require('../models/Maintenance');
+const MarketSurvey = require('../models/MarketSurvey');
 const { sendSchoolAdminWelcomeEmail } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const { generateQuiz, checkGenerationAvailability } = require('../services/quizGenerationService');
@@ -21,6 +22,7 @@ const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
+const USER_DELETION_PIN = process.env.USER_DELETION_PIN || '1234';
 
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
@@ -298,7 +300,8 @@ router.post('/schools', authenticateP2LAdmin, async (req, res) => {
 // Update school
 router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { organization_name, organization_type, licenseId, contact, is_active } = req.body;
+    // License modification is no longer allowed - extract only allowed fields
+    const { organization_name, organization_type, contact, is_active } = req.body;
     
     const school = await School.findById(req.params.id);
     if (!school) {
@@ -308,21 +311,9 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
-    // Verify license exists if being updated
-    if (licenseId && licenseId !== school.licenseId.toString()) {
-      const license = await License.findById(licenseId);
-      if (!license) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'License not found' 
-        });
-      }
-    }
-
-    // Update fields if provided
+    // Update fields if provided (licenseId cannot be changed)
     if (organization_name) school.organization_name = organization_name;
     if (organization_type) school.organization_type = organization_type;
-    if (licenseId) school.licenseId = licenseId;
     if (contact !== undefined) school.contact = contact;
     if (is_active !== undefined) school.is_active = is_active;
 
@@ -348,7 +339,17 @@ router.put('/schools/:id', authenticateP2LAdmin, async (req, res) => {
 // Delete school
 router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
   try {
-    const school = await School.findByIdAndDelete(req.params.id);
+    const { pin } = req.body;
+    
+    // Verify PIN
+    if (pin !== USER_DELETION_PIN) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Invalid PIN. School deletion requires correct PIN verification.' 
+      });
+    }
+    
+    const school = await School.findById(req.params.id).populate('licenseId');
     if (!school) {
       return res.status(404).json({ 
         success: false, 
@@ -356,9 +357,73 @@ router.delete('/schools/:id', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Check if school has active license (not expired)
+    if (school.licenseExpiresAt && new Date(school.licenseExpiresAt) > new Date()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Cannot delete school with active license. License must be expired before deletion.' 
+      });
+    }
+
+    // Check if license is free type
+    if (school.licenseId && school.licenseId.type !== 'free') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Can only delete schools with free license type. School must be on free trial plan.' 
+      });
+    }
+
+    // Delete all users associated with this school
+    const usersToDelete = await User.find({ schoolId: school._id });
+    
+    // Find all students in this school
+    const studentsInSchool = usersToDelete.filter(u => u.role === 'Student');
+    const studentIds = studentsInSchool.map(s => s._id);
+    
+    // Delete parent accounts linked to students in this school
+    // BUT only if they don't have students in other schools
+    if (studentIds.length > 0) {
+      // Find all parents linked to these students
+      const parentsLinkedToTheseStudents = await User.find({
+        role: 'Parent',
+        'linkedStudents.studentId': { $in: studentIds }
+      });
+      
+      let parentsDeletedCount = 0;
+      for (const parent of parentsLinkedToTheseStudents) {
+        // Check if this parent has any students in other schools
+        const allLinkedStudentIds = parent.linkedStudents.map(ls => ls.studentId);
+        const studentsInOtherSchools = await User.find({
+          _id: { $in: allLinkedStudentIds },
+          schoolId: { $ne: school._id } // Students NOT in this school
+        });
+        
+        // Only delete parent if they have NO students in other schools
+        if (studentsInOtherSchools.length === 0) {
+          await User.findByIdAndDelete(parent._id);
+          parentsDeletedCount++;
+          console.log(`Deleted parent account: ${parent.name} (${parent.email})`);
+        } else {
+          console.log(`Kept parent account: ${parent.name} (has ${studentsInOtherSchools.length} students in other schools)`);
+        }
+      }
+      console.log(`Deleted ${parentsDeletedCount} parent accounts (kept parents with students in other schools)`);
+    }
+    
+    // Delete all users with this school_id
+    const usersDeleted = await User.deleteMany({ schoolId: school._id });
+    console.log(`Deleted ${usersDeleted.deletedCount} users from school ${school.organization_name}`);
+    
+    // Finally, delete the school itself
+    await School.findByIdAndDelete(req.params.id);
+
     res.json({
       success: true,
-      message: 'School deleted successfully'
+      message: 'School and all associated users deleted successfully',
+      details: {
+        usersDeleted: usersDeleted.deletedCount,
+        parentsDeleted: studentIds.length > 0 ? 'Yes' : 'No'
+      }
     });
   } catch (error) {
     console.error('Delete school error:', error);
@@ -1312,7 +1377,7 @@ router.post('/quizzes', authenticateP2LAdmin, async (req, res) => {
 // Generate quiz automatically
 router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { quiz_level, student_id, trigger_reason } = req.body;
+    const { quiz_level, student_id, trigger_reason, force } = req.body;
     
     // Validate quiz_level
     if (!quiz_level || quiz_level < 1 || quiz_level > 10) {
@@ -1332,11 +1397,12 @@ router.post('/quizzes/generate', authenticateP2LAdmin, async (req, res) => {
       });
     }
     
-    // Generate the quiz
+    // Generate the quiz (skipDuplicateCheck if force=true)
     const quiz = await generateQuiz(
       quiz_level,
       student_id || null,
-      trigger_reason || 'manual'
+      trigger_reason || 'manual',
+      !!force
     );
     
     res.status(201).json({
@@ -1425,14 +1491,6 @@ router.delete('/quizzes/:id', authenticateP2LAdmin, async (req, res) => {
       return res.status(404).json({ 
         success: false, 
         error: 'Quiz not found' 
-      });
-    }
-    
-    // Block deletion of auto-generated quizzes
-    if (quiz.is_auto_generated) {
-      return res.status(403).json({
-        success: false,
-        error: 'Auto-generated quizzes cannot be deleted. They are managed by the system.'
       });
     }
     
@@ -2239,12 +2297,20 @@ router.get('/users/schools', authenticateP2LAdmin, async (req, res) => {
 // should be handled separately or through a scheduled cleanup job if needed.
 router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
   try {
-    const { ids } = req.body;
+    const { ids, pin } = req.body;
     
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ 
         success: false, 
         error: 'User IDs array is required' 
+      });
+    }
+
+    // Validate PIN
+    if (pin !== USER_DELETION_PIN) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid PIN. Please enter the correct PIN to delete users.' 
       });
     }
 
@@ -2257,7 +2323,22 @@ router.post('/users/bulk-delete', authenticateP2LAdmin, async (req, res) => {
       });
     }
 
+    // Check if any of the users to delete are p2ladmin
+    const usersToDelete = await User.find({ _id: { $in: ids } });
+    const p2ladminUsers = usersToDelete.filter(user => user.role === 'p2ladmin');
+    
+    if (p2ladminUsers.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cannot delete p2ladmin accounts. Please remove them from selection.' 
+      });
+    }
+
+    // Delete users
     const result = await User.deleteMany({ _id: { $in: ids } });
+
+    // Delete associated support tickets for deleted users
+    await SupportTicket.deleteMany({ user_id: { $in: ids } });
 
     res.json({
       success: true,
@@ -2479,6 +2560,41 @@ router.post('/support-tickets/:id/close', authenticateP2LAdmin, async (req, res)
   }
 });
 
+// Delete a support ticket
+router.delete('/support-tickets/:id', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id);
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // Only allow deletion of closed tickets
+    if (ticket.status !== 'closed') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Only closed tickets can be deleted' 
+      });
+    }
+    
+    await SupportTicket.findByIdAndDelete(req.params.id);
+    
+    res.json({
+      success: true,
+      message: 'Ticket deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete ticket' 
+    });
+  }
+});
+
 // Get support ticket statistics
 router.get('/support-tickets-stats', authenticateP2LAdmin, async (req, res) => {
   try {
@@ -2580,6 +2696,88 @@ router.put('/skill-points-config', authenticateP2LAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update skill points configuration' 
+    });
+  }
+});
+
+// ==================== MARKET SURVEY ====================
+
+// GET /api/p2ladmin/market-survey - Get market survey data
+router.get('/market-survey', authenticateP2LAdmin, async (req, res) => {
+  try {
+    const { type, startDate, endDate } = req.query;
+
+    // Build query
+    const query = {};
+    if (type) {
+      query.type = type;
+    }
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        query.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        query.createdAt.$lte = new Date(endDate);
+      }
+    }
+
+    // Fetch all survey data
+    const surveys = await MarketSurvey.find(query).sort({ createdAt: -1 });
+
+    // Aggregate statistics by type and reason
+    const stats = {
+      registration_referral: {},
+      auto_renewal_disable: {},
+      subscription_cancel: {},
+      total: surveys.length
+    };
+
+    surveys.forEach(survey => {
+      if (!stats[survey.type]) {
+        stats[survey.type] = {};
+      }
+      
+      const displayReason = survey.reason === 'other' && survey.otherReason 
+        ? `Other: ${survey.otherReason}` 
+        : survey.reason;
+      
+      if (!stats[survey.type][displayReason]) {
+        stats[survey.type][displayReason] = 0;
+      }
+      stats[survey.type][displayReason]++;
+    });
+
+    // Convert to arrays for easier frontend consumption
+    const formattedStats = {
+      registrationReferrals: Object.entries(stats.registration_referral).map(([reason, count]) => ({
+        reason,
+        count
+      })).sort((a, b) => b.count - a.count),
+      
+      autoRenewalDisableReasons: Object.entries(stats.auto_renewal_disable).map(([reason, count]) => ({
+        reason,
+        count
+      })).sort((a, b) => b.count - a.count),
+      
+      subscriptionCancelReasons: Object.entries(stats.subscription_cancel).map(([reason, count]) => ({
+        reason,
+        count
+      })).sort((a, b) => b.count - a.count),
+      
+      total: stats.total,
+      recentSurveys: surveys.slice(0, 50) // Last 50 surveys
+    };
+
+    res.json({
+      success: true,
+      data: formattedStats
+    });
+  } catch (error) {
+    console.error('Error fetching market survey data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch market survey data'
     });
   }
 });

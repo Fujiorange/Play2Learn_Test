@@ -136,9 +136,10 @@ export const updateSchool = async (id, schoolData) => {
   });
 };
 
-export const deleteSchool = async (id) => {
+export const deleteSchool = async (id, pin) => {
   return apiCall(`/api/p2ladmin/schools/${id}`, {
     method: 'DELETE',
+    body: JSON.stringify({ pin }),
   });
 };
 
@@ -346,10 +347,10 @@ export const getUserSchools = async () => {
   return apiCall('/api/p2ladmin/users/schools');
 };
 
-export const bulkDeleteUsers = async (ids) => {
+export const bulkDeleteUsers = async (ids, pin) => {
   return apiCall('/api/p2ladmin/users/bulk-delete', {
     method: 'POST',
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids, pin }),
   });
 };
 
@@ -398,6 +399,12 @@ export const replySupportTicket = async (id, response) => {
 export const closeSupportTicket = async (id) => {
   return apiCall(`/api/p2ladmin/support-tickets/${id}/close`, {
     method: 'POST',
+  });
+};
+
+export const deleteSupportTicket = async (id) => {
+  return apiCall(`/api/p2ladmin/support-tickets/${id}`, {
+    method: 'DELETE',
   });
 };
 
@@ -465,6 +472,7 @@ export default {
   getSupportTicket,
   replySupportTicket,
   closeSupportTicket,
+  deleteSupportTicket,
   getSupportTicketStats,
   getSkillPointsConfig,
   updateSkillPointsConfig,
