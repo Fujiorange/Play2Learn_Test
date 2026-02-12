@@ -78,11 +78,29 @@ if (allPresent) {
   
   // Check EMAIL_FROM format
   const emailFrom = process.env.EMAIL_FROM;
-  if (emailFrom && emailFrom.includes('<') && emailFrom.includes('>')) {
-    console.log(`✅ EMAIL_FROM: ${emailFrom} (correct format)`);
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  const hasEmail = emailRegex.test(emailFrom);
+  
+  if (!hasEmail) {
+    console.log(`❌ EMAIL_FROM is invalid - missing email address`);
+    console.log(`   Current value: "${emailFrom}"`);
+    console.log(`   EMAIL_FROM must contain a valid email address`);
+    console.log(`   Correct formats:`);
+    console.log(`   - "Play2Learn <your-email@gmail.com>"`);
+    console.log(`   - "your-email@gmail.com"`);
+    hasIssues = true;
+  } else if (emailFrom && emailFrom.includes('<') && emailFrom.includes('>')) {
+    const emailMatch = emailFrom.match(/<([^>]+)>/);
+    if (emailMatch && emailMatch[1]) {
+      console.log(`✅ EMAIL_FROM: ${emailFrom} (correct format)`);
+    } else {
+      console.log(`❌ EMAIL_FROM has angle brackets but email is malformed`);
+      console.log(`   Current value: "${emailFrom}"`);
+      console.log(`   Expected format: "Display Name <email@domain.com>"`);
+      hasIssues = true;
+    }
   } else if (emailFrom) {
-    console.log(`⚠️  EMAIL_FROM should be in format: "Name <email@domain.com>"`);
-    console.log(`   Current value: ${emailFrom}`);
+    console.log(`✅ EMAIL_FROM: ${emailFrom} (email address format)`);
   }
   
   // Check common SMTP hosts
