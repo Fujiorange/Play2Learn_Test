@@ -14,6 +14,7 @@ export default function StudentMatrix() {
   const [error, setError] = useState('');
   const [myClasses, setMyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('all');
+  const [classOptions, setClassOptions] = useState([]);
 
   const getToken = () => localStorage.getItem('token');
   const isObjectId = (str) => str && typeof str === 'string' && /^[a-f\d]{24}$/i.test(str);
@@ -37,31 +38,81 @@ export default function StudentMatrix() {
   useEffect(() => { loadStudents(); }, [selectedClass]);
 
   const loadClasses = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      const data = await res.json();
-      if (data.success) setMyClasses(data.classes || []);
-    } catch (err) { console.error('Error:', err); }
-  };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
+      headers: { 'Authorization': `Bearer ${getToken()}` }
+    });
+    const data = await res.json();
+    if (data.success) {
+      // Store BOTH class names AND their corresponding IDs
+      const options = [];
+      
+      // data.classes = class names array
+      // data.classIds = class IDs array
+      if (data.classIds && data.classIds.length > 0) {
+        // Map IDs to names
+        for (let i = 0; i < data.classIds.length; i++) {
+          options.push({
+            id: data.classIds[i],
+            name: data.classes[i] || `Class ${i+1}`
+          });
+        }
+      } else {
+        // Fallback: use names as IDs
+        options.push(...data.classes.map(name => ({ id: name, name })));
+      }
+      
+      setClassOptions(options);
+      setMyClasses(data.classes || []);
+    }
+  } catch (err) { 
+    console.error('Error loading classes:', err); 
+  }
+};
+
 
   const loadStudents = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const url = selectedClass === 'all'
-        ? `${API_BASE_URL}/api/mongo/teacher/students`
-        : `${API_BASE_URL}/api/mongo/teacher/students?className=${encodeURIComponent(selectedClass)}`;
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${getToken()}` } });
-      const data = await res.json();
-      if (data.success) setStudents(data.students || []);
-      else setError(data.error || data.message || 'Failed to load');
-    } catch (err) {
-      console.error('Error:', err);
-      setError('Failed to connect');
-    } finally { setLoading(false); }
-  };
+  try {
+    setLoading(true);
+    setError('');
+    
+    let url;
+    
+    if (selectedClass === 'all') {
+      url = `${API_BASE_URL}/api/mongo/teacher/students`;
+    } else {
+      // Find the class ID for the selected class name
+      const selectedOption = classOptions.find(opt => opt.name === selectedClass);
+      
+      if (selectedOption && selectedOption.id) {
+        // Send the ID, not the name
+        url = `${API_BASE_URL}/api/mongo/teacher/students?className=${encodeURIComponent(selectedOption.id)}`;
+        console.log('🔍 Filtering by class ID:', selectedOption.id);
+      } else {
+        // Fallback: send the name as is
+        url = `${API_BASE_URL}/api/mongo/teacher/students?className=${encodeURIComponent(selectedClass)}`;
+      }
+    }
+    
+    console.log('📡 Fetching students from:', url);
+    
+    const res = await fetch(url, { 
+      headers: { 'Authorization': `Bearer ${getToken()}` } 
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      setStudents(data.students || []);
+    } else {
+      setError(data.error || data.message || 'Failed to load students');
+    }
+  } catch (err) {
+    console.error('Error loading students:', err);
+    setError('Failed to connect to server');
+  } finally { 
+    setLoading(false); 
+  }
+};
 
   const loadStudentSkills = async (student) => {
     const displayClass = getClassDisplayName(student.class);
@@ -137,13 +188,18 @@ export default function StudentMatrix() {
           </div>
           <p style={{ color: '#6b7280', marginBottom: '16px' }}>Click on a student to view their math skill breakdown</p>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <label style={{ fontWeight: '500' }}>Filter by Class:</label>
-            <select style={styles.select} value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
-              <option value="all">All Classes</option>
-              {myClasses.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
+          <label style={{ fontWeight: '500' }}>Filter by Class:</label>
+          <select style={styles.select} value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
+            <option value="all">All Classes</option>
+            {/* ✅ FIXED - Use classOptions with proper name display */}
+            {classOptions.map(option => (
+              <option key={option.id} value={option.name}>
+                {option.name}
+              </option>
+            ))}
+        </select>
+      </div>
+    </div>
 
         {error && <div style={styles.error}>⚠️ {error}</div>}
 

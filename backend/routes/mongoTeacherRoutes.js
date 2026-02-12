@@ -93,26 +93,24 @@ router.get('/dashboard', async (req, res) => {
     }
     // === END FIX ===
 
+
+
     console.log('📊 Teacher dashboard for:', teacher.email);
     console.log('📊 Assigned class IDs:', assignedClasses);
     console.log('📊 Assigned class names:', assignedClassNames);
     console.log('📊 Teacher schoolId:', teacher.schoolId);
 
-    // Count students - if no assigned classes, count all students in same school
+    // Count students - ONLY from assigned classes (no fallback)
+    // Fresh teacher with no assigned classes = 0 students
     let totalStudents = 0;
     if (assignedClasses.length > 0) {
       // Use IDs for database queries (Student documents reference IDs)
       totalStudents = await User.countDocuments({
         role: 'Student',
-        class: { $in: assignedClasses }  // This must be IDs
+        class: { $in: assignedClasses }
       });
-    } else if (teacher.schoolId) {
-      totalStudents = await User.countDocuments({
-        role: 'Student',
-        schoolId: teacher.schoolId
-      });
-      console.log('📊 Using schoolId fallback, found', totalStudents, 'students');
     }
+    // No fallback - if no assigned classes, totalStudents stays 0
 
     // Count active quizzes visible to this teacher (launched for their school/classes)
     let teacherClassNames = [];
@@ -163,14 +161,16 @@ router.get('/dashboard', async (req, res) => {
     const activeQuizzes = await Quiz.countDocuments(quizQuery);
     console.log('📊 Active quizzes for teacher:', activeQuizzes);
 
-    // Get recent quiz attempts from students
-    let studentQuery = { role: 'Student' };
+    // Get recent quiz attempts from students in assigned classes ONLY
+    // Fresh teacher with no assigned classes = no students to query
+    let students = [];
     if (assignedClasses.length > 0) {
-      studentQuery.class = { $in: assignedClasses }; // Use IDs here too
-    } else if (teacher.schoolId) {
-      studentQuery.schoolId = teacher.schoolId;
+      students = await User.find({
+        role: 'Student',
+        class: { $in: assignedClasses }
+      }).select('_id');
     }
-    const students = await User.find(studentQuery).select('_id');
+    // No fallback - if no assigned classes, students stays empty
 
     const studentIds = students.map(s => s._id);
 
@@ -209,6 +209,8 @@ router.get('/dashboard', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to load dashboard' });
   }
 });
+
+
 
 // ==================== PROFILE MANAGEMENT ====================
 router.get('/profile', async (req, res) => {
@@ -793,6 +795,70 @@ router.get('/my-classes', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to load classes' });
   }
 });
+
+// ==================== TEACHER ANNOUNCEMENTS ====================
+// Get announcements for teachers (filtered by school and teacher audience)
+
+router.get('/announcements', async (req, res) => {
+  try {
+    const teacher = req.teacher;
+    
+    if (!teacher.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Teacher must be associated with a school to view announcements' 
+      });
+    }
+
+    console.log('📢 Teacher fetching announcements for school:', teacher.schoolId);
+    
+    const db = mongoose.connection.db;
+    
+    // Check if announcements collection exists
+    const collections = await db.listCollections({ name: 'announcements' }).toArray();
+    if (collections.length === 0) {
+      return res.json({ success: true, announcements: [] });
+    }
+    
+    const now = new Date();
+    
+    // Get announcements for teacher's school that are:
+    // 1. Not expired
+    // 2. Targeted at 'all', 'teacher', or no audience specified
+    const announcements = await db.collection('announcements')
+      .find({
+        school_id: teacher.schoolId.toString(),
+        $or: [
+          { expiresAt: { $gt: now } },
+          { expiresAt: null },
+          { expiresAt: { $exists: false } }
+        ],
+        $or: [
+          { audience: { $in: ['all', 'teacher', 'teachers'] } },
+          { audience: { $exists: false } },
+          { audience: null }
+        ]
+      })
+      .sort({ pinned: -1, createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    console.log(`✅ Teacher found ${announcements.length} announcements`);
+    
+    res.json({
+      success: true,
+      announcements: announcements
+    });
+  } catch (error) {
+    console.error('❌ Teacher announcements error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to load announcements',
+      details: error.message 
+    });
+  }
+});
+
 
 // ==================== SUPPORT TICKETS ====================
 // FIXED: Uses SupportTicket model with correct fields for School Admin visibility

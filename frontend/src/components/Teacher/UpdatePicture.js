@@ -88,6 +88,7 @@ export default function UpdatePicture() {
         const updatedUser = { ...currentUser, profile_picture: preview };
         localStorage.setItem('user', JSON.stringify(updatedUser));
         setMessage({ type: 'success', text: 'Profile picture updated!' });
+        setTimeout(() => navigate('/teacher/profile'), 1500);
         setCurrentPicture(preview);
         setTimeout(() => {
           setSelectedFile(null);
@@ -128,6 +129,7 @@ export default function UpdatePicture() {
         setPreview(null);
         setSelectedFile(null);
         setMessage({ type: 'success', text: 'Picture removed!' });
+        setTimeout(() => navigate('/teacher/profile'), 1500);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to remove' });
       }
@@ -172,7 +174,7 @@ export default function UpdatePicture() {
           <h1 style={styles.title}>My Profile</h1>
           <button
             style={styles.backBtn}
-            onClick={() => navigate('/teacher')}
+            onClick={() => navigate('/teacher/profile')}
             onMouseEnter={(e) => e.target.style.background = '#4b5563'}
             onMouseLeave={(e) => e.target.style.background = '#6b7280'}
           >

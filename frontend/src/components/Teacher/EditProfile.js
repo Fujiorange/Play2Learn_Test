@@ -76,7 +76,7 @@ export default function EditProfile() {
         const user = authService.getCurrentUser();
         localStorage.setItem('user', JSON.stringify({ ...user, contact: formData.contact }));
         setMessage({ type: 'success', text: 'Profile updated successfully!' });
-        setTimeout(() => navigate('/teacher'), 1500);
+        setTimeout(() => navigate('/teacher/profile'), 1500);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to update' });
       }
@@ -115,7 +115,7 @@ export default function EditProfile() {
       <div style={styles.content}>
         <div style={styles.header}>
           <h1 style={styles.title}>✏️ Edit Profile</h1>
-          <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
+          <button style={styles.backBtn} onClick={() => navigate('/teacher/profile')}>← Back to Profile</button>
         </div>
 
         <div style={styles.infoBox}>
@@ -162,7 +162,7 @@ export default function EditProfile() {
             <button type="submit" disabled={saving || !!contactError} style={{ ...styles.saveBtn, ...((saving || contactError) ? styles.disabled : {}) }}>
               {saving ? 'Saving...' : '💾 Save Changes'}
             </button>
-            <button type="button" onClick={() => navigate('/teacher')} disabled={saving} style={styles.cancelBtn}>
+            <button type="button" onClick={() => navigate('/teacher/profile')} disabled={saving} style={styles.cancelBtn}>
               Cancel
             </button>
           </div>

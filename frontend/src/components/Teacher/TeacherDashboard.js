@@ -35,24 +35,19 @@ export default function TeacherDashboard() {
 
   const loadDashboard = async () => {
   try {
-    // ✅ USE THE SERVICE METHOD (it has correct URLs)
     const data = await teacherService.getDashboard();
     
-    console.log('📊 Dashboard API Response:', data); // For debugging
+    console.log('📊 Dashboard API Response:', data);
     
     if (data.success) {
       console.log('🔍 Dashboard data details:');
       console.log('- Total students:', data.data?.total_students);
       console.log('- Assigned classes:', data.data?.assigned_classes);
-      console.log('- Active quizzes:', data.data?.active_quizzes, '(type:', typeof data.data?.active_quizzes, ')');
-      console.log('- Average score:', data.data?.average_score, '(type:', typeof data.data?.average_score, ')');
-      console.log('- Raw data:', data.data);
       
       setDashboardData(data.data);
     } else {
       console.error('Dashboard API failed:', data.error);
       
-      // Auto-logout if token is invalid
       if (data.error?.includes('token') || data.error?.includes('authenticated')) {
         authService.logout();
         navigate('/login');
@@ -85,6 +80,16 @@ export default function TeacherDashboard() {
       boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
       borderBottom: '1px solid #e5e7eb',
     },
+    welcomeText: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: '#1f2937',
+    },
+    roleText: {
+      fontSize: '12px',
+      color: '#6b7280',
+      marginTop: '2px',
+    },
     logo: {
       display: 'flex',
       alignItems: 'center',
@@ -99,52 +104,47 @@ export default function TeacherDashboard() {
       alignItems: 'center',
       justifyContent: 'center',
       color: 'white',
-      fontWeight: 'bold',
-      fontSize: '18px',
+      fontSize: '20px',
     },
     logoText: {
       fontSize: '20px',
       fontWeight: '700',
       color: '#1f2937',
     },
-    welcomeText: {
-      color: '#4a5568',
-      fontSize: '14px',
-    },
     logoutBtn: {
-      padding: '8px 20px',
-      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+      padding: '10px 20px',
+      background: '#ef4444',
       color: 'white',
       border: 'none',
       borderRadius: '8px',
       cursor: 'pointer',
-      fontWeight: '500',
+      fontWeight: '600',
+      fontSize: '14px',
     },
-    content: {
+    main: {
       padding: '32px 40px',
-      maxWidth: '1400px',
+      maxWidth: '1200px',
       margin: '0 auto',
     },
     welcomeSection: {
       background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       borderRadius: '16px',
       padding: '32px',
-      color: 'white',
       marginBottom: '32px',
+      color: 'white',
     },
     welcomeTitle: {
       fontSize: '28px',
       fontWeight: '700',
-      margin: '0 0 8px 0',
+      marginBottom: '8px',
     },
     welcomeSubtitle: {
       fontSize: '16px',
-      opacity: 0.9,
-      margin: 0,
+      opacity: '0.9',
     },
     statsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+      gridTemplateColumns: 'repeat(2, 1fr)',
       gap: '20px',
       marginBottom: '32px',
     },
@@ -153,123 +153,133 @@ export default function TeacherDashboard() {
       borderRadius: '12px',
       padding: '24px',
       textAlign: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     },
-    statIcon: { fontSize: '32px', marginBottom: '10px' },
+    statIcon: {
+      fontSize: '32px',
+      marginBottom: '8px',
+    },
     statValue: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: '0 0 4px 0' },
-    statLabel: { color: '#6b7280', fontSize: '14px', margin: 0 },
+    statLabel: { fontSize: '14px', color: '#6b7280', margin: 0 },
     sectionsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
       gap: '24px',
     },
     section: {
       background: 'white',
-      borderRadius: '16px',
+      borderRadius: '12px',
       padding: '24px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     },
     sectionHeader: {
       display: 'flex',
       alignItems: 'center',
       gap: '12px',
-      marginBottom: '20px',
+      marginBottom: '16px',
       paddingBottom: '12px',
-      borderBottom: '2px solid #e2e8f0',
+      borderBottom: '2px solid #e5e7eb',
     },
-    sectionIcon: { fontSize: '24px' },
-    sectionTitle: { fontSize: '18px', fontWeight: '600', color: '#2d3748', margin: 0 },
-    menuList: { listStyle: 'none', padding: 0, margin: 0 },
+    sectionIcon: {
+      fontSize: '24px',
+    },
+    sectionTitle: {
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#1f2937',
+      margin: 0,
+    },
+    menuList: {
+      listStyle: 'none',
+      padding: 0,
+      margin: 0,
+    },
     menuItem: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '14px 16px',
-      borderRadius: '10px',
-      marginBottom: '8px',
+      padding: '12px 16px',
+      borderRadius: '8px',
       cursor: 'pointer',
       transition: 'all 0.2s',
-      background: '#f7fafc',
+      marginBottom: '8px',
+      background: '#f9fafb',
     },
     menuItemHover: {
       background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       color: 'white',
     },
-    arrow: { fontSize: '14px' },
+    arrow: {
+      fontWeight: '600',
+    },
+    loadingContainer: {
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
+    },
   };
 
   if (loading) {
     return (
-      <div style={styles.container}>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-          <p style={{ color: '#6b7280', fontSize: '18px' }}>Loading dashboard...</p>
+      <div style={styles.loadingContainer}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
+          <p style={{ color: '#6b7280' }}>Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
-  const currentUser = authService.getCurrentUser();
+  const userName = authService.getCurrentUser()?.name || 'Teacher';
 
   return (
     <div style={styles.container}>
+      {/* Header */}
       <header style={styles.header}>
         <div style={styles.logo}>
-          <div style={styles.logoIcon}>P2L</div>
+          <div style={styles.logoIcon}>🎓</div>
           <span style={styles.logoText}>Play2Learn</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <span style={styles.welcomeText}>Welcome, {currentUser?.name || 'Teacher'}</span>
-          <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+          <div style={{ textAlign: 'right' }}>
+            <span style={styles.welcomeText}>{userName}</span>
+            <div style={styles.roleText}>
+              {authService.getCurrentUser()?.role === 'Trial Teacher' ? 'Trial Teacher' : 'Teacher'}
+            </div>
+          </div>
+          <button style={styles.logoutBtn} onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </header>
 
-      <div style={styles.content}>
+      {/* Main Content */}
+      <main style={styles.main}>
         {/* Welcome Section */}
         <div style={styles.welcomeSection}>
-          <h1 style={styles.welcomeTitle}>Teacher Dashboard</h1>
+          <h1 style={styles.welcomeTitle}>Welcome back, {userName}! 👋</h1>
           <p style={styles.welcomeSubtitle}>Primary 1 Mathematics - Manage your classes and students</p>
         </div>
 
-        {/* Stats Cards - UPDATED WITH CORRECT FIELD NAMES */}
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>👥</div>
-          <p style={styles.statValue}>{dashboardData?.total_students || 0}</p>
-          <p style={styles.statLabel}>Total Students</p>
+        {/* Stats Cards - ONLY Students and Classes */}
+        <div style={styles.statsGrid}>
+          <div style={styles.statCard}>
+            <div style={styles.statIcon}>👥</div>
+            <p style={styles.statValue}>{dashboardData?.total_students || 0}</p>
+            <p style={styles.statLabel}>Total Students</p>
+          </div>
+          <div style={styles.statCard}>
+            <div style={styles.statIcon}>📚</div>
+            <p style={styles.statValue}>{dashboardData?.assigned_classes?.length || 0}</p>
+            <p style={styles.statLabel}>My Classes</p>
+          </div>
         </div>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>📚</div>
-          <p style={styles.statValue}>{dashboardData?.assigned_classes?.length || 0}</p>
-          <p style={styles.statLabel}>My Classes</p>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>🎯</div>
-          {/* FIX: Use active_assignments instead of active_quizzes */}
-          <p style={styles.statValue}>
-            {dashboardData?.active_assignments !== undefined && 
-            dashboardData?.active_assignments !== null 
-              ? dashboardData.active_assignments 
-              : 0}
-          </p>
-          <p style={styles.statLabel}>Active Quizzes</p>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>📊</div>
-          {/* FIX: Use avg_performance instead of average_score */}
-          <p style={styles.statValue}>
-            {dashboardData?.avg_performance !== undefined && 
-            dashboardData?.avg_performance !== null && 
-            !isNaN(dashboardData.avg_performance)
-              ? Math.round(dashboardData.avg_performance) + '%'
-              : '0%'}
-          </p>
-          <p style={styles.statLabel}>Avg. Score</p>
-        </div>
-      </div>
 
         {/* Menu Sections */}
         <div style={styles.sectionsGrid}>
-          {/* Profile Management */}
+          {/* Profile Management - Only View Profile */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <span style={styles.sectionIcon}>👤</span>
@@ -282,22 +292,10 @@ export default function TeacherDashboard() {
                 onClick={() => navigate('/teacher/profile')}>
                 <span>View Profile</span><span style={styles.arrow}>→</span>
               </li>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'edit-profile' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('edit-profile')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/profile/edit')}>
-                <span>Update Profile Details</span><span style={styles.arrow}>→</span>
-              </li>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'update-picture' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('update-picture')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/profile/picture')}>
-                <span>Update Profile Picture</span><span style={styles.arrow}>→</span>
-              </li>
             </ul>
           </div>
 
-          {/* Student Monitoring */}
+          {/* Student Monitoring - No View Student Performance */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <span style={styles.sectionIcon}>📊</span>
@@ -310,12 +308,6 @@ export default function TeacherDashboard() {
                 onClick={() => navigate('/teacher/students')}>
                 <span>View Classes & Students</span><span style={styles.arrow}>→</span>
               </li>
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'performance' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('performance')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/students/performance')}>
-                <span>View Student Performance</span><span style={styles.arrow}>→</span>
-              </li>
               <li style={{ ...styles.menuItem, ...(hoveredItem === 'matrix' ? styles.menuItemHover : {}) }}
                 onMouseEnter={() => setHoveredItem('matrix')}
                 onMouseLeave={() => setHoveredItem(null)}
@@ -327,23 +319,6 @@ export default function TeacherDashboard() {
                 onMouseLeave={() => setHoveredItem(null)}
                 onClick={() => navigate('/teacher/students/leaderboard')}>
                 <span>View Leaderboard</span><span style={styles.arrow}>→</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Quiz Management */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span style={styles.sectionIcon}>🎯</span>
-              <h2 style={styles.sectionTitle}>Quiz Management</h2>
-            </div>
-            <ul style={styles.menuList}>
-              
-              <li style={{ ...styles.menuItem, ...(hoveredItem === 'view-quizzes' ? styles.menuItemHover : {}) }}
-                onMouseEnter={() => setHoveredItem('view-quizzes')}
-                onMouseLeave={() => setHoveredItem(null)}
-                onClick={() => navigate('/teacher/quiz-assignment')}>
-                <span>View Active Quizzes</span><span style={styles.arrow}>→</span>
               </li>
             </ul>
           </div>
@@ -404,7 +379,7 @@ export default function TeacherDashboard() {
             </ul>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

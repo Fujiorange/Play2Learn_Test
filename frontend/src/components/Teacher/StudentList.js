@@ -9,6 +9,7 @@ export default function StudentList() {
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
   const [myClasses, setMyClasses] = useState([]);
+  const [classIdToName, setClassIdToName] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [error, setError] = useState('');
@@ -18,14 +19,16 @@ export default function StudentList() {
   // Check if string looks like MongoDB ObjectId
   const isObjectId = (str) => str && typeof str === 'string' && /^[a-f\d]{24}$/i.test(str);
   
-  // Build a mapping from any class identifier to display name
+  // Get class display name using the mapping
   const getClassDisplayName = (studentClass) => {
     if (!studentClass) return 'Unassigned';
-    // If it's already a readable class name, return it
-    if (!isObjectId(studentClass)) return studentClass;
-    // If we have assigned classes, use the first one as fallback for hashes
-    if (myClasses.length > 0) return myClasses[0];
-    return 'Primary 1';
+    const classStr = studentClass.toString();
+    // If we have a mapping for this ID, use it
+    if (classIdToName[classStr]) return classIdToName[classStr];
+    // If it's not an ObjectId, it's already a name
+    if (!isObjectId(classStr)) return classStr;
+    // Fallback
+    return 'Unknown Class';
   };
 
   useEffect(() => {
@@ -40,13 +43,27 @@ export default function StudentList() {
     try {
       setError('');
       
-      // Get classes first
+      // Get classes first - this returns both names and IDs
       const classesRes = await fetch(`${API_BASE_URL}/api/mongo/teacher/my-classes`, {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       const classesData = await classesRes.json();
-      const classes = classesData.success ? (classesData.classes || []) : [];
-      setMyClasses(classes);
+      
+      if (classesData.success) {
+        const classNames = classesData.classes || [];
+        const classIds = classesData.classIds || [];
+        setMyClasses(classNames);
+        
+        // Build ID -> Name mapping
+        const mapping = {};
+        classIds.forEach((id, index) => {
+          if (id && classNames[index]) {
+            mapping[id.toString()] = classNames[index];
+          }
+        });
+        setClassIdToName(mapping);
+        console.log('📚 Class mapping:', mapping);
+      }
       
       // Get students
       const studentsRes = await fetch(`${API_BASE_URL}/api/mongo/teacher/students`, {
@@ -75,7 +92,7 @@ export default function StudentList() {
       const matchesClass = filterClass === 'all' || displayClass === filterClass;
       return matchesSearch && matchesClass;
     });
-  }, [students, searchQuery, filterClass, myClasses]);
+  }, [students, searchQuery, filterClass, classIdToName]);
 
   const handleViewPerformance = (student) => {
     const displayClass = getClassDisplayName(student.class);
@@ -131,8 +148,11 @@ export default function StudentList() {
               onChange={(e) => setSearchQuery(e.target.value)} 
             />
             <select style={styles.select} value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
-              <option value="all">All Classes</option>
-              {myClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+              <option value="all">All Classes ({students.length})</option>
+              {myClasses.map(cls => {
+                const count = students.filter(s => getClassDisplayName(s.class) === cls).length;
+                return <option key={cls} value={cls}>{cls} ({count})</option>;
+              })}
             </select>
           </div>
         </div>

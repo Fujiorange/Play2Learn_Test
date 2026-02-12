@@ -1,5 +1,5 @@
 // frontend/src/components/Teacher/ViewAnnouncements.js
-// ✅ FIXED - Uses school-admin public announcements endpoint (same as main)
+// ✅ FIXED - Sends auth token so backend can filter by schoolId
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
@@ -15,6 +15,8 @@ const ViewAnnouncements = () => {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
 
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
     if (!authService.isAuthenticated()) {
       navigate('/login');
@@ -24,32 +26,40 @@ const ViewAnnouncements = () => {
   }, [navigate]);
 
   const fetchAnnouncements = async () => {
-    try {
-      setLoading(true);
-      
-      // ✅ Uses school-admin public endpoint with teacher audience
-      const response = await fetch(`${API_BASE_URL}/school-admin/announcements/public?audience=teacher`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setAnnouncements(data.announcements || []);
-        setError('');
-      } else {
-        setError(data.error || 'Failed to load announcements');
+  try {
+    setLoading(true);
+    
+    console.log('📢 Fetching teacher announcements...');
+    const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/announcements`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`
       }
-    } catch (err) {
-      console.error('Error fetching announcements:', err);
-      setError('Failed to load announcements. Please try again.');
-    } finally {
-      setLoading(false);
+    });
+
+    console.log('📥 Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-  };
+    
+    const data = await response.json();
+    console.log('📥 Response data:', data);
+    
+    if (data.success) {
+      setAnnouncements(data.announcements || []);
+      setError('');
+    } else {
+      setError(data.error || 'Failed to load announcements');
+    }
+  } catch (err) {
+    console.error('❌ Error fetching announcements:', err);
+    setError('Failed to load announcements. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getPriorityColor = (priority) => {
     const colors = {
@@ -60,293 +70,242 @@ const ViewAnnouncements = () => {
     return colors[priority] || colors.info;
   };
 
-  const filteredAnnouncements = filter === 'all' 
-    ? announcements 
-    : announcements.filter(ann => ann.priority === filter);
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-SG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const filteredAnnouncements = announcements.filter(a => {
+    if (filter === 'all') return true;
+    return a.priority === filter;
+  });
+
+  // Styles
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+      padding: '24px'
+    },
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '24px',
+      flexWrap: 'wrap',
+      gap: '16px'
+    },
+    title: {
+      fontSize: '28px',
+      fontWeight: 'bold',
+      color: '#1b5e20',
+      margin: 0
+    },
+    backButton: {
+      padding: '10px 20px',
+      background: 'linear-gradient(135deg, #43a047 0%, #2e7d32 100%)',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      fontWeight: '600',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    filterContainer: {
+      display: 'flex',
+      gap: '8px',
+      marginBottom: '20px',
+      flexWrap: 'wrap'
+    },
+    filterButton: {
+      padding: '8px 16px',
+      border: '2px solid #43a047',
+      borderRadius: '20px',
+      cursor: 'pointer',
+      fontWeight: '500',
+      transition: 'all 0.2s'
+    },
+    announcementCard: {
+      background: 'white',
+      borderRadius: '12px',
+      padding: '20px',
+      marginBottom: '16px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      borderLeft: '4px solid'
+    },
+    cardHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: '12px',
+      flexWrap: 'wrap',
+      gap: '8px'
+    },
+    cardTitle: {
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#333',
+      margin: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    badge: {
+      padding: '4px 12px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: '600'
+    },
+    cardContent: {
+      color: '#555',
+      lineHeight: '1.6',
+      marginBottom: '12px'
+    },
+    cardMeta: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      fontSize: '13px',
+      color: '#888',
+      flexWrap: 'wrap',
+      gap: '8px'
+    },
+    pinnedBadge: {
+      background: '#fff3e0',
+      color: '#e65100',
+      padding: '2px 8px',
+      borderRadius: '4px',
+      fontSize: '11px',
+      fontWeight: '600'
+    },
+    emptyState: {
+      textAlign: 'center',
+      padding: '60px 20px',
+      background: 'white',
+      borderRadius: '12px'
+    },
+    emptyIcon: {
+      fontSize: '48px',
+      marginBottom: '16px'
+    },
+    loadingContainer: {
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '300px'
+    },
+    errorBox: {
+      background: '#ffebee',
+      color: '#c62828',
+      padding: '16px',
+      borderRadius: '8px',
+      marginBottom: '20px'
+    }
+  };
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-        padding: '20px'
-      }}>
-        <div style={{
-          maxWidth: '1000px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '400px'
-        }}>
+      <div style={styles.container}>
+        <div style={styles.loadingContainer}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: '50px',
-              height: '50px',
-              border: '5px solid #e5e7eb',
-              borderTop: '5px solid #10b981',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 15px'
-            }}></div>
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>Loading announcements...</p>
+            <div style={{ fontSize: '40px', marginBottom: '16px' }}>📢</div>
+            <p style={{ color: '#666' }}>Loading announcements...</p>
           </div>
         </div>
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-      padding: '20px'
-    }}>
-      <div style={{
-        maxWidth: '1000px',
-        margin: '0 auto'
-      }}>
-        {/* Header */}
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '32px' }}>📢</span>
-            <h1 style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#1f2937',
-              margin: 0
-            }}>
-              School Announcements
-            </h1>
-          </div>
-          <button
-            onClick={() => navigate('/teacher')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#10b981',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
-          >
-            ← Back to Dashboard
-          </button>
-        </div>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h1 style={styles.title}>📢 School Announcements</h1>
+        <button 
+          style={styles.backButton}
+          onClick={() => navigate('/teacher')}
+        >
+          ← Back to Dashboard
+        </button>
+      </div>
 
-        {/* Filter Tabs */}
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '16px',
-          marginBottom: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          display: 'flex',
-          gap: '12px',
-          flexWrap: 'wrap'
-        }}>
-          {[
-            { value: 'all', label: '📋 All', count: announcements.length },
-            { value: 'urgent', label: '🚨 Urgent', count: announcements.filter(a => a.priority === 'urgent').length },
-            { value: 'event', label: '📅 Events', count: announcements.filter(a => a.priority === 'event').length },
-            { value: 'info', label: 'ℹ️ Info', count: announcements.filter(a => a.priority === 'info').length }
-          ].map((category) => (
-            <button
-              key={category.value}
-              onClick={() => setFilter(category.value)}
+      {error && <div style={styles.errorBox}>{error}</div>}
+
+      <div style={styles.filterContainer}>
+        {['all', 'urgent', 'event', 'info'].map(f => (
+          <button
+            key={f}
+            style={{
+              ...styles.filterButton,
+              background: filter === f ? '#43a047' : 'white',
+              color: filter === f ? 'white' : '#43a047'
+            }}
+            onClick={() => setFilter(f)}
+          >
+            {f === 'all' ? '📋 All' : f === 'urgent' ? '🚨 Urgent' : f === 'event' ? '📅 Events' : 'ℹ️ Info'}
+          </button>
+        ))}
+      </div>
+
+      {filteredAnnouncements.length === 0 ? (
+        <div style={styles.emptyState}>
+          <div style={styles.emptyIcon}>📭</div>
+          <h3 style={{ color: '#666', marginBottom: '8px' }}>No Announcements</h3>
+          <p style={{ color: '#999' }}>
+            {filter === 'all' 
+              ? 'There are no announcements from your school at this time.' 
+              : `No ${filter} announcements found.`}
+          </p>
+        </div>
+      ) : (
+        filteredAnnouncements.map((announcement, index) => {
+          const priorityStyle = getPriorityColor(announcement.priority);
+          return (
+            <div 
+              key={announcement._id || index}
               style={{
-                padding: '8px 16px',
-                border: filter === category.value ? '2px solid #10b981' : '2px solid #e5e7eb',
-                borderRadius: '8px',
-                backgroundColor: filter === category.value ? '#d1fae5' : 'white',
-                color: filter === category.value ? '#065f46' : '#6b7280',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
+                ...styles.announcementCard,
+                borderLeftColor: priorityStyle.border
               }}
             >
-              {category.label} ({category.count})
-            </button>
-          ))}
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            background: '#fee2e2',
-            color: '#991b1b',
-            padding: '16px',
-            borderRadius: '12px',
-            marginBottom: '24px',
-            border: '1px solid #fca5a5'
-          }}>
-            <strong>Error:</strong> {error}
-          </div>
-        )}
-
-        {/* Announcements List */}
-        {filteredAnnouncements.length === 0 ? (
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '60px 20px',
-            textAlign: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-          }}>
-            <span style={{ fontSize: '64px', display: 'block', marginBottom: '16px' }}>📭</span>
-            <p style={{
-              fontSize: '18px',
-              color: '#6b7280',
-              margin: 0
-            }}>
-              {filter === 'all' 
-                ? 'No announcements yet. Check back later!' 
-                : `No ${filter} announcements at this time.`}
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {filteredAnnouncements.map((announcement) => {
-              const priorityStyle = getPriorityColor(announcement.priority);
-              
-              return (
-                <div
-                  key={announcement._id}
-                  style={{
-                    background: 'white',
-                    borderRadius: '16px',
-                    padding: '24px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    border: announcement.pinned ? '3px solid #10b981' : 'none',
-                    borderLeft: `4px solid ${priorityStyle.text}`,
-                    position: 'relative',
-                    transition: 'transform 0.2s, box-shadow 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                  }}
-                >
-                  {/* Pinned Badge */}
+              <div style={styles.cardHeader}>
+                <h3 style={styles.cardTitle}>
+                  <span>{priorityStyle.icon}</span>
+                  {announcement.title}
                   {announcement.pinned && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '16px',
-                      right: '16px',
-                      background: '#10b981',
-                      color: 'white',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      📌 Pinned
-                    </div>
+                    <span style={styles.pinnedBadge}>📌 Pinned</span>
                   )}
-
-                  {/* Priority Badge */}
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    backgroundColor: priorityStyle.bg,
-                    color: priorityStyle.text,
-                    border: `1px solid ${priorityStyle.border}`,
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    textTransform: 'uppercase',
-                    marginBottom: '12px'
-                  }}>
-                    {priorityStyle.icon} {announcement.priority || 'info'}
-                  </div>
-
-                  {/* Title */}
-                  <h2 style={{
-                    fontSize: '22px',
-                    fontWeight: '700',
-                    color: '#1f2937',
-                    margin: '0 0 12px 0',
-                    lineHeight: '1.3',
-                    paddingRight: announcement.pinned ? '80px' : '0'
-                  }}>
-                    {announcement.title}
-                  </h2>
-
-                  {/* Content */}
-                  <p style={{
-                    fontSize: '16px',
-                    color: '#4b5563',
-                    lineHeight: '1.6',
-                    margin: '0 0 16px 0',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    {announcement.content}
-                  </p>
-
-                  {/* Footer */}
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    paddingTop: '16px',
-                    borderTop: '1px solid #e5e7eb',
-                    flexWrap: 'wrap',
-                    gap: '8px'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      color: '#6b7280',
-                      fontSize: '14px'
-                    }}>
-                      <span>👤</span>
-                      <span style={{ fontWeight: '600' }}>{announcement.author || 'School Admin'}</span>
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      color: '#6b7280',
-                      fontSize: '14px'
-                    }}>
-                      <span>📅</span>
-                      <span>{new Date(announcement.createdAt).toLocaleDateString('en-SG', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                </h3>
+                <span style={{
+                  ...styles.badge,
+                  background: priorityStyle.bg,
+                  color: priorityStyle.text
+                }}>
+                  {announcement.priority?.toUpperCase() || 'INFO'}
+                </span>
+              </div>
+              
+              <div style={styles.cardContent}>
+                {announcement.content}
+              </div>
+              
+              <div style={styles.cardMeta}>
+                <span>By: {announcement.author || 'School Admin'}</span>
+                <span>Posted: {formatDate(announcement.createdAt)}</span>
+                {announcement.expiresAt && (
+                  <span>Expires: {formatDate(announcement.expiresAt)}</span>
+                )}
+              </div>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 };
