@@ -53,14 +53,10 @@ export default function ViewChildProgress() {
           console.warn('⚠️ Could not fetch child quiz journey level:', levelError);
         }
         
-        // ✅ FIXED: Fetch child's quiz history directly from API
+        // ✅ FIXED: Fetch child's quiz history using parentService
         let recentQuizzes = [];
         try {
-          const historyResponse = await fetch(
-            `${API_BASE_URL}/api/parents/child/${childInfo.studentId}/quiz-history`,
-            { headers: { 'Authorization': `Bearer ${getToken()}` } }
-          );
-          const historyData = await historyResponse.json();
+          const historyData = await parentService.getChildQuizHistory(childInfo.studentId);
           
           console.log('📊 Raw quiz history response:', historyData);
           

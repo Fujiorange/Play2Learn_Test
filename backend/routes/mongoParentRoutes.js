@@ -13,6 +13,8 @@ const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const Testimonial = require('../models/Testimonial');
 const SupportTicket = require('../models/SupportTicket');
+const MathProfile = require('../models/MathProfile');
+const MathSkill = require('../models/MathSkill');
 const { authMiddleware } = require('../middleware/auth');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
@@ -23,6 +25,7 @@ const mongoose = require('mongoose');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 // ==================== SCHOOL SCHEMA ====================
+// Only define School if it doesn't exist in models folder
 if (!mongoose.models.School) {
   const schoolSchema = new mongoose.Schema({
     organization_name: { type: String, required: true },
@@ -40,58 +43,6 @@ if (!mongoose.models.School) {
 }
 
 const School = mongoose.model('School');
-
-// ==================== MATHSKILL SCHEMA ====================
-if (!mongoose.models.MathSkill) {
-  const mathSkillSchema = new mongoose.Schema({
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    skill_name: { type: String, required: true },
-    current_level: { type: Number, default: 0, min: 0, max: 5 },
-    xp: { type: Number, default: 0 },
-    points: { type: Number, default: 0 },
-    unlocked: { type: Boolean, default: true },
-    updatedAt: { type: Date, default: Date.now }
-  });
-  mathSkillSchema.index({ student_id: 1, skill_name: 1 }, { unique: true });
-  mongoose.model('MathSkill', mathSkillSchema);
-}
-
-const MathSkill = mongoose.model('MathSkill');
-
-// ==================== MATHPROFILE SCHEMA ====================
-if (!mongoose.models.MathProfile) {
-  const mathProfileSchema = new mongoose.Schema({
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    current_profile: { type: Number, default: 1, min: 1, max: 10 },
-    placement_completed: { type: Boolean, default: false },
-    total_points: { type: Number, default: 0 },
-    consecutive_fails: { type: Number, default: 0 },
-    quizzes_today: { type: Number, default: 0 },
-    last_reset_date: { type: Date, default: Date.now },
-    streak: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-  });
-  mongoose.model('MathProfile', mathProfileSchema);
-}
-
-const MathProfile = mongoose.model('MathProfile');
-
-// ==================== QUIZ SCHEMA (NEW FOR PHASE 2.7) ====================
-if (!mongoose.models.Quiz) {
-  const quizSchema = new mongoose.Schema({
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    quiz_id: { type: String, required: true },
-    quiz_type: { type: String, enum: ['placement', 'regular'], default: 'regular' },
-    profile_level: { type: Number, required: true },
-    score: { type: Number, required: true },
-    total_questions: { type: Number, required: true },
-    percentage: { type: Number, required: true },
-    points_earned: { type: Number, default: 0 },
-    completed_at: { type: Date, default: Date.now }
-  });
-  mongoose.model('Quiz', quizSchema);
-}
 
 // ==================== SUPPORT TICKET SCHEMA ====================
 const supportTicketSchema = new mongoose.Schema({
@@ -1309,6 +1260,103 @@ router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
       success: false,
       error: 'Failed to load child skill matrix',
       details: error.message
+    });
+  }
+});
+
+// ========================================
+// QUIZ HISTORY ENDPOINT (NEW)
+// ========================================
+
+/**
+ * @route   GET /api/mongo/parent/child/:studentId/quiz-history
+ * @desc    Get child's quiz history (adaptive quizzes)
+ * @access  Private (Parent only)
+ */
+router.get('/child/:studentId/quiz-history', authenticateParent, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    console.log('📊 Fetching quiz history for student:', studentId);
+    
+    // Verify parent is linked to this student
+    const parent = await User.findById(req.user.userId).select('linkedStudents');
+    
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Parent not found'
+      });
+    }
+
+    const isLinked = parent.linkedStudents?.some(
+      ls => ls.studentId.toString() === studentId
+    );
+
+    if (!isLinked) {
+      return res.status(403).json({
+        success: false,
+        error: 'This student is not linked to your account'
+      });
+    }
+
+    // ✅ FIXED: Fetch quiz attempts and populate quiz details to filter by type
+    const quizHistory = await QuizAttempt.find({ 
+      userId: studentId,
+      is_completed: true  // Only completed quizzes
+    })
+    .populate('quizId')  // Populate the full quiz object
+    .sort({ completedAt: -1 })
+    .limit(50)
+    .lean();
+
+    console.log(`✅ Found ${quizHistory.length} total quiz attempts`);
+
+    // ✅ Filter out placement quizzes - only show adaptive quizzes
+    const adaptiveQuizzes = quizHistory.filter(quiz => {
+      // If quizId is populated and has quiz_type, check it
+      if (quiz.quizId && quiz.quizId.quiz_type) {
+        return quiz.quizId.quiz_type === 'adaptive';
+      }
+      // If no quiz_type, check if quizLevel exists (placement quizzes typically don't have levels 1-10)
+      // Adaptive quizzes have quizLevel 1-10
+      return quiz.quizLevel >= 1 && quiz.quizLevel <= 10;
+    });
+
+    console.log(`✅ Filtered to ${adaptiveQuizzes.length} adaptive quizzes (excluded ${quizHistory.length - adaptiveQuizzes.length} placement quizzes)`);
+
+    // Format the quiz history to match the student's format
+    const formattedHistory = adaptiveQuizzes.map(quiz => ({
+      quizId: quiz.quizId || quiz._id,
+      quizType: 'adaptive', // All quizattempts are adaptive quizzes
+      profile: quiz.quizLevel,
+      quiz_level: quiz.quizLevel,
+      score: Math.round(quiz.correct_count || 0),
+      totalQuestions: quiz.total_answered || 20,
+      // ✅ FIXED: Calculate percentage from correct_count/total_answered, not from score field
+      percentage: Math.round(((quiz.correct_count || 0) / (quiz.total_answered || 20)) * 100),
+      pointsEarned: quiz.performanceScore || 0,
+      date: quiz.completedAt ? new Date(quiz.completedAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }) : 'N/A',
+      timestamp: quiz.completedAt
+    }));
+
+    res.json({
+      success: true,
+      history: formattedHistory,
+      totalQuizzes: formattedHistory.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching quiz history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load quiz history',
+      details: error.message,
+      history: []
     });
   }
 });

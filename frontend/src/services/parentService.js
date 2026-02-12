@@ -528,6 +528,47 @@ class ParentService {
     }
   }
 
+  // ==================== QUIZ HISTORY (NEW) ====================
+  
+  /**
+   * Get child's quiz history
+   * @param {string} studentId - The student's ID
+   * @returns {Promise} API response with quiz history data
+   */
+  async getChildQuizHistory(studentId) {
+    try {
+      const token = authService.getToken();
+      
+      console.log(`📊 Fetching quiz history for student: ${studentId}`);
+      
+      const response = await fetch(`${API_BASE_URL}/child/${studentId}/quiz-history`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Failed to fetch quiz history:', data.error);
+        throw new Error(data.error || 'Failed to load quiz history');
+      }
+
+      console.log(`✅ Quiz history fetched successfully: ${data.history?.length || 0} items`);
+      
+      return data;
+    } catch (error) {
+      console.error('Error loading quiz history:', error);
+      return {
+        success: false,
+        error: error.message,
+        history: []
+      };
+    }
+  }
+
   // ==================== UTILITY METHODS ====================
 
   formatDate(dateString) {
