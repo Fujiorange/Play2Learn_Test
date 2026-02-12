@@ -9,6 +9,7 @@ import {
   deleteTestimonial,
   getLandingPageStatistics
 } from '../../services/p2lAdminService';
+import PinConfirmationModal from '../common/PinConfirmationModal';
 import './LandingPageManager.css';
 
 function LandingPageManager() {
@@ -21,6 +22,8 @@ function LandingPageManager() {
   const [loadingTestimonials, setLoadingTestimonials] = useState(false);
   const [testimonialError, setTestimonialError] = useState('');
   const [testimonialsLoaded, setTestimonialsLoaded] = useState(false); // Track if testimonials have been loaded
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [deleteAction, setDeleteAction] = useState(null); // { type: 'testimonial' | 'block', id/index: value }
   const [testimonialFilters, setTestimonialFilters] = useState({
     minRating: '',
     sentiment: '',
@@ -91,23 +94,37 @@ function LandingPageManager() {
     }
   };
 
-  const handleDeleteTestimonial = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this testimonial? This action cannot be undone.')) {
-      return;
+  const handleDeleteTestimonial = (id) => {
+    setDeleteAction({ type: 'testimonial', id });
+    setShowPinModal(true);
+  };
+
+  const handleDeleteBlock = (index) => {
+    setDeleteAction({ type: 'block', index });
+    setShowPinModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteAction.type === 'testimonial') {
+      try {
+        const result = await deleteTestimonial(deleteAction.id);
+        if (result.success) {
+          alert('Testimonial deleted successfully!');
+          fetchTestimonials(); // Refresh list
+        } else {
+          alert(result.error || 'Failed to delete testimonial');
+        }
+      } catch (error) {
+        console.error('Failed to delete testimonial:', error);
+        alert('Failed to delete testimonial. Please try again.');
+      }
+    } else if (deleteAction.type === 'block') {
+      const newBlocks = blocks.filter((_, i) => i !== deleteAction.index);
+      setBlocks(newBlocks);
     }
     
-    try {
-      const result = await deleteTestimonial(id);
-      if (result.success) {
-        alert('Testimonial deleted successfully!');
-        fetchTestimonials(); // Refresh list
-      } else {
-        alert(result.error || 'Failed to delete testimonial');
-      }
-    } catch (error) {
-      console.error('Failed to delete testimonial:', error);
-      alert('Failed to delete testimonial. Please try again.');
-    }
+    setShowPinModal(false);
+    setDeleteAction(null);
   };
 
   // Auto-fetch testimonials when filters change (only after initial load)
@@ -212,14 +229,6 @@ function LandingPageManager() {
     
     setBlocks(newBlocks);
     setShowForm(false);
-  };
-
-  const handleDeleteBlock = (index) => {
-    if (!window.confirm('Are you sure you want to delete this block?')) {
-      return;
-    }
-    const newBlocks = blocks.filter((_, i) => i !== index);
-    setBlocks(newBlocks);
   };
 
   const handleSave = async () => {
@@ -1483,6 +1492,17 @@ function LandingPageManager() {
           )}
         </div>
       )}
+
+      {/* PIN Confirmation Modal */}
+      <PinConfirmationModal
+        isOpen={showPinModal}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowPinModal(false);
+          setDeleteAction(null);
+        }}
+        title={deleteAction?.type === 'testimonial' ? 'Confirm Testimonial Deletion' : 'Confirm Block Deletion'}
+      />
     </div>
   );
 }

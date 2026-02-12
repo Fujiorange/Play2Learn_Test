@@ -1,0 +1,161 @@
+/* PIN Confirmation Modal Styles */
+.pin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.pin-modal-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 450px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.pin-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pin-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.pin-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.pin-modal-close:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.pin-modal-body {
+  padding: 20px;
+}
+
+.pin-modal-body p {
+  margin: 0 0 15px 0;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.pin-input-group {
+  margin: 20px 0;
+}
+
+.pin-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.5rem;
+  text-align: center;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  letter-spacing: 8px;
+  transition: border-color 0.2s;
+}
+
+.pin-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.pin-input:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.pin-error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.pin-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.pin-modal-footer button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-cancel {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background-color: #e5e7eb;
+}
+
+.btn-confirm {
+  background-color: #dc2626;
+  color: white;
+}
+
+.btn-confirm:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.btn-cancel:disabled,
+.btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Dark overlay animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.pin-modal-overlay {
+  animation: fadeIn 0.2s ease-out;
+}

@@ -22,12 +22,22 @@ const licenseRoutes = require('./routes/licenseRoutes');
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
+    
+    // Build allowed origins list dynamically
     const allowedOrigins = [
-      'https://play2learn-test.onrender.com',
       'http://localhost:3000',
       'http://localhost:5000',
       'http://localhost:5173',
     ];
+    
+    // Add production frontend URL from environment if available
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    
+    // Add hardcoded production URL as fallback
+    allowedOrigins.push('https://play2learn-test.onrender.com');
+    
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -88,6 +98,9 @@ const Testimonial = require('./models/Testimonial');
 const User = require('./models/User');
 const School = require('./models/School');
 const License = require('./models/License');
+
+// Import license scheduler
+const { initLicenseScheduler } = require('./services/licenseScheduler');
 
 // Cache for landing page data to reduce database load and provide rate limiting
 let landingPageCache = {
@@ -465,6 +478,9 @@ async function startServer() {
         '                   ║');
       console.log('╚═══════════════════════════════════════════════╝');
       console.log('✅ Ready to accept connections');
+      
+      // Initialize license scheduler after server is running
+      initLicenseScheduler();
     });
     
     // Graceful shutdown

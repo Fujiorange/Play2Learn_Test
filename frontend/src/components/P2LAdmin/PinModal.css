@@ -1,0 +1,85 @@
+/* PIN Modal Styles */
+
+.pin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.pin-modal {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+}
+
+.pin-modal h3 {
+  margin: 0 0 16px 0;
+  color: #1f2937;
+  font-size: 20px;
+}
+
+.pin-modal p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.pin-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 16px;
+  margin-bottom: 24px;
+  box-sizing: border-box;
+}
+
+.pin-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.pin-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-cancel,
+.btn-confirm {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-cancel {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-cancel:hover {
+  background: #d1d5db;
+}
+
+.btn-confirm {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-confirm:hover {
+  background: #2563eb;
+}

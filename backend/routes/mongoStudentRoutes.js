@@ -2,12 +2,10 @@
 // ✅ All endpoints match frontend expectations
 // ✅ Field names corrected for compatibility
 // ✅ Daily limit set to 2 quizzes (matching frontend)
-
 // ✅ Placement quizzes excluded from all statistics
 // ✅ Quiz model points to quiz_attempts collection (CRITICAL FIX!)
-// ✅ Profile 1 counter reset added (Line 725-728)
+// ✅ CRITICAL FIX: Placement quiz now sets adaptive_quiz_level for Quiz Journey!
 
-// backend/routes/mongoStudentRoutes.js - COMPREHENSIVE FIX v13
 const express = require("express");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
@@ -181,6 +179,7 @@ if (!mongoose.models.Quiz) {
     collection: 'quiz_attempts'
   }));
 }
+
 if (!mongoose.models.MathSkill) {
   const mathSkillSchema = new mongoose.Schema({
     student_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -228,38 +227,6 @@ if (!mongoose.models.Testimonial) {
   mongoose.model("Testimonial", testimonialSchema);
 }
 
-function shuffleInPlace(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function buildOperationSequence(profile) {
-  if (profile <= 5) {
-    const addCount = Math.random() < 0.5 ? 7 : 8;
-    const subCount = 15 - addCount;
-    const ops = [
-      ...Array(addCount).fill("addition"),
-      ...Array(subCount).fill("subtraction"),
-    ];
-    return shuffleInPlace(ops);
-  }
-
-  const ops = ["addition", "subtraction", "multiplication", "division"];
-  const counts = { addition: 3, subtraction: 3, multiplication: 3, division: 3 };
-  const pick = shuffleInPlace([...ops]).slice(0, 3);
-  pick.forEach((k) => (counts[k] += 1));
-
-  const seq = [];
-  ops.forEach((k) => {
-    for (let i = 0; i < counts[k]; i++) seq.push(k);
-  });
-
-  return shuffleInPlace(seq);
-}
-
 // ==================== SCHEMA COMPATIBILITY HELPER ====================
 /**
  * Check if a quiz is completed - handles BOTH old and new schemas
@@ -282,84 +249,8 @@ function isQuizCompleted(quiz) {
   return false;
 }
 
-// ==================== PROFILE CONFIG ====================
-function getProfileConfig(profile) {
-  const configs = {
-    1: { range: [1, 10] },
-    2: { range: [1, 20] },
-    3: { range: [1, 30] },
-    4: { range: [1, 40] },
-    5: { range: [1, 50] },
-    6: { range: [1, 60] },
-    7: { range: [1, 70] },
-    8: { range: [1, 80] },
-    9: { range: [1, 90] },
-    10: { range: [1, 100] },
-  };
-  return configs[profile] || configs[1];
-}
-
-function shuffleInPlace(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function randInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function generateQuestion(range, operation) {
-  const [min, max] = range;
-  let num1, num2, answer, questionText;
-
-  switch (operation) {
-    case "addition":
-      num1 = randInt(min, max);
-      num2 = randInt(min, max);
-      answer = num1 + num2;
-      questionText = `${num1} + ${num2} = ?`;
-      break;
-
-    case "subtraction":
-      num1 = randInt(min, max);
-      num2 = randInt(min, num1);
-      answer = num1 - num2;
-      questionText = `${num1} - ${num2} = ?`;
-      break;
-
-    case "multiplication":
-      num1 = randInt(1, 12);
-      num2 = randInt(1, 12);
-      answer = num1 * num2;
-      questionText = `${num1} × ${num2} = ?`;
-      break;
-
-    case "division":
-      num2 = randInt(1, 12);
-      const quotient = randInt(1, 12);
-      num1 = num2 * quotient;
-      answer = quotient;
-      questionText = `${num1} ÷ ${num2} = ?`;
-      break;
-
-    default:
-      num1 = randInt(min, max);
-      num2 = randInt(min, max);
-      answer = num1 + num2;
-      questionText = `${num1} + ${num2} = ?`;
-  }
-
-  return {
-    question_text: questionText,
-    operation,
-    correct_answer: answer,
-    student_answer: null,
-    is_correct: false,
-  };
-}
+// ==================== HELPER FUNCTIONS ====================
+// getProfileConfig is kept for placement quiz if needed
 
 // Helper function to get default difficulty points configuration
 function getDefaultDifficultyPoints() {
@@ -632,34 +523,6 @@ router.get("/math-profile", async (req, res) => {
   }
 });
 
-// ==================== PLACEMENT STATUS ENDPOINT ====================
-router.get("/placement-status", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-
-    let mathProfile = await MathProfile.findOne({ student_id: studentId });
-    
-    if (!mathProfile) {
-      return res.json({
-        success: true,
-        placementCompleted: false,
-        placementScore: null,
-        placementDate: null
-      });
-    }
-
-    res.json({
-      success: true,
-      placementCompleted: mathProfile.placement_completed || false,
-      placementScore: mathProfile.placement_score || null,
-      placementDate: mathProfile.placement_date || null
-    });
-  } catch (error) {
-    console.error("❌ Placement status error:", error);
-    res.status(500).json({ success: false, error: "Failed to check placement status" });
-  }
-});
-
 // ==================== MATH SKILLS ENDPOINT ====================
 router.get("/math-skills", async (req, res) => {
   try {
@@ -710,11 +573,39 @@ router.get("/math-skills", async (req, res) => {
   }
 });
 
+// ==================== PLACEMENT QUIZ - STATUS ====================
+router.get("/placement-quiz/status", async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+
+    let mathProfile = await MathProfile.findOne({ student_id: studentId });
+    
+    if (!mathProfile) {
+      // If no profile exists, placement is not completed
+      return res.json({
+        success: true,
+        placementCompleted: false,
+        placement_completed: false
+      });
+    }
+
+    // Return placement status
+    res.json({
+      success: true,
+      placementCompleted: mathProfile.placement_completed || false,
+      placement_completed: mathProfile.placement_completed || false,
+      current_profile: mathProfile.current_profile
+    });
+  } catch (error) {
+    console.error("❌ Get placement status error:", error);
+    res.status(500).json({ success: false, error: "Failed to get placement status" });
+  }
+});
+
 // ==================== PLACEMENT QUIZ - GENERATE ====================
 router.post("/placement-quiz/generate", async (req, res) => {
   try {
     const studentId = req.user.userId;
-    const Question = require('../models/Question');
 
     let mathProfile = await MathProfile.findOne({ student_id: studentId });
 
@@ -727,6 +618,7 @@ router.post("/placement-quiz/generate", async (req, res) => {
       });
     }
 
+    // BLOCK: Only allow placement quiz once per student
     if (mathProfile.placement_completed) {
       return res.status(400).json({
         success: false,
@@ -735,43 +627,44 @@ router.post("/placement-quiz/generate", async (req, res) => {
     }
 
     // Pull 20 random questions from the shared question bank
-    const questions = await Question.aggregate([
+    const Question = mongoose.model('Question');
+    const randomQuestions = await Question.aggregate([
       { $match: { is_active: true } },
       { $sample: { size: 20 } }
     ]);
 
-    if (!questions || questions.length === 0) {
+    if (!randomQuestions || randomQuestions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "No questions available in the question bank. Please contact your administrator.",
+        error: "No active questions found. Please contact your administrator.",
       });
     }
 
-    // Create a student quiz attempt record with dynamically selected questions
+    // Create a student quiz attempt record using random questions
     const quiz = await StudentQuiz.create({
       student_id: studentId,
       quiz_type: "placement",
       profile_level: 5,
-      questions: questions.map(q => ({
-        question_text: q.text,
-        operation: q.topic || 'general',
-        correct_answer: q.answer,
+      questions: randomQuestions.map(q => ({
+        question_text: q.text || q.question_text,
+        operation: 'general',
+        correct_answer: q.answer || q.correct_answer,
         student_answer: null,
         is_correct: false,
       })),
       score: 0,
-      total_questions: questions.length,
+      total_questions: randomQuestions.length,
     });
 
     res.json({
       success: true,
       quiz_id: quiz._id,
-      questions: questions.map((q) => ({ 
-        question_text: q.text, 
+      questions: randomQuestions.map((q) => ({ 
+        question_text: q.text || q.question_text, 
         choices: q.choices,
-        operation: q.topic || 'general' 
+        operation: 'general' 
       })),
-      total_questions: questions.length,
+      total_questions: randomQuestions.length,
     });
   } catch (error) {
     console.error("❌ Generate placement quiz error:", error);
@@ -780,7 +673,8 @@ router.post("/placement-quiz/generate", async (req, res) => {
 });
 
 // ==================== PLACEMENT QUIZ - SUBMIT ====================
-router.post("/quiz/submit-placement", async (req, res) => {
+// ✅ CRITICAL FIX: Now sets adaptive_quiz_level for Quiz Journey!
+router.post("/placement-quiz/submit", async (req, res) => {
   try {
     const studentId = req.user.userId;
     const { quiz_id, answers } = req.body;
@@ -827,23 +721,33 @@ router.post("/quiz/submit-placement", async (req, res) => {
 
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
 
-    // Map percentage to profile level (1-10) in 10% increments
-    let startingProfile;
-    if (quiz.percentage >= 90) startingProfile = 10;
-    else if (quiz.percentage >= 80) startingProfile = 9;
-    else if (quiz.percentage >= 70) startingProfile = 8;
-    else if (quiz.percentage >= 60) startingProfile = 7;
-    else if (quiz.percentage >= 50) startingProfile = 6;
-    else if (quiz.percentage >= 40) startingProfile = 5;
-    else if (quiz.percentage >= 30) startingProfile = 4;
-    else if (quiz.percentage >= 20) startingProfile = 3;
-    else if (quiz.percentage >= 10) startingProfile = 2;
-    else startingProfile = 1;
+    let startingProfile = 1;
+    // Map percentage score to profile level (1-10)
+    if (quiz.percentage >= 90) startingProfile = 10;      // 90-100% → Level 10
+    else if (quiz.percentage >= 80) startingProfile = 9;  // 80-89% → Level 9
+    else if (quiz.percentage >= 70) startingProfile = 8;  // 70-79% → Level 8
+    else if (quiz.percentage >= 60) startingProfile = 7;  // 60-69% → Level 7
+    else if (quiz.percentage >= 50) startingProfile = 6;  // 50-59% → Level 6
+    else if (quiz.percentage >= 40) startingProfile = 5;  // 40-49% → Level 5
+    else if (quiz.percentage >= 30) startingProfile = 4;  // 30-39% → Level 4
+    else if (quiz.percentage >= 20) startingProfile = 3;  // 20-29% → Level 3
+    else if (quiz.percentage >= 10) startingProfile = 2;  // 10-19% → Level 2
+    else startingProfile = 1;                             // 0-9% → Level 1
 
+    // ✅ CRITICAL FIX: Set BOTH fields
+    // current_profile: Used by legacy quiz system (kept for backward compatibility)
+    // adaptive_quiz_level: Used by adaptive quiz journey (REQUIRED FOR UNLOCKING LEVELS!)
     mathProfile.current_profile = startingProfile;
+    mathProfile.adaptive_quiz_level = startingProfile;  // 🆕 THIS IS THE KEY FIX!
     mathProfile.placement_completed = true;
     mathProfile.total_points += quiz.points_earned;
     await mathProfile.save();
+
+    console.log(`✅ Placement quiz completed for student ${studentId}:`);
+    console.log(`   - Score: ${score}/${totalQuestions} (${quiz.percentage}%)`);
+    console.log(`   - Assigned Level: ${startingProfile}`);
+    console.log(`   - current_profile: ${mathProfile.current_profile}`);
+    console.log(`   - adaptive_quiz_level: ${mathProfile.adaptive_quiz_level}`);
 
     await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, startingProfile);
 
@@ -865,166 +769,6 @@ router.post("/quiz/submit-placement", async (req, res) => {
   }
 });
 
-// ==================== REGULAR QUIZ - GENERATE ====================
-router.post("/quiz/generate", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-
-    let mathProfile = await MathProfile.findOne({ student_id: studentId });
-
-    if (!mathProfile) {
-      mathProfile = await MathProfile.create({
-        student_id: studentId,
-        current_profile: 1,
-        placement_completed: false,
-        total_points: 0,
-      });
-    }
-
-    if (!mathProfile.placement_completed) {
-      return res.status(400).json({
-        success: false,
-        error: "Please complete placement quiz first",
-        requiresPlacement: true,
-      });
-    }
-
-    const now = getSingaporeTime();
-    const lastResetMid = getSgtMidnightTime(mathProfile.last_reset_date || now);
-    const todayMid = getSgtMidnightTime(now);
-
-    if (todayMid > lastResetMid) {
-      mathProfile.quizzes_today = 0;
-      mathProfile.last_reset_date = now;
-      await mathProfile.save();
-    }
-
-    const dailyLimit = 2; // Frontend expects 2 attempts per day
-    if (mathProfile.quizzes_today >= dailyLimit) {
-      return res.status(400).json({
-        success: false,
-        error: "Daily quiz limit reached. Come back tomorrow at 12:00 AM SGT!",
-      });
-    }
-
-    const profile = mathProfile.current_profile;
-    const cfg = getProfileConfig(profile);
-    const opSeq = buildOperationSequence(profile);
-    const questions = opSeq.map((op) => generateQuestion(cfg.range, op));
-
-    const quiz = await StudentQuiz.create({
-      student_id: studentId,
-      quiz_type: "regular",
-      profile_level: profile,
-      questions,
-      score: 0,
-      total_questions: 15,
-      percentage: 0,
-      points_earned: 0,
-    });
-
-    mathProfile.quizzes_today += 1;
-    await mathProfile.save();
-
-    res.json({
-      success: true,
-      quiz_id: quiz._id,
-      profile,
-      questions: questions.map((q) => ({ question_text: q.question_text, operation: q.operation })),
-      total_questions: 15,
-      attemptsToday: mathProfile.quizzes_today,
-    });
-  } catch (error) {
-    console.error("❌ Generate quiz error:", error);
-    res.status(500).json({ success: false, error: "Failed to generate quiz" });
-  }
-});
-
-// ==================== REGULAR QUIZ - SUBMIT ====================
-router.post("/quiz/submit", async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-    const { quiz_id, answers } = req.body;
-
-    const quiz = await StudentQuiz.findById(quiz_id);
-    if (!quiz || quiz.quiz_type !== "regular") {
-      return res.status(404).json({ success: false, error: "Quiz not found" });
-    }
-
-    let score = 0;
-    quiz.questions.forEach((q, i) => {
-      const studentAnswer = answers[i];
-      q.student_answer = studentAnswer;
-      q.is_correct = studentAnswer === q.correct_answer;
-      if (q.is_correct) score++;
-    });
-
-    quiz.score = score;
-    quiz.percentage = Math.round((score / 15) * 100);
-    quiz.points_earned = score * 10;
-    quiz.completed_at = new Date();
-    await quiz.save();
-
-    const mathProfile = await MathProfile.findOne({ student_id: studentId });
-    const oldProfile = mathProfile.current_profile;
-
-    let newProfile = oldProfile;
-    let profileChanged = false;
-    let changeType = null;
-
-    if (quiz.percentage >= 70) {
-      mathProfile.consecutive_fails = 0;
-
-      if (mathProfile.current_profile < 10) {
-        newProfile = mathProfile.current_profile + 1;
-        mathProfile.current_profile = newProfile;
-        profileChanged = true;
-        changeType = "advance";
-      }
-    } else if (quiz.percentage < 50) {
-      mathProfile.consecutive_fails += 1;
-
-      if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile > 1) {
-        newProfile = mathProfile.current_profile - 1;
-        mathProfile.current_profile = newProfile;
-        mathProfile.consecutive_fails = 0;
-        profileChanged = true;
-        changeType = "demote";
-      } else if (mathProfile.consecutive_fails >= 6 && mathProfile.current_profile === 1) {
-        // At lowest profile, reset fail counter without demotion
-        mathProfile.consecutive_fails = 0;
-      }
-    } else {
-      mathProfile.consecutive_fails = 0;
-    }
-
-    mathProfile.total_points += quiz.points_earned;
-    updateStreakOnCompletion(mathProfile);
-    await mathProfile.save();
-
-    await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, mathProfile.current_profile);
-
-    res.json({
-      success: true,
-      result: {
-        score,
-        total: 15,
-        percentage: quiz.percentage,
-        points_earned: quiz.points_earned,
-        old_profile: oldProfile,
-        new_profile: newProfile,
-        profile_changed: profileChanged,
-        change_type: changeType,
-        consecutive_fails: mathProfile.consecutive_fails,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Submit quiz error:", error);
-    res.status(500).json({ success: false, error: "Failed to submit quiz" });
-  }
-});
-
-// ==================== QUIZ RESULTS / HISTORY ====================
 // ==================== MATH PROGRESS ====================
 router.get("/math-progress", async (req, res) => {
   try {
@@ -1221,18 +965,29 @@ router.get("/leaderboard", async (req, res) => {
 
     // Use provided parameters or fall back to current user's school/class
     const filterSchoolId = schoolId || currentUser.schoolId;
-    const filterClass = classId || currentUser.class;
+    // Handle class parameter - convert string 'null' to actual null
+    const filterClass = (classId === undefined || classId === null || classId === 'null') 
+      ? null 
+      : classId;
 
-    // Build filter query - must match school AND class
+    // Build filter query
     const filterQuery = {
-      ...(filterSchoolId && { schoolId: filterSchoolId }),
-      ...(filterClass && { class: filterClass }),
       role: 'Student' // Only show students
     };
+    
+    // Always filter by school
+    if (filterSchoolId) {
+      filterQuery.schoolId = filterSchoolId;
+    }
+    
+    // Only add class filter if classId is provided and not null
+    if (filterClass) {
+      filterQuery.class = filterClass;
+    }
 
     console.log(`🎯 Leaderboard filter:`, filterQuery);
 
-    // Find students matching school and class
+    // Find students matching school (and optionally class)
     const matchingStudents = await User.find(filterQuery)
       .select('_id name email schoolId class')
       .lean();
@@ -1251,29 +1006,97 @@ router.get("/leaderboard", async (req, res) => {
 
     const studentIds = matchingStudents.map(s => s._id);
 
-    // Get math profiles for these students, sorted by points
-    const students = await MathProfile.find({ student_id: { $in: studentIds } })
-      .sort({ total_points: -1 })
-      .limit(50)
+    // Get math profiles for these students
+    const profiles = await MathProfile.find({ student_id: { $in: studentIds } })
       .lean();
 
-    // Enrich with student details
+    // Get earliest quiz completion date for each student (for tie-breaking)
+    const db = mongoose.connection.db;
     const studentMap = new Map(matchingStudents.map(s => [s._id.toString(), s]));
+    
+    // Enrich profiles with student data and first quiz date
+    const enrichedProfiles = await Promise.all(profiles.map(async (p) => {
+      const student = studentMap.get(p.student_id.toString());
+      
+      // Get earliest quiz completion for this student
+      const earliestQuiz = await StudentQuiz.findOne({
+        student_id: p.student_id,
+        quiz_type: 'regular',
+        completed_at: { $exists: true }
+      }).sort({ completed_at: 1 }).select('completed_at').lean();
+      
+      // Also check adaptive quizzes
+      const earliestAdaptive = await QuizAttempt.findOne({
+        userId: p.student_id,
+        is_completed: true,
+        completedAt: { $exists: true }
+      }).sort({ completedAt: 1 }).select('completedAt').lean();
+      
+      // Use the earliest between regular and adaptive
+      let firstCompletionDate = null;
+      if (earliestQuiz && earliestAdaptive) {
+        firstCompletionDate = earliestQuiz.completed_at < earliestAdaptive.completedAt 
+          ? earliestQuiz.completed_at 
+          : earliestAdaptive.completedAt;
+      } else if (earliestQuiz) {
+        firstCompletionDate = earliestQuiz.completed_at;
+      } else if (earliestAdaptive) {
+        firstCompletionDate = earliestAdaptive.completedAt;
+      }
+      
+      // Get earned badges count
+      const earnedBadges = await db.collection('student_badges')
+        .countDocuments({ student_email: student?.email });
+      
+      return {
+        student_id: p.student_id,
+        name: student ? student.name : "Unknown",
+        points: p.total_points || 0,
+        level: p.current_profile || 1,
+        achievements: earnedBadges || 0,
+        firstCompletionDate: firstCompletionDate,
+        isCurrentUser: p.student_id.toString() === currentUserId
+      };
+    }));
+
+    // Sort by: 1) Level (desc), 2) Points (desc), 3) First completion date (asc - earlier is better)
+    enrichedProfiles.sort((a, b) => {
+      // First sort by level (higher level = higher rank)
+      if (a.level !== b.level) {
+        return b.level - a.level;
+      }
+      
+      // If same level, sort by points (more points = higher rank)
+      if (a.points !== b.points) {
+        return b.points - a.points;
+      }
+      
+      // If same level and points, sort by first completion date (earlier = higher rank)
+      if (a.firstCompletionDate && b.firstCompletionDate) {
+        return a.firstCompletionDate - b.firstCompletionDate;
+      } else if (a.firstCompletionDate) {
+        return -1; // a has date, b doesn't - a ranks higher
+      } else if (b.firstCompletionDate) {
+        return 1; // b has date, a doesn't - b ranks higher
+      }
+      
+      return 0; // Equal in all aspects
+    });
+
+    // Assign ranks and limit to top 50
+    const leaderboard = enrichedProfiles.slice(0, 50).map((entry, idx) => ({
+      rank: idx + 1,
+      name: entry.name,
+      points: entry.points,
+      level: entry.level,
+      profile: entry.level,
+      achievements: entry.achievements,
+      isCurrentUser: entry.isCurrentUser
+    }));
 
     res.json({
       success: true,
-      leaderboard: students.map((p, idx) => {
-        const student = studentMap.get(p.student_id.toString());
-        return {
-          rank: idx + 1,
-          name: student ? student.name : "Unknown",
-          points: p.total_points,
-          level: p.current_profile,
-          profile: p.current_profile,
-          achievements: 0,
-          isCurrentUser: p.student_id.toString() === currentUserId,
-        };
-      }),
+      leaderboard,
       filterInfo: {
         schoolId: filterSchoolId,
         class: filterClass,
@@ -1864,4 +1687,3 @@ router.get("/badges/progress", async (req, res) => {
 });
 
 module.exports = router;
-

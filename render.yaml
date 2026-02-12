@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: play2learn
+    env: node
+    plan: free
+    buildCommand: npm run render-build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+    # Add these environment variables in Render Dashboard:
+    # - MONGODB_URI (MongoDB connection string)
+    # - JWT_SECRET (Your secret key for JWT tokens)
+    # - FRONTEND_URL (Your Render app URL, e.g., https://play2learn.onrender.com)
+    # - EMAIL_HOST (SMTP host)
+    # - EMAIL_PORT (SMTP port)
+    # - EMAIL_SECURE (true/false)
+    # - EMAIL_USER (SMTP username)
+    # - EMAIL_PASSWORD (SMTP password)
+    # - EMAIL_FROM (From email address)
+    # - USER_DELETION_PIN (PIN for user deletion)

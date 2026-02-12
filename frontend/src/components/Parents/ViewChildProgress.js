@@ -1,12 +1,14 @@
 // frontend/src/components/Parents/ViewChildProgress.js
-// ✅ FIXED: Now properly fetches and displays recent quiz activities
-// ✅ Shows correct child name
-// ✅ Math-only platform (no English)
+// ✅ FIXED: Now correctly fetches child's quiz history
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import authService from '../../services/authService';
 import parentService from '../../services/parentService';
+
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function ViewChildProgress() {
   const navigate = useNavigate();
@@ -15,6 +17,8 @@ export default function ViewChildProgress() {
   const [progressData, setProgressData] = useState(null);
   const [error, setError] = useState(null);
   const childInfo = location.state?.child;
+
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
     const loadProgress = async () => {
@@ -32,57 +36,68 @@ export default function ViewChildProgress() {
       try {
         console.log('📈 Loading progress for student:', childInfo.studentId);
         
-        // Fetch both progress data and activities in parallel
-        const [progressResult, activitiesResult] = await Promise.all([
-          parentService.getChildProgress(childInfo.studentId),
-          parentService.getChildActivities(childInfo.studentId, 10)
-        ]);
-        
-        if (progressResult.success) {
-          console.log('✅ Progress data loaded:', progressResult.progress);
+        // ✅ Fetch child's Quiz Journey level
+        let adaptiveLevel = 1;
+        try {
+          const levelResponse = await fetch(
+            `${API_BASE_URL}/api/adaptive-quiz/student/${childInfo.studentId}/current-level`,
+            { headers: { 'Authorization': `Bearer ${getToken()}` } }
+          );
+          const levelData = await levelResponse.json();
           
-          // Format activities from the API into the expected structure
-          let formattedActivities = [];
-          
-          if (activitiesResult.success && activitiesResult.activities) {
-            console.log('✅ Activities loaded:', activitiesResult.activities);
-            
-            formattedActivities = activitiesResult.activities.map(activity => {
-              // Activity could be a quiz attempt or other activity type
-              if (activity.type === 'quiz_attempt' || activity.quiz_id) {
-                return {
-                  date: activity.date || new Date(activity.timestamp || activity.created_at).toLocaleDateString('en-SG'),
-                  quizTitle: activity.quiz_title || activity.description || `Profile ${activity.profile || '?'} Quiz`,
-                  score: activity.score,
-                  total: activity.total_questions || activity.total,
-                  percentage: activity.percentage || (activity.score && activity.total ? Math.round((activity.score / activity.total) * 100) : 0),
-                  description: activity.description
-                };
-              } else {
-                // Generic activity
-                return {
-                  date: activity.date || new Date(activity.timestamp || activity.created_at).toLocaleDateString('en-SG'),
-                  description: activity.description || activity.activity_type || 'Activity',
-                  timestamp: activity.timestamp || activity.created_at
-                };
-              }
-            });
+          if (levelData.success) {
+            adaptiveLevel = levelData.currentLevel || 1;
+            console.log('✅ Child Quiz Journey level:', adaptiveLevel);
           }
-          
-          // Merge progress data with formatted activities
-          const combinedData = {
-            ...progressResult.progress,
-            recentActivities: formattedActivities.length > 0 ? formattedActivities : progressResult.progress.recentActivities || []
-          };
-          
-          setProgressData(combinedData);
-          setError(null);
-        } else {
-          console.error('Failed to load progress:', progressResult.error);
-          setError(progressResult.error || 'Failed to load progress data');
+        } catch (levelError) {
+          console.warn('⚠️ Could not fetch child quiz journey level:', levelError);
         }
+        
+        // ✅ FIXED: Fetch child's quiz history directly from API
+        let recentQuizzes = [];
+        try {
+          const historyResponse = await fetch(
+            `${API_BASE_URL}/api/parents/child/${childInfo.studentId}/quiz-history`,
+            { headers: { 'Authorization': `Bearer ${getToken()}` } }
+          );
+          const historyData = await historyResponse.json();
+          
+          console.log('📊 Raw quiz history response:', historyData);
+          
+          if (historyData.success && historyData.history) {
+            // ✅ Filter to show only adaptive quizzes
+            const adaptiveQuizzes = (historyData.history || []).filter(
+              (quiz) => quiz.quizType === 'adaptive'
+            );
+            
+            recentQuizzes = adaptiveQuizzes.slice(0, 10);
+            
+            console.log('✅ Filtered adaptive quizzes:', recentQuizzes);
+          }
+        } catch (historyError) {
+          console.error('❌ Failed to fetch quiz history:', historyError);
+        }
+        
+        // ✅ Fetch progress data for stats
+        const progressResult = await parentService.getChildProgress(childInfo.studentId);
+        const progressDataObj = progressResult.success ? progressResult.progress : {};
+        
+        console.log('📊 Progress data:', progressDataObj);
+        
+        const combinedData = {
+          currentLevel: adaptiveLevel,
+          totalPoints: progressDataObj.totalPoints || 0,
+          streak: progressDataObj.streak || 0,
+          achievements: progressDataObj.achievements || [],
+          recentQuizzes
+        };
+        
+        console.log('✅ Final combined data:', combinedData);
+        
+        setProgressData(combinedData);
+        setError(null);
       } catch (error) {
-        console.error('Error loading progress:', error);
+        console.error('❌ Error loading progress:', error);
         setError('Failed to load progress data. Please try again.');
       } finally {
         setLoading(false);
@@ -133,18 +148,6 @@ export default function ViewChildProgress() {
       cursor: 'pointer',
       transition: 'all 0.3s'
     },
-    infoBox: { 
-      background: '#dbeafe', 
-      border: '1px solid #60a5fa', 
-      borderRadius: '8px', 
-      padding: '16px', 
-      marginBottom: '24px', 
-      fontSize: '14px', 
-      color: '#1e40af',
-      width: '100%'
-    },
-    
-    // Main stats
     statsGrid: { 
       display: 'grid', 
       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
@@ -171,8 +174,6 @@ export default function ViewChildProgress() {
       textTransform: 'uppercase', 
       fontWeight: '600' 
     },
-    
-    // Achievements
     achievementsCard: { 
       background: 'white', 
       borderRadius: '16px', 
@@ -182,9 +183,9 @@ export default function ViewChildProgress() {
     },
     sectionTitle: { 
       fontSize: '20px', 
-      fontWeight: '600', 
+      fontWeight: '700',
       color: '#1f2937', 
-      marginBottom: '16px' 
+      marginBottom: '20px'
     },
     achievementsGrid: { 
       display: 'grid', 
@@ -208,28 +209,11 @@ export default function ViewChildProgress() {
       fontWeight: '600', 
       color: '#1f2937' 
     },
-    
-    // Activities
-    activitiesCard: { 
+    quizzesCard: { 
       background: 'white', 
       borderRadius: '16px', 
-      padding: '32px', 
+      padding: '24px', 
       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' 
-    },
-    activityItem: { 
-      padding: '12px', 
-      borderBottom: '1px solid #e5e7eb', 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'center' 
-    },
-    activityText: { 
-      fontSize: '14px', 
-      color: '#374151' 
-    },
-    activityTime: { 
-      fontSize: '12px', 
-      color: '#6b7280' 
     },
     quizItem: { 
       display: 'flex', 
@@ -238,17 +222,27 @@ export default function ViewChildProgress() {
       padding: '16px', 
       background: '#f9fafb', 
       borderRadius: '8px', 
-      marginBottom: '12px', 
-      borderBottom: '1px solid #e5e7eb'
+      marginBottom: '12px'
     },
     quizInfo: { flex: 1 },
-    quizDate: { fontSize: '13px', color: '#6b7280', marginBottom: '4px' },
-    quizProfile: { fontSize: '15px', fontWeight: '600', color: '#1f2937' },
-    quizScore: { fontSize: '20px', fontWeight: '700', textAlign: 'right' },
-    
+    quizDate: { 
+      fontSize: '13px', 
+      color: '#6b7280', 
+      marginBottom: '4px' 
+    },
+    quizProfile: { 
+      fontSize: '15px', 
+      fontWeight: '600', 
+      color: '#1f2937' 
+    },
+    quizScore: { 
+      fontSize: '20px', 
+      fontWeight: '700', 
+      textAlign: 'right' 
+    },
     emptyState: { 
       textAlign: 'center', 
-      padding: '60px 20px', 
+      padding: '40px 20px', 
       color: '#6b7280' 
     },
     errorMessage: { 
@@ -306,7 +300,6 @@ export default function ViewChildProgress() {
         <div style={styles.header}>
           <div>
             <h1 style={styles.title}>📈 Learning Progress</h1>
-            {/* ✅ FIXED: Show correct child name */}
             <p style={styles.subtitle}>{childInfo?.studentName || childInfo?.name || 'Student'}</p>
           </div>
           <button 
@@ -317,12 +310,6 @@ export default function ViewChildProgress() {
           >
             ← Back to Dashboard
           </button>
-
-          {progressData?.message && (
-            <div style={styles.infoBox}>
-              <strong>ℹ️ Note:</strong> {progressData.message}
-            </div>
-          )}
         </div>
 
         {/* Main Stats - 3 cards */}
@@ -332,7 +319,7 @@ export default function ViewChildProgress() {
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
           >
-            <div style={styles.statValue}>Lvl {progressData?.currentLevel || progressData?.currentProfile || 1}</div>
+            <div style={styles.statValue}>Level {progressData?.currentLevel || 1}</div>
             <div style={styles.statLabel}>Current Level</div>
           </div>
 
@@ -387,39 +374,42 @@ export default function ViewChildProgress() {
           )}
         </div>
 
-        {/* Recent Activities - ✅ FIXED: Now properly displays quiz attempts */}
-        <div style={styles.activitiesCard}>
-          <h2 style={styles.sectionTitle}>📝 Recent Activities</h2>
-          {progressData?.recentActivities && progressData.recentActivities.length > 0 ? (
+        {/* ✅ FIXED: Recent Quiz Attempts */}
+        <div style={styles.quizzesCard}>
+          <h2 style={styles.sectionTitle}>📝 Recent Quiz Attempts</h2>
+          {progressData?.recentQuizzes && progressData.recentQuizzes.length > 0 ? (
             <div>
-              {progressData.recentActivities.map((activity, index) => {
-                // Check if this is a quiz activity with score data
-                const hasScore = activity.score !== undefined && activity.total !== undefined;
-                const percentage = hasScore ? (activity.percentage || Math.round((activity.score / activity.total) * 100)) : 0;
+              {progressData.recentQuizzes.map((quiz, idx) => {
+                // ✅ Use the same data structure as ViewResults.js
+                const score = Number(quiz?.score) || 0;
+                const total = Number(quiz?.totalQuestions) || 0;
+                const percentage = Number(quiz?.percentage) || 0;
                 const scoreColor = percentage >= 70 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
 
+                console.log('📊 Rendering quiz:', { score, total, percentage, quiz });
+
                 return (
-                  <div key={index} style={styles.quizItem}>
+                  <div key={idx} style={styles.quizItem}>
                     <div style={styles.quizInfo}>
-                      <div style={styles.quizDate}>{activity.date || 'Recent'}</div>
+                      <div style={styles.quizDate}>{quiz.date || 'Recent'}</div>
                       <div style={styles.quizProfile}>
-                        {activity.quizTitle || activity.description || 'Activity'}
+                        Profile {quiz.profile || quiz.quiz_level || '?'} Math Quiz
                       </div>
                     </div>
-                    {hasScore && (
-                      <div style={{ ...styles.quizScore, color: scoreColor }}>
-                        {activity.score}/{activity.total} ({percentage}%)
-                      </div>
-                    )}
+                    <div style={{ ...styles.quizScore, color: scoreColor }}>
+                      {score}/{total} ({percentage}%)
+                    </div>
                   </div>
                 );
               })}
             </div>
           ) : (
             <div style={styles.emptyState}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
-              <p style={{ fontSize: '18px', fontWeight: '600' }}>No recent activities</p>
-              <p>Activities will appear here as {childInfo?.studentName || 'your child'} completes quizzes and uses the platform</p>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📝</div>
+              <p>No quiz attempts yet.</p>
+              <p style={{ fontSize: '14px', marginTop: '8px', color: '#9ca3af' }}>
+                Quiz history will appear here once {childInfo?.studentName || 'your child'} completes adaptive quizzes.
+              </p>
             </div>
           )}
         </div>

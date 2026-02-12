@@ -22,11 +22,14 @@ const ViewAnnouncements = () => {
     try {
       setLoading(true);
       
+      const token = localStorage.getItem('token');
+      
       // ✅ Uses existing school admin endpoint with parents audience
-      const response = await fetch(`${API_BASE_URL}/school-admin/announcements/public?audience=parents`, {
+      const response = await fetch(`${API_BASE_URL}/api/mongo/school-admin/announcements/public?audience=parents`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
 

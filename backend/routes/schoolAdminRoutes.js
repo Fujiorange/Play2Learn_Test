@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const csv = require('csv-parser');
@@ -8,6 +8,7 @@ const User = require('../models/User');
 const School = require('../models/School');
 const Class = require('../models/Class');
 const SupportTicket = require('../models/SupportTicket');
+const MarketSurvey = require('../models/MarketSurvey');
 const { sendTeacherWelcomeEmail, sendParentWelcomeEmail, sendStudentCredentialsToParent } = require('../services/emailService');
 const { generateTempPassword } = require('../utils/passwordGenerator');
 const mongoose = require('mongoose');
@@ -133,20 +134,18 @@ async function checkStudentLinkedToParent(studentId) {
   return { isLinked: false };
 }
 
-// â­ Helper to get MongoDB database (for announcements)
+// ⭐ Helper to get MongoDB database (for announcements)
 const getDb = () => mongoose.connection.db;
 
 // ==================== DASHBOARD STATS (FIXED!) ====================
 router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
   try {
-    console.log('ðŸ“Š Fetching dashboard stats...');
+    console.log('📊 Fetching dashboard stats...');
     
     const schoolAdmin = req.schoolAdmin;
     const schoolId = schoolAdmin.schoolId;
     
-    console.log('ðŸ” Admin:', schoolAdmin.email, 'SchoolId:', schoolId, 'Type:', typeof schoolId);
-    
-    // âœ… FIX: Query the 'users' collection with role field, scoped to school
+    // ✅ FIX: Query the 'users' collection with role field, scoped to school
     const [
       totalStudents,
       totalTeachers,
@@ -159,12 +158,7 @@ router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
       Class.countDocuments({ school_id: schoolId })
     ]);
 
-    console.log(`âœ… Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents, ${totalClasses} classes`);
-    
-    // Debug: Check what's actually in DB
-    const allStudents = await User.countDocuments({ role: 'Student' });
-    const allTeachers = await User.countDocuments({ role: 'Teacher' });
-    console.log(`ðŸ“Š Total in DB (all schools): ${allStudents} students, ${allTeachers} teachers`);
+    console.log(`✅ Found: ${totalStudents} students, ${totalTeachers} teachers, ${totalParents} parents, ${totalClasses} classes`);
 
     res.json({
       success: true,
@@ -174,7 +168,7 @@ router.get('/dashboard-stats', authenticateSchoolAdmin, async (req, res) => {
       total_classes: totalClasses
     });
   } catch (error) {
-    console.error('âŒ Dashboard stats error:', error);
+    console.error('❌ Dashboard stats error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to load dashboard stats',
@@ -273,14 +267,6 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
     const schoolAdmin = req.schoolAdmin;
     const { gradeLevel, subject, role } = req.query;
     
-    // âœ… DEBUG: Log admin info
-    console.log('ðŸ” Admin user:', {
-      id: schoolAdmin._id,
-      email: schoolAdmin.email,
-      schoolId: schoolAdmin.schoolId,
-      schoolIdType: typeof schoolAdmin.schoolId
-    });
-    
     // Filter by school ID to ensure school admin only sees their school's users
     const filter = { schoolId: schoolAdmin.schoolId };
     
@@ -299,21 +285,13 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
       filter.subject = subject;
     }
 
-    console.log('ðŸ” Fetching users with filter:', JSON.stringify(filter, null, 2));
-    
-    // âœ… DEBUG: Count all users with this schoolId first
-    const totalWithSchoolId = await User.countDocuments({ schoolId: schoolAdmin.schoolId });
-    console.log(`ðŸ“Š Total users with schoolId ${schoolAdmin.schoolId}: ${totalWithSchoolId}`);
-    
-    // âœ… DEBUG: Check if there are ANY teachers
-    const allTeachers = await User.find({ role: 'Teacher' }).select('email schoolId');
-    console.log('ðŸ“Š All teachers in DB:', allTeachers.map(t => ({ email: t.email, schoolId: t.schoolId })));
+    console.log('🔍 Fetching users with filter:', filter);
 
     const users = await User.find(filter)
       .select('-password')
       .sort({ createdAt: -1 });
 
-    console.log(`âœ… Found ${users.length} users matching filter`);
+    console.log(`✅ Found ${users.length} users`);
 
     // Map class IDs to names for display
     // Collect class IDs from students (class field) and teachers (assignedClasses array)
@@ -322,31 +300,13 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
       .flatMap(u => u.assignedClasses);
     const classIds = [...new Set([...studentClassIds, ...teacherClassIds])];
     const classLookup = {};
-    
-    if (classValues.length > 0) {
-      // Filter out non-ObjectId values (class names like "1A", "1-Excellence")
-      const mongoose = require('mongoose');
-      const validObjectIds = classValues.filter(id => {
+    if (classIds.length > 0) {
+      // Filter to only valid ObjectIds to avoid query errors
+      const validClassIds = classIds.filter(id => {
         try {
-          return mongoose.Types.ObjectId.isValid(id) && String(new mongoose.Types.ObjectId(id)) === id;
-        } catch {
+          return mongoose.Types.ObjectId.isValid(id);
+        } catch (e) {
           return false;
-        }
-      });
-      
-      // Only query if we have valid ObjectIds
-      if (validObjectIds.length > 0) {
-        const classDocs = await Class.find({ _id: { $in: validObjectIds }, school_id: schoolAdmin.schoolId })
-          .select('class_name');
-        classDocs.forEach(cls => {
-          classLookup[cls._id.toString()] = cls.class_name;
-        });
-      }
-      
-      // For string class names, use them directly
-      classValues.forEach(cv => {
-        if (!classLookup[cv]) {
-          classLookup[cv] = cv; // Use the string value as-is
         }
       });
       
@@ -453,7 +413,7 @@ router.get('/users', authenticateSchoolAdmin, async (req, res) => {
       })
     });
   } catch (error) {
-    console.error('âŒ Get users error:', error);
+    console.error('❌ Get users error:', error);
     res.status(500).json({ success: false, error: 'Failed to load users' });
   }
 });
@@ -542,7 +502,7 @@ router.get('/users/:id/details', authenticateSchoolAdmin, async (req, res) => {
     
     res.json({ success: true, user: result });
   } catch (error) {
-    console.error('âŒ Get user details error:', error);
+    console.error('❌ Get user details error:', error);
     res.status(500).json({ success: false, error: 'Failed to load user details' });
   }
 });
@@ -573,14 +533,14 @@ router.put('/users/:id', authenticateToken, async (req, res) => {
     
     res.json({ success: true, message: 'User updated' });
   } catch (error) {
-    console.error('âŒ Update user error:', error);
+    console.error('❌ Update user error:', error);
     res.status(500).json({ success: false, error: 'Failed to update user' });
   }
 });
 
 // ==================== BULK IMPORT STUDENTS (FIXED - NO DUPLICATE PROFILE) ====================
 router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import students request received');
+  console.log('\n📤 Bulk import students request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -595,7 +555,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     });
   }
 
-  console.log('ðŸ“„ Parsing CSV file...');
+  console.log('📄 Parsing CSV file...');
   
   const students = [];
   const results = {
@@ -625,16 +585,16 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           });
         })
         .on('end', () => {
-          console.log(`âœ… Found ${students.length} students in CSV`);
+          console.log(`✅ Found ${students.length} students in CSV`);
           resolve();
         })
         .on('error', (error) => {
-          console.error('âŒ CSV parsing error:', error);
+          console.error('❌ CSV parsing error:', error);
           reject(error);
         });
     });
 
-    console.log('\nðŸ”„ Processing students...\n');
+    console.log('\n🔄 Processing students...\n');
 
     // Get school data once for all operations
     const schoolData = await School.findById(schoolAdmin.schoolId).populate('licenseId');
@@ -656,10 +616,10 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     // Track students created in this batch for atomic update at the end
     let studentsCreatedCount = 0;
 
-    // âœ… FIX: Only create user in 'users' collection, NO separate student profile
+    // ✅ FIX: Only create user in 'users' collection, NO separate student profile
     for (const studentData of students) {
       try {
-        console.log(`ðŸ‘¤ Processing: ${studentData.name} (${studentData.email})`);
+        console.log(`👤 Processing: ${studentData.name} (${studentData.email})`);
         
         // Check license availability using cached school data
         const currentStudents = (schoolData.current_students || 0) + studentsCreatedCount;
@@ -680,7 +640,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         
         // Validate required fields
         if (!studentData.name || !studentData.email) {
-          console.log(`âš ï¸  Skipping - Missing required fields`);
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({ 
             email: studentData.email || 'unknown', 
@@ -692,7 +652,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
         // Check if user already exists
         const existingUser = await User.findOne({ email: studentData.email });
         if (existingUser) {
-          console.log(`âš ï¸  Skipping - Email already exists: ${studentData.email}`);
+          console.log(`⚠️  Skipping - Email already exists: ${studentData.email}`);
           results.failed++;
           results.errors.push({ 
             email: studentData.email, 
@@ -703,7 +663,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
 
         // Generate password
         const tempPassword = generateTempPassword('Student');
-        console.log(`ðŸ”‘ Generated password: ${tempPassword}`);
+        console.log(`🔑 Generated password: ${tempPassword}`);
         
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const username = studentData.email.split('@')[0];
@@ -730,7 +690,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
               parsedDateOfBirth = null;
             }
           } catch (error) {
-            console.log(`âš ï¸  Invalid date format: ${studentData.dateOfBirth}`);
+            console.log(`⚠️  Invalid date format: ${studentData.dateOfBirth}`);
             parsedDateOfBirth = null;
           }
         }
@@ -743,11 +703,11 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           if (classNameToId[classKey]) {
             classId = classNameToId[classKey];
           } else {
-            console.log(`âš ï¸ Class "${className}" not found for student ${studentData.email}. User will be created without class assignment.`);
+            console.log(`⚠️ Class "${className}" not found for student ${studentData.email}. User will be created without class assignment.`);
           }
         }
 
-        // âœ… Create ONLY user document in 'users' collection
+        // ✅ Create ONLY user document in 'users' collection
         const newUser = await User.create({
           name: studentData.name.trim(),
           email: studentData.email.toLowerCase().trim(),
@@ -775,17 +735,17 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
           await Class.findByIdAndUpdate(classId, { $addToSet: { students: newUser._id } });
         }
 
-        console.log(`âœ… Student created in users collection: ${newUser.email}`);
+        console.log(`✅ Student created in users collection: ${newUser.email}`);
         results.created++;
         studentsCreatedCount++; // Track for batch update
 
         // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
         // The school admin can manually decide when to send credentials via that page
-        console.log(`ðŸ“‹ Credentials saved to pending page for: ${newUser.email}`);
+        console.log(`📋 Credentials saved to pending page for: ${newUser.email}`);
         results.emailsFailed++; // Count as not sent (available on pending page)
 
       } catch (error) {
-        console.error(`âŒ Error creating student:`, error);
+        console.error(`❌ Error creating student:`, error);
         results.failed++;
         results.errors.push({ 
           email: studentData.email, 
@@ -804,7 +764,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
 
     fs.unlinkSync(req.file.path);
 
-    console.log('\nâœ… Bulk import completed!');
+    console.log('\n✅ Bulk import completed!');
     console.log(`   Created: ${results.created}`);
     console.log(`   Failed: ${results.failed}`);
     console.log(`   Emails sent: ${results.emailsSent}`);
@@ -822,7 +782,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
     });
 
   } catch (error) {
-    console.error('âŒ Bulk import error:', error);
+    console.error('❌ Bulk import error:', error);
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -832,7 +792,7 @@ router.post('/bulk-import-students', authenticateSchoolAdmin, upload.single('fil
 
 // ==================== BULK IMPORT TEACHERS ====================
 router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import teachers request received');
+  console.log('\n📤 Bulk import teachers request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -871,7 +831,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           });
         })
         .on('end', () => {
-          console.log(`âœ… Found ${teachers.length} teachers in CSV`);
+          console.log(`✅ Found ${teachers.length} teachers in CSV`);
           resolve();
         })
         .on('error', reject);
@@ -948,17 +908,17 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
           createdBy: 'school-admin'
         });
 
-        console.log(`âœ… Teacher created: ${newTeacher.email}`);
+        console.log(`✅ Teacher created: ${newTeacher.email}`);
         results.created++;
         teachersCreatedCount++; // Track for batch update
 
         // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
         // The school admin can manually decide when to send credentials via that page
-        console.log(`ðŸ“‹ Credentials saved to pending page for: ${newTeacher.email}`);
+        console.log(`📋 Credentials saved to pending page for: ${newTeacher.email}`);
         results.emailsFailed++; // Count as not sent (available on pending page)
 
       } catch (error) {
-        console.error(`âŒ Error creating teacher:`, error);
+        console.error(`❌ Error creating teacher:`, error);
         results.failed++;
         results.errors.push({ 
           email: teacherData.email, 
@@ -989,7 +949,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
     });
 
   } catch (error) {
-    console.error('âŒ Bulk import error:', error);
+    console.error('❌ Bulk import error:', error);
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -999,7 +959,7 @@ router.post('/bulk-import-teachers', authenticateSchoolAdmin, upload.single('fil
 
 // ==================== BULK IMPORT PARENTS (COMPLETE VERSION WITH LINKEDSTUDENTS) ====================
 router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import parents request received');
+  console.log('\n📤 Bulk import parents request received');
   
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -1014,7 +974,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
     });
   }
 
-  console.log('ðŸ“„ Parsing CSV file...');
+  console.log('📄 Parsing CSV file...');
   
   const parents = [];
   const results = {
@@ -1041,16 +1001,16 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           });
         })
         .on('end', () => {
-          console.log(`âœ… Found ${parents.length} parent records in CSV`);
+          console.log(`✅ Found ${parents.length} parent records in CSV`);
           resolve();
         })
         .on('error', (error) => {
-          console.error('âŒ CSV parsing error:', error);
+          console.error('❌ CSV parsing error:', error);
           reject(error);
         });
     });
 
-    console.log('\nðŸ”„ Processing parents...\n');
+    console.log('\n🔄 Processing parents...\n');
 
     // Get school name for emails
     const schoolData = await School.findById(schoolAdmin.schoolId);
@@ -1062,11 +1022,11 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
       const rowNum = i + 2; // CSV row number (header is row 1)
 
       try {
-        console.log(`\nðŸ‘¤ Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
+        console.log(`\n👤 Processing row ${rowNum}: ${parentData.parentName} (${parentData.parentEmail})`);
 
         // Validate required fields
         if (!parentData.parentName || !parentData.parentEmail || !parentData.studentEmail) {
-          console.log(`âš ï¸  Skipping - Missing required fields`);
+          console.log(`⚠️  Skipping - Missing required fields`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1079,7 +1039,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         // Validate email formats
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(parentData.parentEmail)) {
-          console.log(`âš ï¸  Skipping - Invalid parent email format`);
+          console.log(`⚠️  Skipping - Invalid parent email format`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1090,7 +1050,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         }
 
         if (!emailRegex.test(parentData.studentEmail)) {
-          console.log(`âš ï¸  Skipping - Invalid student email format`);
+          console.log(`⚠️  Skipping - Invalid student email format`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1107,7 +1067,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         });
 
         if (!student) {
-          console.log(`âš ï¸  Skipping - Student not found: ${parentData.studentEmail}`);
+          console.log(`⚠️  Skipping - Student not found: ${parentData.studentEmail}`);
           results.failed++;
           results.errors.push({
             row: rowNum,
@@ -1117,7 +1077,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           continue;
         }
 
-        console.log(`âœ… Found student: ${student.name} (${student.email})`);
+        console.log(`✅ Found student: ${student.name} (${student.email})`);
 
         // Check if parent already exists
         const existingParent = await User.findOne({ 
@@ -1126,7 +1086,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 
         if (existingParent) {
           // Parent exists - just add student link if not already linked
-          console.log(`â„¹ï¸  Parent already exists: ${existingParent.email}`);
+          console.log(`ℹ️  Parent already exists: ${existingParent.email}`);
 
           // Initialize linkedStudents array if it doesn't exist
           if (!existingParent.linkedStudents) {
@@ -1139,7 +1099,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           );
 
           if (alreadyLinked) {
-            console.log(`â„¹ï¸  Parent already linked to student ${student.email}`);
+            console.log(`ℹ️  Parent already linked to student ${student.email}`);
             results.details.push({
               row: rowNum,
               parentName: existingParent.name,
@@ -1167,7 +1127,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
               await student.save();
             }
 
-            console.log(`âœ… Linked existing parent to new student`);
+            console.log(`✅ Linked existing parent to new student`);
             results.updated++;
             
             results.details.push({
@@ -1187,7 +1147,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 
         // Parent doesn't exist - create new parent account
         const tempPassword = generateTempPassword('Parent');
-        console.log(`ðŸ”‘ Generated password for new parent: ${tempPassword}`);
+        console.log(`🔑 Generated password for new parent: ${tempPassword}`);
 
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -1217,19 +1177,19 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
           createdAt: new Date()
         });
 
-        console.log(`âœ… Created new parent: ${newParent.email}`);
+        console.log(`✅ Created new parent: ${newParent.email}`);
         results.created++;
 
         // Update student's parentEmail
         if (!student.parentEmail || student.parentEmail !== parentData.parentEmail) {
           student.parentEmail = parentData.parentEmail.toLowerCase().trim();
           await student.save();
-          console.log(`âœ… Updated student's parentEmail field`);
+          console.log(`✅ Updated student's parentEmail field`);
         }
 
         // NOTE: Email sending is disabled - credentials will be displayed on the Pending Credentials page
         // The school admin can manually decide when to send credentials via that page
-        console.log(`ðŸ“‹ Credentials saved to pending page for: ${newParent.email}`);
+        console.log(`📋 Credentials saved to pending page for: ${newParent.email}`);
         results.emailsFailed++; // Count as not sent (available on pending page)
 
         results.details.push({
@@ -1245,7 +1205,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
         });
 
       } catch (error) {
-        console.error(`âŒ Error processing row ${rowNum}:`, error);
+        console.error(`❌ Error processing row ${rowNum}:`, error);
         results.failed++;
         results.errors.push({
           row: rowNum,
@@ -1258,7 +1218,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
     // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
-    console.log('\nâœ… Parent bulk import completed!');
+    console.log('\n✅ Parent bulk import completed!');
     console.log(`   Created: ${results.created}`);
     console.log(`   Updated (linked): ${results.updated}`);
     console.log(`   Failed: ${results.failed}`);
@@ -1282,7 +1242,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
     });
 
   } catch (error) {
-    console.error('âŒ Bulk import parents error:', error);
+    console.error('❌ Bulk import parents error:', error);
     
     // Clean up uploaded file if it exists
     if (req.file && fs.existsSync(req.file.path)) {
@@ -1298,7 +1258,7 @@ router.post('/bulk-import-parents', authenticateSchoolAdmin, upload.single('file
 
 // ==================== BULK IMPORT ALL USERS (roles defined per row) ====================
 router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file'), async (req, res) => {
-  console.log('\nðŸ“¤ Bulk import mixed users request received');
+  console.log('\n📤 Bulk import mixed users request received');
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -1390,7 +1350,7 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
             classId = classNameToId[classKey];
           } else {
             // Class not found - still create user but without class assignment
-            console.log(`âš ï¸ Class "${className}" not found for student ${row.Email}. User will be created without class assignment.`);
+            console.log(`⚠️ Class "${className}" not found for student ${row.Email}. User will be created without class assignment.`);
           }
         }
 
@@ -1415,7 +1375,7 @@ router.post('/bulk-import-users', authenticateSchoolAdmin, upload.single('file')
               parsedDateOfBirth = null;
             }
           } catch (dateErr) {
-            console.log(`âš ï¸ Invalid date format: ${dateStr}`);
+            console.log(`⚠️ Invalid date format: ${dateStr}`);
             parsedDateOfBirth = null;
           }
         }
@@ -1939,7 +1899,16 @@ router.delete('/users/:id', authenticateSchoolAdmin, async (req, res) => {
     }
     
     // Now delete the user
-    await User.findByIdAndDelete(req.params.id);
+    const deletedUser = await User.findByIdAndDelete(req.params.id);
+    
+    // Update school's current teacher/student count using atomic decrement only if deletion was successful
+    if (deletedUser && (deletedUser.role === 'Teacher' || deletedUser.role === 'Student')) {
+      const decrementField = deletedUser.role === 'Teacher' ? 'current_teachers' : 'current_students';
+      await School.findByIdAndUpdate(
+        schoolAdmin.schoolId,
+        { $inc: { [decrementField]: -1 } }
+      );
+    }
     
     res.json({ 
       success: true, 
@@ -2368,42 +2337,42 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
     const schoolAdmin = req.schoolAdmin;
     const { unassigned, includeClassId } = req.query;
     
-    // âœ… FIX: Base filter - get all students from this school
+    // Base filter - only students in this school
+    // Note: accountActive filter removed to ensure all students show up when
+    // creating/editing classes, regardless of account active status
     const filter = {
       schoolId: schoolAdmin.schoolId,
       role: 'Student'
     };
     
-    console.log('ðŸ“Š Getting available students for school:', schoolAdmin.schoolId);
-    console.log('ðŸ“Š Query params - unassigned:', unassigned, 'includeClassId:', includeClassId);
+    // Build conditions for students without classes assigned
+    const orConditions = [
+      { class: { $in: [null, ''] } },
+      { class: { $exists: false } }
+    ];
     
-    // Only filter by unassigned if explicitly requested with unassigned=true
-    // By default, show ALL students so they can be reassigned to different classes
-    if (unassigned === 'true') {
-      // Only unassigned students (null or empty class)
-      filter.$or = [
-        { class: null },
-        { class: '' },
-        { class: { $exists: false } }
-      ];
-      
-      // Also include students from a specific class if editing that class
-      if (includeClassId) {
-        try {
-          const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
-          if (cls && cls.students && cls.students.length > 0) {
-            filter.$or.push({ _id: { $in: cls.students } });
-          }
-        } catch (err) {
-          console.warn('Include class lookup failed:', err.message);
+    // If editing a class, include students currently in that class
+    if (includeClassId) {
+      try {
+        const cls = await Class.findOne({ _id: includeClassId, school_id: schoolAdmin.schoolId });
+        if (cls && cls.students && cls.students.length > 0) {
+          orConditions.push({ _id: { $in: cls.students } });
         }
+        // Also include students whose class field matches this class ID
+        orConditions.push({ class: includeClassId });
+        orConditions.push({ class: includeClassId.toString() });
+      } catch (err) {
+        console.warn('Include class lookup failed:', err.message);
       }
     }
-    // If unassigned is not 'true', we return ALL students
     
-    const students = await User.find(filter).select('name email class gradeLevel');
+    // Apply OR conditions unless explicitly showing all students
+    const limitToUnassigned = unassigned !== 'false';
+    if (limitToUnassigned) {
+      filter.$or = orConditions;
+    }
     
-    console.log(`âœ… Found ${students.length} students`);
+    const students = await User.find(filter).select('name email class');
     
     res.json({
       success: true,
@@ -2411,8 +2380,7 @@ router.get('/classes/available/students', authenticateSchoolAdmin, async (req, r
         id: s._id,
         name: s.name,
         email: s.email,
-        currentClass: s.class,
-        gradeLevel: s.gradeLevel
+        currentClass: s.class
       }))
     });
   } catch (error) {
@@ -2706,7 +2674,15 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
     );
     
     // Delete the class
-    await Class.findByIdAndDelete(req.params.id);
+    const deletedClass = await Class.findByIdAndDelete(req.params.id);
+    
+    // Update school's current class count using atomic decrement only if deletion was successful
+    if (deletedClass) {
+      await School.findByIdAndUpdate(
+        schoolAdmin.schoolId,
+        { $inc: { current_classes: -1 } }
+      );
+    }
     
     res.json({
       success: true,
@@ -2718,7 +2694,7 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
   }
 });
 // ==================================================================================
-// â­ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
+// ⭐ ANNOUNCEMENT ROUTES - FROM WEI XIANG'S IMPLEMENTATION
 // ==================================================================================
 // These routes use direct MongoDB access (getDb()) for compatibility with Wei Xiang's admin UI
 
@@ -2726,31 +2702,49 @@ router.delete('/classes/:id', authenticateSchoolAdmin, async (req, res) => {
 router.get('/announcements', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to view announcements' 
+      });
+    }
+    
     const announcements = await db.collection('announcements')
-      .find({})
+      .find({ school_id: req.user.schoolId })
       .sort({ pinned: -1, createdAt: -1 })
       .toArray();
     
-    console.log(`ðŸ“¢ Admin fetched ${announcements.length} announcements`);
+    console.log(`📢 Admin fetched ${announcements.length} announcements`);
     res.json({ success: true, announcements });
   } catch (error) {
-    console.error('âŒ Get announcements error:', error);
+    console.error('❌ Get announcements error:', error);
     res.status(500).json({ success: false, error: 'Failed to load announcements' });
   }
 });
 
 // ==================== GET PUBLIC ANNOUNCEMENTS (For Students/Parents) ====================
-router.get('/announcements/public', async (req, res) => {
+router.get('/announcements/public', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
     const { audience } = req.query;
     
-    console.log('ðŸ“¢ Fetching public announcements for:', audience);
+    console.log('📢 Fetching public announcements for:', audience);
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to view announcements' 
+      });
+    }
     
     const now = new Date();
     
-    // Base filter: not expired
+    // Base filter: not expired AND belongs to user's school
     let filter = {
+      school_id: req.user.schoolId,
       $or: [
         { expiresAt: { $gt: now } },
         { expiresAt: null },
@@ -2775,6 +2769,7 @@ router.get('/announcements/public', async (req, res) => {
       
       filter = {
         $and: [
+          { school_id: req.user.schoolId },
           { $or: [
             { expiresAt: { $gt: now } },
             { expiresAt: null },
@@ -2794,10 +2789,10 @@ router.get('/announcements/public', async (req, res) => {
       .limit(50)
       .toArray();
     
-    console.log(`âœ… Found ${announcements.length} announcements for ${audience}`);
+    console.log(`✅ Found ${announcements.length} announcements for ${audience}`);
     res.json({ success: true, announcements });
   } catch (error) {
-    console.error('âŒ Get public announcements error:', error);
+    console.error('❌ Get public announcements error:', error);
     res.status(500).json({ success: false, error: 'Failed to load announcements' });
   }
 });
@@ -2815,6 +2810,14 @@ router.post('/announcements', authenticateToken, async (req, res) => {
       });
     }
     
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to create announcements' 
+      });
+    }
+    
     const newAnnouncement = {
       title,
       content,
@@ -2822,6 +2825,7 @@ router.post('/announcements', authenticateToken, async (req, res) => {
       audience: audience || 'all',
       pinned: pinned || false,
       author: req.user.name || req.user.email,
+      school_id: req.user.schoolId,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -2829,13 +2833,13 @@ router.post('/announcements', authenticateToken, async (req, res) => {
     
     const result = await db.collection('announcements').insertOne(newAnnouncement);
     
-    console.log(`ðŸ“¢ Announcement created: "${title}" by ${newAnnouncement.author}`);
+    console.log(`📢 Announcement created: "${title}" by ${newAnnouncement.author}`);
     res.json({ 
       success: true, 
       announcement: { ...newAnnouncement, _id: result.insertedId } 
     });
   } catch (error) {
-    console.error('âŒ Create announcement error:', error);
+    console.error('❌ Create announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to create announcement' });
   }
 });
@@ -2844,26 +2848,41 @@ router.post('/announcements', authenticateToken, async (req, res) => {
 router.put('/announcements/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to update announcements' 
+      });
+    }
+    
     const updates = { ...req.body, updatedAt: new Date() };
     delete updates._id;
+    // Remove school_id from updates to prevent tampering
+    // The updateOne filter below ensures only announcements from user's school are updated
+    delete updates.school_id;
     
     if (updates.expiresAt) {
       updates.expiresAt = new Date(updates.expiresAt);
     }
     
     const result = await db.collection('announcements').updateOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { 
+        _id: new mongoose.Types.ObjectId(req.params.id),
+        school_id: req.user.schoolId // Only update announcements from user's school
+      },
       { $set: updates }
     );
     
     if (result.matchedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Announcement not found' });
+      return res.status(404).json({ success: false, error: 'Announcement not found or access denied' });
     }
     
-    console.log(`ðŸ“¢ Announcement updated: ${req.params.id}`);
+    console.log(`📢 Announcement updated: ${req.params.id}`);
     res.json({ success: true, message: 'Announcement updated' });
   } catch (error) {
-    console.error('âŒ Update announcement error:', error);
+    console.error('❌ Update announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to update announcement' });
   }
 });
@@ -2872,18 +2891,30 @@ router.put('/announcements/:id', authenticateToken, async (req, res) => {
 router.delete('/announcements/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
+    
+    // Ensure user has a schoolId
+    if (!req.user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'User must be associated with a school to delete announcements' 
+      });
+    }
+    
     const result = await db.collection('announcements').deleteOne(
-      { _id: new mongoose.Types.ObjectId(req.params.id) }
+      { 
+        _id: new mongoose.Types.ObjectId(req.params.id),
+        school_id: req.user.schoolId // Only delete announcements from user's school
+      }
     );
     
     if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Announcement not found' });
+      return res.status(404).json({ success: false, error: 'Announcement not found or access denied' });
     }
     
-    console.log(`ðŸ“¢ Announcement deleted: ${req.params.id}`);
+    console.log(`📢 Announcement deleted: ${req.params.id}`);
     res.json({ success: true, message: 'Announcement deleted' });
   } catch (error) {
-    console.error('âŒ Delete announcement error:', error);
+    console.error('❌ Delete announcement error:', error);
     res.status(500).json({ success: false, error: 'Failed to delete announcement' });
   }
 });
@@ -2910,7 +2941,7 @@ router.put('/teachers/:teacherId/assignments', authenticateSchoolAdmin, async (r
     teacher.assignedSubjects = subjects || [];
     await teacher.save();
     
-    console.log(`ðŸ“š Teacher ${teacher.name} assigned to classes: ${classes?.join(', ')}`);
+    console.log(`📚 Teacher ${teacher.name} assigned to classes: ${classes?.join(', ')}`);
     res.json({
       success: true,
       message: 'Teacher assignments updated',
@@ -2923,7 +2954,7 @@ router.put('/teachers/:teacherId/assignments', authenticateSchoolAdmin, async (r
       }
     });
   } catch (error) {
-    console.error('âŒ Teacher assignment error:', error);
+    console.error('❌ Teacher assignment error:', error);
     res.status(500).json({ success: false, error: 'Failed to update teacher assignments' });
   }
 });
@@ -2948,7 +2979,7 @@ router.get('/teachers/:teacherId/assignments', authenticateToken, async (req, re
       }
     });
   } catch (error) {
-    console.error('âŒ Get teacher assignments error:', error);
+    console.error('❌ Get teacher assignments error:', error);
     res.status(500).json({ success: false, error: 'Failed to get teacher assignments' });
   }
 });
@@ -2972,7 +3003,7 @@ router.get('/teachers/assignments', authenticateToken, async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('âŒ Get teachers assignments error:', error);
+    console.error('❌ Get teachers assignments error:', error);
     res.status(500).json({ success: false, error: 'Failed to get teachers' });
   }
 });
@@ -2990,7 +3021,7 @@ router.get('/placement-quizzes', authenticateToken, async (req, res) => {
     
     res.json({ success: true, quizzes });
   } catch (error) {
-    console.error('âŒ Get placement quizzes error:', error);
+    console.error('❌ Get placement quizzes error:', error);
     res.status(500).json({ success: false, error: 'Failed to load placement quizzes' });
   }
 });
@@ -3028,7 +3059,7 @@ router.post('/placement-quizzes/:quizId/launch', authenticateSchoolAdmin, async 
     
     await quiz.save();
     
-    console.log(`ðŸŽ¯ Placement quiz "${quiz.title}" launched for school ${schoolAdmin.schoolId}`);
+    console.log(`🎯 Placement quiz "${quiz.title}" launched for school ${schoolAdmin.schoolId}`);
     res.json({
       success: true,
       message: 'Placement quiz launched successfully',
@@ -3041,7 +3072,7 @@ router.post('/placement-quizzes/:quizId/launch', authenticateSchoolAdmin, async 
       }
     });
   } catch (error) {
-    console.error('âŒ Launch placement quiz error:', error);
+    console.error('❌ Launch placement quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to launch placement quiz' });
   }
 });
@@ -3072,10 +3103,10 @@ router.post('/placement-quizzes/:quizId/revoke', authenticateSchoolAdmin, async 
     
     await quiz.save();
     
-    console.log(`ðŸŽ¯ Placement quiz "${quiz.title}" revoked for school ${schoolAdmin.schoolId}`);
+    console.log(`🎯 Placement quiz "${quiz.title}" revoked for school ${schoolAdmin.schoolId}`);
     res.json({ success: true, message: 'Placement quiz launch revoked' });
   } catch (error) {
-    console.error('âŒ Revoke placement quiz error:', error);
+    console.error('❌ Revoke placement quiz error:', error);
     res.status(500).json({ success: false, error: 'Failed to revoke placement quiz' });
   }
 });
@@ -4082,6 +4113,12 @@ router.get('/license-info', authenticateSchoolAdmin, async (req, res) => {
         description: license.description,
         expiresAt: school.licenseExpiresAt,
         daysRemaining,
+        // Subscription details
+        billingCycle: school.billingCycle,
+        subscriptionStatus: school.subscriptionStatus,
+        autoRenew: school.autoRenew,
+        nextBillingDate: school.nextBillingDate,
+        cancelledAt: school.cancelledAt,
         limits: {
           maxTeachers: license.maxTeachers,
           maxStudents: license.maxStudents,
@@ -4124,7 +4161,7 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     }
 
     // Validate payment information
-    const { cardNumber, expiryDate, cvv } = paymentInfo;
+    const { cardNumber, expiryDate: cardExpiryDate, cvv } = paymentInfo;
     
     // Card number validation (16 digits)
     if (!cardNumber || !/^\d{16}$/.test(cardNumber)) {
@@ -4135,14 +4172,14 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     }
 
     // Expiry date validation (MM/YY format and not expired)
-    if (!expiryDate || !/^\d{2}\/\d{2}$/.test(expiryDate)) {
+    if (!cardExpiryDate || !/^\d{2}\/\d{2}$/.test(cardExpiryDate)) {
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid expiry date. Must be in MM/YY format' 
       });
     }
 
-    const [month, year] = expiryDate.split('/');
+    const [month, year] = cardExpiryDate.split('/');
     const monthNum = parseInt(month, 10);
     // Handle year: assume 2000s for years 00-99
     // For production, consider cards typically expire within 10-20 years from now
@@ -4217,12 +4254,26 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
     // Save previous plan name before updating
     const previousPlanName = school.licenseId ? school.licenseId.name : 'Unknown';
 
-    // Payment successful - Update school's license
-    school.licenseId = newLicense._id;
+    // Calculate license expiry/renewal date based on billing cycle
+    const currentDate = new Date();
+    let expiryDate;
     
-    // For paid licenses, we don't set an expiry date (or set it far in the future)
-    // Remove expiry date for paid licenses
-    school.licenseExpiresAt = null;
+    if (billingCycle === 'monthly') {
+      expiryDate = new Date(currentDate);
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+    } else { // yearly
+      expiryDate = new Date(currentDate);
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    }
+
+    // Payment successful - Update school's license and subscription details
+    school.licenseId = newLicense._id;
+    school.licenseExpiresAt = expiryDate;
+    school.nextBillingDate = expiryDate;
+    school.billingCycle = billingCycle;
+    school.subscriptionStatus = 'active';
+    school.autoRenew = true; // Default to auto-renew enabled
+    school.cancelledAt = null; // Clear any previous cancellation
     
     await school.save();
 
@@ -4237,6 +4288,9 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
         newPlan: newLicense.name,
         billingCycle,
         amountPaid: billingCycle === 'monthly' ? newLicense.priceMonthly : newLicense.priceYearly,
+        expiresAt: expiryDate,
+        nextBillingDate: expiryDate,
+        autoRenew: true,
         newLimits: {
           maxTeachers: newLicense.maxTeachers,
           maxStudents: newLicense.maxStudents,
@@ -4247,6 +4301,151 @@ router.post('/upgrade-license', authenticateSchoolAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error processing license upgrade:', error);
     return res.status(500).json({ success: false, error: 'Failed to process payment. Please try again.' });
+  }
+});
+
+// POST /api/mongo/school-admin/toggle-auto-renewal - Toggle auto-renewal setting
+router.post('/toggle-auto-renewal', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { autoRenew, reason, otherReason } = req.body;
+
+    if (typeof autoRenew !== 'boolean') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'autoRenew must be a boolean value' 
+      });
+    }
+
+    // Validate reason when disabling auto-renewal
+    if (!autoRenew && !reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reason is required when disabling auto-renewal'
+      });
+    }
+
+    // Validate otherReason when reason is 'other'
+    if (!autoRenew && reason === 'other' && !otherReason?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide details when selecting "Other"'
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId);
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    school.autoRenew = autoRenew;
+    await school.save();
+
+    // If disabling auto-renewal and reason is provided, save to market survey
+    if (!autoRenew && reason) {
+      const surveyEntry = new MarketSurvey({
+        type: 'auto_renewal_disable',
+        reason: reason,
+        otherReason: reason === 'other' ? otherReason : null,
+        schoolId: school._id,
+        schoolName: school.organization_name,
+        userEmail: user.email
+      });
+      await surveyEntry.save();
+      console.log(`📊 Market survey recorded: Auto-renewal disabled - Reason: ${reason}${reason === 'other' ? ` (${otherReason})` : ''}`);
+    }
+
+    console.log(`✅ Auto-renewal ${autoRenew ? 'enabled' : 'disabled'} for school ${school.organization_name}`);
+
+    return res.json({
+      success: true,
+      message: `Auto-renewal ${autoRenew ? 'enabled' : 'disabled'} successfully`,
+      autoRenew: school.autoRenew
+    });
+  } catch (error) {
+    console.error('Error toggling auto-renewal:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update auto-renewal setting' });
+  }
+});
+
+// POST /api/mongo/school-admin/cancel-subscription - Cancel subscription
+router.post('/cancel-subscription', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const { reason, otherReason } = req.body;
+
+    // Validate reason is provided
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reason is required when cancelling subscription'
+      });
+    }
+
+    // Validate otherReason when reason is 'other'
+    if (reason === 'other' && !otherReason?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide details when selecting "Other"'
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.schoolId) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    const school = await School.findById(user.schoolId).populate('licenseId');
+    if (!school) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
+    // Check if school has a paid license
+    if (!school.licenseId || school.licenseId.type !== 'paid') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No active paid subscription to cancel' 
+      });
+    }
+
+    // Cancel subscription - disable auto-renewal and mark as cancelled
+    school.autoRenew = false;
+    school.subscriptionStatus = 'cancelled';
+    school.cancelledAt = new Date();
+    
+    await school.save();
+
+    // Save to market survey if reason is provided
+    if (reason) {
+      const surveyEntry = new MarketSurvey({
+        type: 'subscription_cancel',
+        reason: reason,
+        otherReason: reason === 'other' ? otherReason : null,
+        schoolId: school._id,
+        schoolName: school.organization_name,
+        userEmail: user.email
+      });
+      await surveyEntry.save();
+      console.log(`📊 Market survey recorded: Subscription cancelled - Reason: ${reason}${reason === 'other' ? ` (${otherReason})` : ''}`);
+    }
+
+    console.log(`✅ Subscription cancelled for school ${school.organization_name}`);
+    console.log(`License will remain active until ${school.licenseExpiresAt}`);
+
+    return res.json({
+      success: true,
+      message: 'Subscription cancelled successfully. Your license will remain active until the end of the current billing period.',
+      details: {
+        cancelledAt: school.cancelledAt,
+        remainsActiveUntil: school.licenseExpiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Error cancelling subscription:', error);
+    return res.status(500).json({ success: false, error: 'Failed to cancel subscription' });
   }
 });
 

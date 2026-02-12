@@ -31,6 +31,7 @@ export default function ManageClasses() {
   const [students, setStudents] = useState([]);
   const csvFileInputRef = React.useRef(null);
   
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
     grade: 'Primary 1',
@@ -39,6 +40,7 @@ export default function ManageClasses() {
     students: []
   });
 
+  // CSV upload state
   const [csvFile, setCsvFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
@@ -48,11 +50,13 @@ export default function ManageClasses() {
       navigate('/login');
       return;
     }
+
     const currentUser = authService.getCurrentUser();
     if (currentUser.role !== 'School Admin') {
       navigate('/login');
       return;
     }
+
     loadClasses();
     loadTeachersAndStudents();
   }, [navigate]);
@@ -76,19 +80,31 @@ export default function ManageClasses() {
 
   const loadTeachersAndStudents = async () => {
     try {
-      const [teachersResult, studentsResult] = await Promise.all([
-        schoolAdminService.getAvailableTeachers(),
-        schoolAdminService.getAvailableStudents(false)
-      ]);
-      if (teachersResult.success) setTeachers(teachersResult.teachers || []);
-      if (studentsResult.success) setStudents(studentsResult.students || []);
+       const [teachersResult, studentsResult] = await Promise.all([
+         schoolAdminService.getAvailableTeachers(),
+         schoolAdminService.getAvailableStudents(true)
+       ]);
+      
+      if (teachersResult.success) {
+        setTeachers(teachersResult.teachers || []);
+      }
+      if (studentsResult.success) {
+       // include only unassigned or currently assigned students
+       setStudents(studentsResult.students || []);
+      }
     } catch (error) {
       console.error('Error loading teachers/students:', error);
     }
   };
 
   const resetForm = () => {
-    setFormData({ name: '', grade: 'Primary 1', subjects: ['Mathematics'], teachers: [], students: [] });
+    setFormData({
+      name: '',
+      grade: 'Primary 1',
+      subjects: ['Mathematics'],
+      teachers: [],
+      students: []
+    });
   };
 
   const handleAddClass = async () => {
@@ -96,8 +112,10 @@ export default function ManageClasses() {
       setMessage({ type: 'error', text: 'Class name is required' });
       return;
     }
+
     try {
       const result = await schoolAdminService.createClass(formData);
+      
       if (result.success) {
         setMessage({ type: 'success', text: 'Class created successfully!' });
         setShowAddModal(false);
@@ -119,8 +137,10 @@ export default function ManageClasses() {
       setMessage({ type: 'error', text: 'Class name is required' });
       return;
     }
+
     try {
       const result = await schoolAdminService.updateClass(selectedClass.id, formData);
+      
       if (result.success) {
         setMessage({ type: 'success', text: 'Class updated successfully!' });
         setShowEditModal(false);
@@ -141,6 +161,7 @@ export default function ManageClasses() {
   const handleDeleteClass = async () => {
     try {
       const result = await schoolAdminService.deleteClass(selectedClass.id);
+      
       if (result.success) {
         setMessage({ type: 'success', text: 'Class deleted successfully!' });
         setShowDeleteModal(false);
@@ -157,27 +178,32 @@ export default function ManageClasses() {
     }
   };
 
-  const openEditModal = async (cls) => {
-    setSelectedClass(cls);
-    setFormData({
-      name: cls.name,
-      grade: cls.grade || 'Primary 1',
-      subjects: cls.subjects || ['Mathematics'],
-      teachers: cls.teachers?.map(t => t.id || t._id) || [],
-      students: cls.students?.map(s => s.id || s._id) || []
-    });
-    try {
-      const [teachersResult, studentsResult] = await Promise.all([
-        schoolAdminService.getAvailableTeachers(cls.id),
-        schoolAdminService.getAvailableStudents(false, cls.id)
-      ]);
-      if (teachersResult.success) setTeachers(teachersResult.teachers || []);
-      if (studentsResult.success) setStudents(studentsResult.students || []);
-    } catch (err) {
-      console.error('Error refreshing teachers/students for edit:', err);
-    }
-    setShowEditModal(true);
-  };
+   const openEditModal = async (cls) => {
+     setSelectedClass(cls);
+     setFormData({
+       name: cls.name,
+       grade: cls.grade,
+       subjects: cls.subjects || ['Mathematics'],
+       teachers: cls.teacherList ? cls.teacherList.map(t => t._id) : [],
+       students: cls.studentList ? cls.studentList.map(s => s._id) : []
+     });
+     // Refresh both teachers and students to include currently assigned ones
+     try {
+       const [teachersResult, studentsResult] = await Promise.all([
+         schoolAdminService.getAvailableTeachers(cls.id),
+         schoolAdminService.getAvailableStudents(true, cls.id)
+       ]);
+       if (teachersResult.success) {
+         setTeachers(teachersResult.teachers || []);
+       }
+       if (studentsResult.success) {
+         setStudents(studentsResult.students || []);
+       }
+     } catch (err) {
+       console.error('Error refreshing teachers/students for edit:', err);
+     }
+     setShowEditModal(true);
+   };
 
   const openDeleteModal = (cls) => {
     setSelectedClass(cls);
@@ -203,6 +229,7 @@ export default function ManageClasses() {
   };
 
   const handleSubjectSelection = (subject) => {
+    // Only allow Mathematics for now
     if (subject !== 'Mathematics') {
       setMessage({ type: 'error', text: 'Only Mathematics is enabled for now' });
       setTimeout(() => setMessage({ type: '', text: '' }), 2000);
@@ -217,11 +244,13 @@ export default function ManageClasses() {
   };
 
   const downloadCSVTemplate = () => {
+    // CSV Template with class metadata in first row and users in subsequent rows
     const csvTemplate = `ClassName,Grade,Subject,Name,Email,Role,Gender,LinkedStudentEmail
 Primary 1A,Primary 1,Mathematics,,,,,
 ,,,John Teacher,john.teacher@school.com,Teacher,male,
 ,,,Mary Student,mary.student@school.com,Student,female,
 ,,,Jane Parent,jane.parent@email.com,Parent,female,mary.student@school.com`;
+
     const blob = new Blob([csvTemplate], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -257,23 +286,35 @@ Primary 1A,Primary 1,Mathematics,,,,,
       setMessage({ type: 'error', text: 'Please select a CSV file' });
       return;
     }
+
     setUploading(true);
     setMessage({ type: '', text: '' });
     setUploadResult(null);
+
     try {
       const response = await schoolAdminService.bulkUploadClass(csvFile);
+
       if (response.success) {
         setUploadResult(response);
         const totalCreated = response.usersCreated.teachers + response.usersCreated.students + response.usersCreated.parents;
         const totalAssigned = response.usersAssigned.teachers + response.usersAssigned.parents;
-        let msg = `Class "${response.className}" created successfully! ${totalCreated} new users created`;
-        if (totalAssigned > 0) msg += ` and ${totalAssigned} existing users assigned`;
-        msg += '.';
-        setMessage({ type: 'success', text: msg });
+        let message = `Class "${response.className}" created successfully! ${totalCreated} new users created`;
+        if (totalAssigned > 0) {
+          message += ` and ${totalAssigned} existing users assigned`;
+        }
+        message += '.';
+        setMessage({ type: 'success', text: message });
         setCsvFile(null);
-        if (csvFileInputRef.current) csvFileInputRef.current.value = '';
+        // Reset file input using ref
+        if (csvFileInputRef.current) {
+          csvFileInputRef.current.value = '';
+        }
+        
+        // Reload classes and users
         loadClasses();
         loadTeachersAndStudents();
+        
+        // Close modal after 3 seconds
         setTimeout(() => {
           setShowCSVUploadModal(false);
           setUploadResult(null);
@@ -319,37 +360,41 @@ Primary 1A,Primary 1,Mathematics,,,,,
     select: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '16px', cursor: 'pointer' },
     multiSelect: { border: '2px solid #e5e7eb', borderRadius: '8px', padding: '8px', marginBottom: '16px', maxHeight: '150px', overflow: 'auto', background: '#f9fafb' },
     checkboxItem: { display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', borderRadius: '4px' },
+    checkboxItemHover: { background: '#e5e7eb' },
     checkbox: { marginRight: '8px' },
     modalButtons: { display: 'flex', gap: '12px', marginTop: '24px' },
     cancelButton: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     saveButton: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    dangerButton: { flex: 1, padding: '12px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     message: { marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500' },
     successMessage: { background: '#f0fdf4', border: '2px solid #bbf7d0', color: '#16a34a' },
     errorMessage: { background: '#fef2f2', border: '2px solid #fecaca', color: '#dc2626' },
     note: { fontSize: '13px', color: '#6b7280', marginTop: '-8px', marginBottom: '16px', fontStyle: 'italic' },
     disabledSubject: { opacity: 0.5, cursor: 'not-allowed' },
     loadingSpinner: { textAlign: 'center', padding: '40px', color: '#6b7280' },
+    // Two-column layout styles for edit mode
     twoColumnContainer: { display: 'flex', gap: '16px', marginBottom: '16px' },
     studentColumn: { flex: 1, display: 'flex', flexDirection: 'column' },
     columnHeader: { background: '#dbeafe', border: '2px solid #3b82f6', borderBottom: 'none', borderRadius: '8px 8px 0 0', padding: '10px 12px', fontWeight: '600', fontSize: '14px', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' },
     columnHeaderAvailable: { background: '#f0fdf4', border: '2px solid #10b981', borderBottom: 'none', borderRadius: '8px 8px 0 0', padding: '10px 12px', fontWeight: '600', fontSize: '14px', color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' },
+    columnHeaderIcon: { fontSize: '16px' },
     multiSelectColumn: { border: '2px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px', flex: 1, maxHeight: '200px', overflow: 'auto', background: '#f9fafb' },
     checkboxItemInClass: { display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: '#dbeafe', marginBottom: '4px', border: '1px solid #93c5fd' },
     checkboxItemAvailable: { display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', borderRadius: '4px', background: '#ffffff', marginBottom: '4px', border: '1px solid #e5e7eb' },
     removeIcon: { marginLeft: 'auto', color: '#dc2626', fontWeight: 'bold', fontSize: '12px' },
     addIcon: { marginLeft: 'auto', color: '#10b981', fontWeight: 'bold', fontSize: '16px' },
+    // CSV Upload Modal Styles
     infoBox: { background: '#f0f9ff', border: '2px solid #bfdbfe', borderRadius: '8px', padding: '16px', marginBottom: '24px', fontSize: '14px', color: '#1e40af' },
     infoTitle: { fontWeight: '700', marginBottom: '8px' },
     infoList: { margin: '8px 0 0 20px', paddingLeft: '0' },
     fileInput: { width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', background: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' },
     fileInfo: { marginTop: '12px', padding: '12px 16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a', fontSize: '14px', fontWeight: '500' },
-    templateButton: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '24px' },
+    templateButton: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', marginBottom: '24px' },
     successBox: { marginTop: '20px', padding: '16px', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '8px', color: '#16a34a' },
     successTitle: { fontSize: '16px', fontWeight: '700', marginBottom: '12px' },
     successStats: { fontSize: '14px', marginBottom: '4px' },
-    btnGroup: { display: 'flex', gap: '12px', marginTop: '24px' },
-    cancelBtn: { flex: 1, padding: '12px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-    submitBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    errorList: { fontSize: '13px', marginTop: '8px', maxHeight: '150px', overflowY: 'auto' },
+    errorItem: { padding: '4px 0', borderBottom: '1px solid #fecaca' },
   };
 
   const renderModal = (isEdit = false) => (
@@ -378,7 +423,11 @@ Primary 1A,Primary 1,Mathematics,,,,,
           style={styles.select}
         >
           {GRADES.map(grade => (
-            <option key={grade.value} value={grade.value} disabled={!grade.enabled}>
+            <option 
+              key={grade.value} 
+              value={grade.value}
+              disabled={!grade.enabled}
+            >
               {grade.value} {!grade.enabled && '(Coming Soon)'}
             </option>
           ))}
@@ -390,10 +439,19 @@ Primary 1A,Primary 1,Mathematics,,,,,
           {SUBJECTS.map(subject => (
             <div
               key={subject.value}
-              style={{ ...styles.checkboxItem, ...(subject.enabled ? {} : styles.disabledSubject) }}
+              style={{
+                ...styles.checkboxItem,
+                ...(subject.enabled ? {} : styles.disabledSubject)
+              }}
               onClick={() => subject.enabled && handleSubjectSelection(subject.value)}
             >
-              <input type="checkbox" checked={formData.subjects.includes(subject.value)} readOnly disabled={!subject.enabled} style={styles.checkbox} />
+              <input
+                type="checkbox"
+                checked={formData.subjects.includes(subject.value)}
+                readOnly
+                disabled={!subject.enabled}
+                style={styles.checkbox}
+              />
               <span>{subject.value} {!subject.enabled && '(Coming Soon)'}</span>
             </div>
           ))}
@@ -406,8 +464,17 @@ Primary 1A,Primary 1,Mathematics,,,,,
             <p style={{ padding: '8px', color: '#6b7280' }}>No teachers available</p>
           ) : (
             teachers.map(teacher => (
-              <div key={teacher.id} style={styles.checkboxItem} onClick={() => handleTeacherSelection(teacher.id)}>
-                <input type="checkbox" checked={formData.teachers.includes(teacher.id)} readOnly style={styles.checkbox} />
+              <div
+                key={teacher.id}
+                style={styles.checkboxItem}
+                onClick={() => handleTeacherSelection(teacher.id)}
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.teachers.includes(teacher.id)}
+                  readOnly
+                  style={styles.checkbox}
+                />
                 <span>{teacher.name} ({teacher.email})</span>
               </div>
             ))
@@ -416,14 +483,16 @@ Primary 1A,Primary 1,Mathematics,,,,,
 
         <label style={styles.label}>Assign Students</label>
         {isEdit ? (
+          /* Two-column layout for edit mode: Students in Class vs Available Students */
           (() => {
             const studentsInClass = students.filter(s => formData.students.includes(s.id));
             const availableStudents = students.filter(s => !formData.students.includes(s.id));
             return (
               <div style={styles.twoColumnContainer}>
+                {/* Left Column: Students Currently in Class */}
                 <div style={styles.studentColumn}>
                   <div style={styles.columnHeader}>
-                    <span>✅</span>
+                    <span style={styles.columnHeaderIcon}>✅</span>
                     <span>Students in Class ({studentsInClass.length})</span>
                   </div>
                   <div style={styles.multiSelectColumn}>
@@ -431,8 +500,18 @@ Primary 1A,Primary 1,Mathematics,,,,,
                       <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students assigned yet</p>
                     ) : (
                       studentsInClass.map(student => (
-                        <div key={student.id} style={styles.checkboxItemInClass} onClick={() => handleStudentSelection(student.id)} title="Click to remove from class">
-                          <input type="checkbox" checked={true} readOnly style={styles.checkbox} />
+                        <div
+                          key={student.id}
+                          style={styles.checkboxItemInClass}
+                          onClick={() => handleStudentSelection(student.id)}
+                          title="Click to remove from class"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={true}
+                            readOnly
+                            style={styles.checkbox}
+                          />
                           <span>{student.name} ({student.email})</span>
                           <span style={styles.removeIcon}>✕</span>
                         </div>
@@ -440,9 +519,11 @@ Primary 1A,Primary 1,Mathematics,,,,,
                     )}
                   </div>
                 </div>
+                
+                {/* Right Column: Available Students */}
                 <div style={styles.studentColumn}>
                   <div style={styles.columnHeaderAvailable}>
-                    <span>➕</span>
+                    <span style={styles.columnHeaderIcon}>➕</span>
                     <span>Available Students ({availableStudents.length})</span>
                   </div>
                   <div style={styles.multiSelectColumn}>
@@ -450,8 +531,18 @@ Primary 1A,Primary 1,Mathematics,,,,,
                       <p style={{ padding: '8px', color: '#6b7280', textAlign: 'center' }}>No students available</p>
                     ) : (
                       availableStudents.map(student => (
-                        <div key={student.id} style={styles.checkboxItemAvailable} onClick={() => handleStudentSelection(student.id)} title="Click to add to class">
-                          <input type="checkbox" checked={false} readOnly style={styles.checkbox} />
+                        <div
+                          key={student.id}
+                          style={styles.checkboxItemAvailable}
+                          onClick={() => handleStudentSelection(student.id)}
+                          title="Click to add to class"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            readOnly
+                            style={styles.checkbox}
+                          />
                           <span>{student.name} ({student.email})</span>
                           <span style={styles.addIcon}>+</span>
                         </div>
@@ -463,13 +554,23 @@ Primary 1A,Primary 1,Mathematics,,,,,
             );
           })()
         ) : (
+          /* Single list for add mode */
           <div style={styles.multiSelect}>
             {students.length === 0 ? (
               <p style={{ padding: '8px', color: '#6b7280' }}>No students available</p>
             ) : (
               students.map(student => (
-                <div key={student.id} style={styles.checkboxItem} onClick={() => handleStudentSelection(student.id)}>
-                  <input type="checkbox" checked={formData.students.includes(student.id)} readOnly style={styles.checkbox} />
+                <div
+                  key={student.id}
+                  style={styles.checkboxItem}
+                  onClick={() => handleStudentSelection(student.id)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.students.includes(student.id)}
+                    readOnly
+                    style={styles.checkbox}
+                  />
                   <span>{student.name} ({student.email})</span>
                 </div>
               ))
@@ -478,8 +579,21 @@ Primary 1A,Primary 1,Mathematics,,,,,
         )}
 
         <div style={styles.modalButtons}>
-          <button style={styles.cancelButton} onClick={() => { isEdit ? setShowEditModal(false) : setShowAddModal(false); resetForm(); }}>Cancel</button>
-          <button style={styles.saveButton} onClick={isEdit ? handleEditClass : handleAddClass}>{isEdit ? 'Update Class' : 'Create Class'}</button>
+          <button 
+            style={styles.cancelButton} 
+            onClick={() => {
+              isEdit ? setShowEditModal(false) : setShowAddModal(false);
+              resetForm();
+            }}
+          >
+            Cancel
+          </button>
+          <button 
+            style={styles.saveButton} 
+            onClick={isEdit ? handleEditClass : handleAddClass}
+          >
+            {isEdit ? 'Update Class' : 'Create Class'}
+          </button>
         </div>
       </div>
     </div>
@@ -498,14 +612,35 @@ Primary 1A,Primary 1,Mathematics,,,,,
             <li><strong>Grade:</strong> Only "Primary 1" is enabled</li>
             <li><strong>Subject:</strong> Only "Mathematics" is enabled</li>
             <li><strong>Roles:</strong> Teacher, Student, Parent</li>
+            <li><strong>Teachers:</strong> Will be auto-assigned to class (can teach multiple classes)</li>
+            <li><strong>Students:</strong> Must have unique email, assigned to single class only</li>
+            <li><strong>Parents:</strong> Require LinkedStudentEmail to link with student</li>
           </ul>
         </div>
 
-        <button style={styles.templateButton} onClick={downloadCSVTemplate}>📥 Download CSV Template</button>
+        <button
+          style={styles.templateButton}
+          onClick={downloadCSVTemplate}
+          onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
+          onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
+        >
+          📥 Download CSV Template
+        </button>
 
         <label style={styles.label}>Select CSV File</label>
-        <input ref={csvFileInputRef} type="file" accept=".csv" onChange={handleCSVFileChange} style={styles.fileInput} disabled={uploading} />
-        {csvFile && <div style={styles.fileInfo}>✅ {csvFile.name} ({(csvFile.size / 1024).toFixed(2)} KB)</div>}
+        <input
+          ref={csvFileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleCSVFileChange}
+          style={styles.fileInput}
+          disabled={uploading}
+        />
+        {csvFile && (
+          <div style={styles.fileInfo}>
+            ✅ {csvFile.name} ({(csvFile.size / 1024).toFixed(2)} KB)
+          </div>
+        )}
 
         {uploadResult && uploadResult.success && (
           <div style={styles.successBox}>
@@ -514,12 +649,46 @@ Primary 1A,Primary 1,Mathematics,,,,,
             <div style={styles.successStats}>👨‍🏫 Teachers Created: {uploadResult.usersCreated.teachers}</div>
             <div style={styles.successStats}>👩‍🎓 Students Created: {uploadResult.usersCreated.students}</div>
             <div style={styles.successStats}>👪 Parents Created: {uploadResult.usersCreated.parents}</div>
+            {uploadResult.usersAssigned.teachers > 0 && (
+              <div style={styles.successStats}>🔗 Existing Teachers Assigned: {uploadResult.usersAssigned.teachers}</div>
+            )}
+            {uploadResult.usersAssigned.parents > 0 && (
+              <div style={styles.successStats}>🔗 Existing Parents Linked: {uploadResult.usersAssigned.parents}</div>
+            )}
+            {uploadResult.errors && uploadResult.errors.length > 0 && (
+              <div style={styles.errorList}>
+                <strong>⚠️ Errors:</strong>
+                {uploadResult.errors.map((err, idx) => (
+                  <div key={idx} style={styles.errorItem}>
+                    Row {err.row}: {err.email} - {err.error}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         <div style={styles.modalButtons}>
-          <button style={styles.cancelButton} onClick={() => { setShowCSVUploadModal(false); setCsvFile(null); setUploadResult(null); }} disabled={uploading}>Cancel</button>
-          <button style={{ ...styles.saveButton, opacity: uploading || !csvFile ? 0.7 : 1 }} onClick={handleCSVUpload} disabled={uploading || !csvFile}>
+          <button 
+            style={styles.cancelButton} 
+            onClick={() => {
+              setShowCSVUploadModal(false);
+              setCsvFile(null);
+              setUploadResult(null);
+            }}
+            disabled={uploading}
+          >
+            Cancel
+          </button>
+          <button 
+            style={{
+              ...styles.saveButton,
+              opacity: uploading || !csvFile ? 0.7 : 1,
+              cursor: uploading || !csvFile ? 'not-allowed' : 'pointer'
+            }}
+            onClick={handleCSVUpload}
+            disabled={uploading || !csvFile}
+          >
             {uploading ? 'Uploading...' : 'Upload & Create Class'}
           </button>
         </div>
@@ -532,29 +701,40 @@ Primary 1A,Primary 1,Mathematics,,,,,
       <header style={styles.header}>
         <div style={styles.headerContent}>
           <div style={styles.logo}>
-            <div style={styles.logoIcon}>P2L</div>
+            <div style={styles.logoIcon}>P</div>
             <span style={styles.logoText}>Play2Learn</span>
           </div>
-          <button style={styles.backButton} onClick={() => navigate('/school-admin')}>← Back to Dashboard</button>
+          <button style={styles.backButton} onClick={() => navigate('/school-admin')}>
+            ← Back to Dashboard
+          </button>
         </div>
       </header>
 
       <main style={styles.main}>
-        <h1 style={styles.pageTitle}>📚 Class Management</h1>
-        <p style={styles.pageSubtitle}>Create and manage classes, assign teachers and students</p>
-
-        {message.text && (
-          <div style={{ ...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage) }}>
-            {message.text}
-          </div>
-        )}
+        <h1 style={styles.pageTitle}>Manage Classes</h1>
+        <p style={styles.pageSubtitle}>Create and manage classes. Assign teachers and students to each class.</p>
 
         <div style={styles.card}>
+          {message.text && (
+            <div style={{ ...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage) }}>
+              {message.type === 'success' ? '✅' : '⚠️'} {message.text}
+            </div>
+          )}
+
           <div style={styles.headerRow}>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>All Classes ({classes.length})</h3>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+              All Classes ({classes.length})
+            </h3>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button style={{ ...styles.addButton, background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' }} onClick={() => setShowCSVUploadModal(true)}>📤 Upload CSV</button>
-              <button style={styles.addButton} onClick={() => { resetForm(); setShowAddModal(true); }}>+ Add New Class</button>
+              <button 
+                style={{ ...styles.addButton, background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' }} 
+                onClick={() => setShowCSVUploadModal(true)}
+              >
+                📤 Upload CSV
+              </button>
+              <button style={styles.addButton} onClick={() => { resetForm(); setShowAddModal(true); }}>
+                + Add New Class
+              </button>
             </div>
           </div>
 
@@ -577,43 +757,71 @@ Primary 1A,Primary 1,Mathematics,,,,,
                   {classes.map((cls) => (
                     <tr key={cls.id}>
                       <td style={styles.td}><strong>{cls.name}</strong></td>
-                      <td style={styles.td}><span style={styles.badge}>{cls.grade}</span></td>
+                      <td style={styles.td}>
+                        <span style={styles.badge}>{cls.grade}</span>
+                      </td>
                       <td style={styles.td}>{cls.subject}</td>
                       <td style={styles.td}>{cls.students}</td>
                       <td style={styles.td}>{cls.teacher}</td>
                       <td style={styles.td}>
-                        <button style={{ ...styles.actionButton, ...styles.editButton }} onClick={() => openEditModal(cls)}>Edit</button>
-                        <button style={{ ...styles.actionButton, ...styles.deleteButton }} onClick={() => openDeleteModal(cls)}>Delete</button>
+                        <button 
+                          style={{ ...styles.actionButton, ...styles.editButton }}
+                          onClick={() => openEditModal(cls)}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          style={{ ...styles.actionButton, ...styles.deleteButton }}
+                          onClick={() => openDeleteModal(cls)}
+                        >
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
               {classes.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>No classes found. Click "Add New Class" to create one.</div>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                  No classes found. Click "Add New Class" to create one.
+                </div>
               )}
             </>
           )}
         </div>
+      </main>
 
-        {showAddModal && renderModal(false)}
-        {showEditModal && renderModal(true)}
-        {showCSVUploadModal && renderCSVUploadModal()}
+      {showAddModal && renderModal(false)}
+      {showEditModal && renderModal(true)}
+      {showCSVUploadModal && renderCSVUploadModal()}
 
-        {showDeleteModal && (
-          <div style={styles.modal}>
-            <div style={styles.modalContent}>
-              <h2 style={styles.modalTitle}>Delete Class</h2>
-              <p>Are you sure you want to delete <strong>{selectedClass?.name}</strong>?</p>
-              <p style={{ color: '#6b7280', marginTop: '8px' }}>This will unassign all teachers and students from this class.</p>
-              <div style={styles.btnGroup}>
-                <button style={styles.cancelBtn} onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button style={{ ...styles.submitBtn, background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }} onClick={handleDeleteClass}>Delete</button>
-              </div>
+      {showDeleteModal && selectedClass && (
+        <div style={styles.modal} onClick={() => setShowDeleteModal(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Delete Class</h2>
+            <p style={{ marginBottom: '24px', color: '#374151' }}>
+              Are you sure you want to delete the class "<strong>{selectedClass.name}</strong>"? 
+              This will unassign all {selectedClass.students} students and teachers from this class.
+              This action cannot be undone.
+            </p>
+            <div style={styles.modalButtons}>
+              <button 
+                style={styles.cancelButton} 
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                style={styles.dangerButton} 
+                onClick={handleDeleteClass}
+              >
+                Delete Class
+              </button>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   );
 }

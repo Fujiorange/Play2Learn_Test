@@ -654,3 +654,77 @@
   color: #1e40af;
   line-height: 1.5;
 }
+
+/* Subscription Information Card */
+.subscription-info-card {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.subscription-info-card h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.subscription-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.detail-value {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.cancelled {
+  background: #fed7aa;
+  color: #92400e;
+}
+
+.status-badge.expired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.btn-cancel-subscription:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

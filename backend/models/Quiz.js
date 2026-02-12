@@ -18,7 +18,7 @@ const quizSchema = new mongoose.Schema({
   generation_criteria: { type: String, default: null },
   unique_hash: { type: String, default: null },
   adaptive_config: {
-    target_correct_answers: { type: Number, default: 10 },
+    target_correct_answers: { type: Number, default: 20 },
     difficulty_progression: { type: String, enum: ['gradual', 'immediate', 'ml-based'], default: 'gradual' },
     starting_difficulty: { type: Number, enum: [1, 2, 3, 4, 5], default: 1 }
   },

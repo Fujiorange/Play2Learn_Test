@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getAllUsers, getUserSchools, bulkDeleteUsers } from '../../services/p2lAdminService';
+import PinModal from './PinModal';
 import './UserManagement.css';
 
 function UserManagement() {
@@ -14,6 +15,7 @@ function UserManagement() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [deleting, setDeleting] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [showPinModal, setShowPinModal] = useState(false);
 
   const roles = [
     'Platform Admin',
@@ -78,7 +80,13 @@ function UserManagement() {
     }
   };
 
-  const handleSelectUser = (userId) => {
+  const handleSelectUser = (userId, userRole) => {
+    // Prevent selection of p2ladmin accounts
+    if (userRole === 'p2ladmin') {
+      alert('Cannot select p2ladmin accounts for deletion');
+      return;
+    }
+    
     setSelectedUsers(prev => {
       if (prev.includes(userId)) {
         return prev.filter(id => id !== userId);
@@ -88,10 +96,11 @@ function UserManagement() {
   };
 
   const handleSelectAll = () => {
-    if (selectedUsers.length === users.length) {
+    if (selectedUsers.length === users.filter(user => user.role !== 'p2ladmin').length) {
       setSelectedUsers([]);
     } else {
-      setSelectedUsers(users.map(user => user._id));
+      // Only select non-p2ladmin users
+      setSelectedUsers(users.filter(user => user.role !== 'p2ladmin').map(user => user._id));
     }
   };
 
@@ -99,6 +108,17 @@ function UserManagement() {
     if (selectedUsers.length === 0) {
       alert('Please select at least one user to delete');
       return;
+    }
+
+    // Show PIN modal
+    setShowPinModal(true);
+  };
+
+  const handlePinConfirm = async (pin) => {
+    setShowPinModal(false);
+    
+    if (!pin) {
+      return; // User cancelled
     }
 
     const confirmed = window.confirm(
@@ -109,7 +129,7 @@ function UserManagement() {
 
     setDeleting(true);
     try {
-      const response = await bulkDeleteUsers(selectedUsers);
+      const response = await bulkDeleteUsers(selectedUsers, pin);
       alert(response.message || `Successfully deleted ${response.deletedCount} user(s)`);
       setSelectedUsers([]);
       fetchUsers();
@@ -119,6 +139,10 @@ function UserManagement() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handlePinCancel = () => {
+    setShowPinModal(false);
   };
 
   const clearFilters = () => {
@@ -279,7 +303,11 @@ function UserManagement() {
                   <th className="checkbox-col">
                     <input 
                       type="checkbox" 
-                      checked={selectedUsers.length === users.length && users.length > 0}
+                      checked={
+                        selectedUsers.length > 0 && 
+                        selectedUsers.length === users.filter(user => user.role !== 'p2ladmin').length &&
+                        users.filter(user => user.role !== 'p2ladmin').length > 0
+                      }
                       onChange={handleSelectAll}
                     />
                   </th>
@@ -345,7 +373,8 @@ function UserManagement() {
                       <input 
                         type="checkbox" 
                         checked={selectedUsers.includes(user._id)}
-                        onChange={() => handleSelectUser(user._id)}
+                        onChange={() => handleSelectUser(user._id, user.role)}
+                        disabled={user.role === 'p2ladmin'}
                       />
                     </td>
                     <td>{user.name}</td>
@@ -364,6 +393,13 @@ function UserManagement() {
           )}
         </div>
       </div>
+
+      <PinModal
+        isOpen={showPinModal}
+        onConfirm={handlePinConfirm}
+        onCancel={handlePinCancel}
+        message={`You are about to delete ${selectedUsers.length} user(s). Enter PIN to confirm:`}
+      />
     </div>
   );
 }

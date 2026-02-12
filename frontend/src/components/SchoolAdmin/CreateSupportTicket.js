@@ -11,7 +11,6 @@ export default function CreateSupportTicket() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
     category: 'website',
-    priority: 'normal',
     subject: '',
     description: '',
   });
@@ -49,7 +48,6 @@ export default function CreateSupportTicket() {
         setTimeout(() => {
           setFormData({ 
             category: 'website',
-            priority: 'normal',
             subject: '', 
             description: '' 
           });
@@ -112,7 +110,7 @@ export default function CreateSupportTicket() {
         </div>
         
         <div style={styles.infoNote}>
-          ℹ️ As a School Admin, support tickets are sent to the P2L Admin team for website-related issues.
+          ℹ️ <strong>Website Support Ticket:</strong> Use this form to report platform or website-related issues to the P2L Admin team. For school-related support requests from your users, use "Manage School Tickets" instead.
         </div>
         
         {message.text && (
@@ -122,21 +120,6 @@ export default function CreateSupportTicket() {
         )}
         
         <form style={styles.form} onSubmit={handleSubmit}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Priority</label>
-            <select 
-              value={formData.priority} 
-              onChange={(e) => setFormData({...formData, priority: e.target.value})} 
-              disabled={submitting}
-              style={styles.select}
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-          
           <div style={styles.formGroup}>
             <label style={styles.label}>Subject *</label>
             <input 
