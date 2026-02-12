@@ -223,22 +223,19 @@ function AttemptAdaptiveQuiz() {
   const handleProgressToNextLevel = () => {
     if (progressionData && progressionData.hasNextLevel && progressionData.nextQuizId) {
       navigate(`/student/adaptive-quiz/${progressionData.nextQuizId}`);
-      // Reset state
       setQuizCompleted(false);
       setResults(null);
       setProgressionData(null);
       setLoading(true);
     } else {
-      navigate('/student/adaptive-quizzes');
+      navigate('/student/quiz-journey');
     }
   };
 
   // 🆕 NEW: Get progression message
   const getProgressionMessage = () => {
     if (!progressionData || !progressionData.levelDecision) return '';
-    
     const { progression, levelChange } = progressionData.levelDecision;
-    
     switch (progression) {
       case 'down':
         return '📉 Let\'s try an easier level to build confidence!';
@@ -297,7 +294,7 @@ function AttemptAdaptiveQuiz() {
             </div>
           </div>
 
-          {/* 🆕 NEW: Score Breakdown */}
+          {/* Performance Breakdown */}
           {progressionData && progressionData.scoreData && (
             <div className="score-breakdown">
               <h3>📊 Performance Breakdown</h3>
@@ -328,7 +325,7 @@ function AttemptAdaptiveQuiz() {
             </div>
           )}
 
-          {/* 🆕 NEW: Level Progression */}
+          {/* Level Progression */}
           {progressionData && progressionData.levelDecision && (
             <div className="level-progression">
               <h3>🎯 Level Progression</h3>
@@ -372,7 +369,7 @@ function AttemptAdaptiveQuiz() {
             </div>
           </div>
 
-          {/* 🆕 NEW: Conditional progression button */}
+          {/* Results Actions */}
           <div className="results-actions">
             {progressionData && progressionData.hasNextLevel ? (
               <button 
@@ -389,7 +386,7 @@ function AttemptAdaptiveQuiz() {
             )}
             <button 
               className="btn-secondary"
-              onClick={() => navigate('/student/adaptive-quizzes')}
+              onClick={() => navigate('/student/quiz-journey')}
             >
               Back to Quizzes
             </button>
@@ -413,7 +410,7 @@ function AttemptAdaptiveQuiz() {
             <div 
               className="progress-bar-fill"
               style={{ 
-                width: `${(progress?.total_answered / 20) * 100}%` // 🆕 Changed to 20 questions
+                width: `${(progress?.total_answered / 20) * 100}%` // Changed to 20 questions
               }}
             />
           </div>
