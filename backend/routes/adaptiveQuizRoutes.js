@@ -8,6 +8,9 @@ const MathSkill = require('../models/MathSkill');
 const MathProfile = require('../models/MathProfile');
 const SkillPointsConfig = require('../models/SkillPointsConfig');
 
+// ✅ Import shared streak utilities
+const { updateStreakOnCompletion } = require('../utils/streakUtils');
+
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 // Middleware to authenticate users
@@ -320,45 +323,42 @@ async function updateSkillsFromAdaptiveQuiz(userId, answers) {
   }
 }
 
-// Helper function to update streak and points when adaptive quiz is completed
+// ✅ FIXED: Helper function to update streak and points when adaptive quiz is completed
 async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, totalAnswered) {
   try {
     const mathProfile = await MathProfile.findOne({ student_id: userId });
     const pointsEarned = Math.max(0, correctCount * 10);
     
     if (!mathProfile) {
+      console.log(`⚠️ No math profile found for user ${userId} - creating new profile`);
       const newProfile = new MathProfile({
         student_id: userId,
-        streak: 1,
-        last_mid: new Date(),
-        total_points: pointsEarned
+        streak: 1, // ✅ First Quiz Journey quiz = streak 1
+        last_quiz_date: new Date(), // ✅ Correct field name
+        total_points: pointsEarned,
+        placement_completed: false,
+        current_profile: 1,
+        adaptive_quiz_level: 1
       });
       await newProfile.save();
+      console.log(`✅ Created new profile with streak=1 for user ${userId}`);
       return;
     }
 
-    const now = new Date();
-    const lastQuizDate = mathProfile.last_mid ? new Date(mathProfile.last_mid) : null;
+    // ✅ Use shared updateStreakOnCompletion function
+    const newStreak = updateStreakOnCompletion(mathProfile);
     
-    if (!lastQuizDate) {
-      mathProfile.streak = 1;
-    } else {
-      const diffDays = Math.floor((now - lastQuizDate) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) {
-        // Same day
-      } else if (diffDays === 1) {
-        mathProfile.streak = (mathProfile.streak || 0) + 1;
-      } else {
-        mathProfile.streak = 1;
-      }
-    }
-
-    mathProfile.last_mid = now;
+    // Update points
     mathProfile.total_points = (mathProfile.total_points || 0) + pointsEarned;
+    
     await mathProfile.save();
+    
+    console.log(`✅ Quiz Journey completed for user ${userId}:`);
+    console.log(`   - Streak: ${newStreak}`);
+    console.log(`   - Points earned: ${pointsEarned}`);
+    console.log(`   - Total points: ${mathProfile.total_points}`);
   } catch (error) {
-    console.error("Error updating streak and points:", error);
+    console.error("❌ Error updating streak and points:", error);
   }
 }
 
@@ -650,6 +650,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       
       await attempt.save();
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
+      
+      // ✅ UPDATE STREAK - This is Quiz Journey!
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
       // ✅ CRITICAL FIX: Update student's adaptive_quiz_level in MathProfile (both UP and DOWN)
@@ -823,6 +825,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       await attempt.save();
       
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
+      
+      // ✅ UPDATE STREAK
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
       // ✅ FIX: Update level both UP and DOWN

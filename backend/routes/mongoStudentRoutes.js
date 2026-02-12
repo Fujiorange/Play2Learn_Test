@@ -5,12 +5,22 @@
 // ✅ Placement quizzes excluded from all statistics
 // ✅ Quiz model points to quiz_attempts collection (CRITICAL FIX!)
 // ✅ CRITICAL FIX: Placement quiz now sets adaptive_quiz_level for Quiz Journey!
+// ✅ STREAK FIX: Using shared utility - placement quiz does NOT update streak
 
 const express = require("express");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 
 const router = express.Router();
+
+// ✅ Import shared streak utilities
+const { 
+  getSingaporeTime, 
+  getSgtMidnightTime, 
+  updateStreakOnCompletion, 
+  computeEffectiveStreak,
+  MS_PER_DAY 
+} = require('../utils/streakUtils');
 
 // ==================== AUTH ====================
 function authenticateToken(req, res, next) {
@@ -46,9 +56,7 @@ const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
 const { analyzeSentiment } = require('../utils/sentimentKeywords');
 
-// ==================== TIME HELPERS ====================
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
+// ==================== LEVEL THRESHOLDS ====================
 // Level thresholds for points-based leveling system
 // Each entry defines the min points required to reach that level
 const LEVEL_THRESHOLDS = [
@@ -83,58 +91,6 @@ function calculateLevelProgress(points) {
   const rangeSize = threshold.max - threshold.min;
   const progressInRange = points - threshold.min;
   return Math.min(100, Math.floor((progressInRange / rangeSize) * 100));
-}
-
-function getSingaporeTime() {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore" }));
-}
-
-function getMidnightSGT(date = new Date()) {
-  const sgtDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Singapore" }));
-  sgtDate.setHours(0, 0, 0, 0);
-  return sgtDate;
-}
-
-function getSgtMidnightTime(date) {
-  return getMidnightSGT(date).getTime();
-}
-
-function updateStreakOnCompletion(mathProfile) {
-  const nowSgt = getSingaporeTime();
-  const todayMid = getSgtMidnightTime(nowSgt);
-  const storedStreak = Number.isFinite(mathProfile.streak) ? mathProfile.streak : 0;
-  const lastMid = mathProfile.last_quiz_date ? getSgtMidnightTime(mathProfile.last_quiz_date) : null;
-
-  let nextStreak = storedStreak;
-
-  if (!lastMid) {
-    nextStreak = 0;
-  } else if (todayMid === lastMid) {
-    nextStreak = storedStreak;
-  } else {
-    const diffDays = Math.round((todayMid - lastMid) / MS_PER_DAY);
-    nextStreak = diffDays === 1 ? storedStreak + 1 : 0;
-  }
-
-  mathProfile.streak = nextStreak;
-  mathProfile.last_quiz_date = nowSgt;
-  return nextStreak;
-}
-
-function computeEffectiveStreak(mathProfile) {
-  if (!mathProfile) return { effective: 0, shouldPersistReset: false };
-
-  const nowSgt = getSingaporeTime();
-  const todayMid = getSgtMidnightTime(nowSgt);
-  const storedStreak = Number.isFinite(mathProfile.streak) ? mathProfile.streak : 0;
-  const lastMid = mathProfile.last_quiz_date ? getSgtMidnightTime(mathProfile.last_quiz_date) : null;
-
-  if (!lastMid) return { effective: 0, shouldPersistReset: storedStreak !== 0 };
-
-  const diffDays = Math.round((todayMid - lastMid) / MS_PER_DAY);
-  if (diffDays <= 1) return { effective: storedStreak, shouldPersistReset: false };
-
-  return { effective: 0, shouldPersistReset: storedStreak !== 0 };
 }
 
 // ==================== PROFILE CONFIG ====================
@@ -673,7 +629,7 @@ router.post("/placement-quiz/generate", async (req, res) => {
 });
 
 // ==================== PLACEMENT QUIZ - SUBMIT ====================
-// ✅ CRITICAL FIX: Now sets adaptive_quiz_level for Quiz Journey!
+// ✅ PLACEMENT QUIZ DOES NOT UPDATE STREAK - Only sets initial level
 router.post("/placement-quiz/submit", async (req, res) => {
   try {
     const studentId = req.user.userId;
@@ -734,13 +690,16 @@ router.post("/placement-quiz/submit", async (req, res) => {
     else if (quiz.percentage >= 10) startingProfile = 2;  // 10-19% → Level 2
     else startingProfile = 1;                             // 0-9% → Level 1
 
-    // ✅ CRITICAL FIX: Set BOTH fields
-    // current_profile: Used by legacy quiz system (kept for backward compatibility)
-    // adaptive_quiz_level: Used by adaptive quiz journey (REQUIRED FOR UNLOCKING LEVELS!)
+    // ✅ Set BOTH fields for Quiz Journey unlocking
     mathProfile.current_profile = startingProfile;
-    mathProfile.adaptive_quiz_level = startingProfile;  // 🆕 THIS IS THE KEY FIX!
+    mathProfile.adaptive_quiz_level = startingProfile;
     mathProfile.placement_completed = true;
     mathProfile.total_points += quiz.points_earned;
+    
+    // ⚠️ CRITICAL: DO NOT UPDATE STREAK FOR PLACEMENT QUIZ
+    // Streak only updates when students complete Quiz Journey (adaptive quizzes)
+    console.log(`📝 Placement quiz does NOT update streak - only Quiz Journey counts`);
+    
     await mathProfile.save();
 
     console.log(`✅ Placement quiz completed for student ${studentId}:`);
@@ -748,6 +707,7 @@ router.post("/placement-quiz/submit", async (req, res) => {
     console.log(`   - Assigned Level: ${startingProfile}`);
     console.log(`   - current_profile: ${mathProfile.current_profile}`);
     console.log(`   - adaptive_quiz_level: ${mathProfile.adaptive_quiz_level}`);
+    console.log(`   - Streak NOT updated (placement quiz doesn't count)`);
 
     await updateSkillsFromQuiz(studentId, quiz.questions, quiz.percentage, startingProfile);
 
@@ -789,26 +749,8 @@ router.get("/math-progress", async (req, res) => {
       is_completed: true 
     }).sort({ completedAt: -1 }).lean();
 
-    // Combine all quizzes for streak/stats calculation
-    const allQuizzes = [
-      ...regularQuizzes.map(q => ({ date: q.completed_at, type: 'regular' })),
-      ...adaptiveAttempts.map(a => ({ date: a.completedAt, type: 'adaptive' }))
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    // Calculate streak based on all quiz types
-    let streak = 0;
-    if (allQuizzes.length > 0) {
-      const lastQuizDate = new Date(allQuizzes[0].date);
-      const today = new Date();
-      const diffDays = Math.floor((today - lastQuizDate) / (1000 * 60 * 60 * 24));
-      
-      // If last quiz was today or yesterday, maintain streak
-      if (diffDays <= 1) {
-        streak = mathProfile ? (mathProfile.streak || 0) : 0;
-      } else {
-        streak = 0;
-      }
-    }
+    // Get effective streak
+    const { effective: streak } = computeEffectiveStreak(mathProfile);
 
     const totalQuizzes = regularQuizzes.length + adaptiveAttempts.length;
     const averageScore =
