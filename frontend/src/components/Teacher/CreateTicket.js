@@ -3,133 +3,186 @@ import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import teacherService from '../../services/teacherService';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function CreateTicket() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({
-    category: 'website',
+    category: 'school',  // Default to 'school' so School Admin can see it
     priority: 'normal',
-    routeTo: 'website',
     subject: '',
     description: '',
   });
 
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
-    const loadData = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
-      setLoading(false);
-    };
-    loadData();
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    setLoading(false);
   }, [navigate]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setMessage({ type: '', text: '' });
-
-    try {
-      // Use teacherService which handles user_id extraction and field mapping
-      const result = await teacherService.createSupportTicket(formData);
-
-      if (result.success) {
-        setMessage({ 
-          type: 'success', 
-          text: `Support ticket #${result.ticketId} created successfully! We will get back to you soon.` 
-        });
-        
-        // Reset form
-        setTimeout(() => {
-          setFormData({ 
-            category: 'website', 
-            priority: 'normal', 
-            routeTo: 'website', 
-            subject: '', 
-            description: '' 
-          });
-          setMessage({ type: '', text: '' });
-        }, 3000);
-      } else {
-        setMessage({ 
-          type: 'error', 
-          text: result.error || 'Failed to create support ticket' 
-        });
-      }
-    } catch (error) {
-      console.error('Create ticket error:', error);
-      setMessage({ 
-        type: 'error', 
-        text: 'Failed to create support ticket. Please try again.' 
-      });
-    } finally {
-      setSubmitting(false);
-    }
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!authService.isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+
+  if (!formData.subject.trim() || !formData.description.trim()) {
+    setMessage({ type: 'error', text: 'Please fill in subject and description' });
+    return;
+  }
+
+  setSubmitting(true);
+  setMessage({ type: '', text: '' });
+
+  try {
+    // ✅ USE THE SERVICE INSTEAD OF DIRECT FETCH
+    const result = await teacherService.createSupportTicket({
+      subject: formData.subject,
+      description: formData.description,
+      category: formData.category,
+      priority: formData.priority
+    });
+
+    if (result.success) {
+      setMessage({ 
+        type: 'success', 
+        text: `Support ticket created successfully! Your ticket ID: ${result.ticketId || 'Submitted'}` 
+      });
+      
+      setTimeout(() => {
+        setFormData({ 
+          category: 'school', 
+          priority: 'normal', 
+          subject: '', 
+          description: '' 
+        });
+        setMessage({ type: '', text: '' });
+      }, 3000);
+    } else {
+      setMessage({ type: 'error', text: result.error || 'Failed to create support ticket' });
+    }
+  } catch (error) {
+    console.error('Create ticket error:', error);
+    setMessage({ type: 'error', text: 'Failed to create support ticket.' });
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const styles = {
     container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
-    content: { maxWidth: '800px', margin: '0 auto', background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
+    content: { maxWidth: '700px', margin: '0 auto' },
+    header: { background: 'white', borderRadius: '16px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
     title: { fontSize: '28px', fontWeight: '700', color: '#1f2937', margin: 0 },
-    backButton: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    backBtn: { padding: '10px 20px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    card: { background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
     form: { display: 'flex', flexDirection: 'column', gap: '20px' },
     formGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
     label: { fontSize: '14px', fontWeight: '600', color: '#374151' },
-    input: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', fontFamily: 'inherit' },
-    select: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', fontFamily: 'inherit', cursor: 'pointer' },
-    textarea: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', fontFamily: 'inherit', minHeight: '150px', resize: 'vertical' },
-    submitButton: { padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
-    message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
-    successMessage: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
-    errorMessage: { background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' },
-    loadingContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
-    loadingText: { fontSize: '24px', color: '#6b7280', fontWeight: '600' },
+    input: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' },
+    select: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' },
+    textarea: { padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', minHeight: '150px', resize: 'vertical', fontFamily: 'inherit' },
+    submitBtn: { padding: '14px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' },
+    messageBox: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px' },
+    success: { background: '#d1fae5', color: '#065f46', border: '1px solid #34d399' },
+    error: { background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' },
+    disabled: { opacity: 0.6, cursor: 'not-allowed' },
+    infoBox: { background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' },
+    loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
-  if (loading) return (<div style={styles.loadingContainer}><div style={styles.loadingText}>Loading...</div></div>);
+  if (loading) return <div style={styles.loading}><div>Loading...</div></div>;
 
   return (
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>🎫 Create Support Ticket</h1>
-          <button style={styles.backButton} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
+          <div style={styles.headerTop}>
+            <h1 style={styles.title}>🎫 Create Support Ticket</h1>
+            <button style={styles.backBtn} onClick={() => navigate('/teacher')}>← Back to Dashboard</button>
+          </div>
+          <p style={{ color: '#6b7280', margin: 0 }}>Submit a ticket for technical support or school-related issues</p>
         </div>
-        {message.text && <div style={{...styles.message, ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)}}>{message.text}</div>}
-        <form style={styles.form} onSubmit={handleSubmit}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Category *</label>
-            <select 
-              value={formData.category} 
-              onChange={(e) => {
-                const category = e.target.value;
-                const routeTo = category === 'school' ? 'school' : 'website';
-                setFormData({...formData, category, routeTo});
-              }} 
-              required 
+
+        {message.text && (
+          <div style={{ ...styles.messageBox, ...(message.type === 'success' ? styles.success : styles.error) }}>
+            {message.text}
+          </div>
+        )}
+
+        <div style={styles.card}>
+          <div style={styles.infoBox}>
+            <p style={{ fontSize: '14px', color: '#1e40af', margin: 0 }}>
+              ℹ️ School-related tickets will be handled by your School Admin. For website issues, select "Website Issue" category.
+            </p>
+          </div>
+
+          <form style={styles.form} onSubmit={handleSubmit}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Category</label>
+              <select name="category" value={formData.category} onChange={handleChange} style={styles.select}>
+                <option value="school">School Issue</option>
+                <option value="website">Website Issue</option>
+                <option value="general">General Inquiry</option>
+              </select>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Priority</label>
+              <select name="priority" value={formData.priority} onChange={handleChange} style={styles.select}>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Subject *</label>
+              <input 
+                name="subject"
+                style={styles.input} 
+                value={formData.subject} 
+                onChange={handleChange} 
+                placeholder="Brief description of your issue" 
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Description *</label>
+              <textarea 
+                name="description"
+                style={styles.textarea} 
+                value={formData.description} 
+                onChange={handleChange} 
+                placeholder="Please describe your issue in detail..." 
+              />
+            </div>
+
+            <button 
+              type="submit" 
               disabled={submitting}
-              style={styles.select}
+              style={{ ...styles.submitBtn, ...(submitting ? styles.disabled : {}) }}
             >
-              <option value="website">Website-Related Problem</option>
-              <option value="school">School-Related Problem</option>
-            </select>
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Subject *</label>
-            <input type="text" value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} required disabled={submitting} placeholder="Brief description of the issue" style={styles.input} />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Description *</label>
-            <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required disabled={submitting} placeholder="Please provide detailed information about your issue..." style={styles.textarea} />
-          </div>
-          <button type="submit" disabled={submitting} style={{...styles.submitButton, opacity: submitting ? 0.7 : 1}}>
-            {submitting ? '📤 Submitting...' : '📤 Submit Ticket'}
-          </button>
-        </form>
+              {submitting ? 'Submitting...' : '📤 Submit Ticket'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

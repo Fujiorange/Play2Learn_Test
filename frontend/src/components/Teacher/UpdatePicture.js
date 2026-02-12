@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+
 export default function UpdatePicture() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -11,55 +13,46 @@ export default function UpdatePicture() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentPicture, setCurrentPicture] = useState(null);
 
+  const getToken = () => localStorage.getItem('token');
+
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!authService.isAuthenticated()) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        const currentUser = authService.getCurrentUser();
-        setCurrentPicture(currentUser.profile_picture || null);
-      } catch (error) {
-        console.error('Error loading profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProfile();
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    const user = authService.getCurrentUser();
+    setCurrentPicture(user?.profile_picture || null);
+    setLoading(false);
   }, [navigate]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith('image/')) {
-        setMessage({ type: 'error', text: 'Please select an image file' });
+        setMessage({ type: 'error', text: 'Please select an image file (JPG, PNG, GIF)' });
         return;
       }
-
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setMessage({ type: 'error', text: 'File size must be less than 5MB' });
+      // Limit to 2MB to avoid base64 issues
+      if (file.size > 2 * 1024 * 1024) {
+        setMessage({ type: 'error', text: 'File size must be less than 2MB' });
         return;
       }
-
       setSelectedFile(file);
       setMessage({ type: '', text: '' });
-
-      // Create preview
+      
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result);
+      };
+      reader.onerror = () => {
+        setMessage({ type: 'error', text: 'Failed to read file' });
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
+    if (!selectedFile || !preview) {
       setMessage({ type: 'error', text: 'Please select a file first' });
       return;
     }
@@ -68,338 +61,159 @@ export default function UpdatePicture() {
     setMessage({ type: '', text: '' });
 
     try {
-      // Here you would upload to your server
-      // For now, we'll simulate an upload
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Update localStorage with new picture URL
-      const currentUser = authService.getCurrentUser();
-      const updatedUser = {
-        ...currentUser,
-        profile_picture: preview, // In real app, this would be the uploaded URL
-      };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-
-      setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
-      setCurrentPicture(preview);
+      console.log('Uploading picture, preview length:', preview.length);
       
-      // Clear selection after 2 seconds
-      setTimeout(() => {
-        setSelectedFile(null);
-        setPreview(null);
-      }, 2000);
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile/picture`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ profile_picture: preview })
+      });
+
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Upload response:', data);
+
+      if (data.success) {
+        const currentUser = authService.getCurrentUser();
+        const updatedUser = { ...currentUser, profile_picture: preview };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setMessage({ type: 'success', text: 'Profile picture updated!' });
+        setCurrentPicture(preview);
+        setTimeout(() => {
+          setSelectedFile(null);
+          setPreview(null);
+        }, 1500);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to upload' });
+      }
     } catch (error) {
-      console.error('Error uploading picture:', error);
-      setMessage({ type: 'error', text: 'Failed to upload picture. Please try again.' });
+      console.error('Upload error:', error);
+      setMessage({ type: 'error', text: `Upload failed: ${error.message}` });
     } finally {
       setUploading(false);
     }
   };
 
   const handleRemove = async () => {
-    if (!window.confirm('Are you sure you want to remove your profile picture?')) {
-      return;
-    }
+    if (!window.confirm('Remove your profile picture?')) return;
 
     setUploading(true);
     try {
-      // Update localStorage
-      const currentUser = authService.getCurrentUser();
-      const updatedUser = {
-        ...currentUser,
-        profile_picture: null,
-      };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      const response = await fetch(`${API_BASE_URL}/api/mongo/teacher/profile/picture`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ profile_picture: null })
+      });
 
-      setCurrentPicture(null);
-      setPreview(null);
-      setSelectedFile(null);
-      setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
+      const data = await response.json();
+
+      if (data.success) {
+        const currentUser = authService.getCurrentUser();
+        const updatedUser = { ...currentUser, profile_picture: null };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setCurrentPicture(null);
+        setPreview(null);
+        setSelectedFile(null);
+        setMessage({ type: 'success', text: 'Picture removed!' });
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to remove' });
+      }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to remove picture. Please try again.' });
+      console.error('Error:', error);
+      setMessage({ type: 'error', text: 'Failed to remove picture' });
     } finally {
       setUploading(false);
     }
   };
 
   const styles = {
-    container: {
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-      padding: '32px',
-    },
-    content: {
-      maxWidth: '600px',
-      margin: '0 auto',
-      background: 'white',
-      borderRadius: '16px',
-      padding: '32px',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '32px',
-      paddingBottom: '16px',
-      borderBottom: '2px solid #e5e7eb',
-    },
-    title: {
-      fontSize: '28px',
-      fontWeight: '700',
-      color: '#1f2937',
-      margin: 0,
-    },
-    backButton: {
-      padding: '10px 20px',
-      background: '#6b7280',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    pictureContainer: {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '24px',
-      marginBottom: '32px',
-    },
-    pictureWrapper: {
-      width: '200px',
-      height: '200px',
-      borderRadius: '50%',
-      overflow: 'hidden',
-      border: '4px solid #e5e7eb',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#f3f4f6',
-    },
-    picture: {
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover',
-    },
-    placeholderIcon: {
-      fontSize: '80px',
-      color: '#9ca3af',
-    },
-    uploadSection: {
-      width: '100%',
-      padding: '32px',
-      border: '2px dashed #d1d5db',
-      borderRadius: '12px',
-      textAlign: 'center',
-      background: '#f9fafb',
-      marginBottom: '24px',
-    },
-    uploadIcon: {
-      fontSize: '48px',
-      marginBottom: '16px',
-    },
-    uploadText: {
-      fontSize: '16px',
-      color: '#4b5563',
-      marginBottom: '8px',
-    },
-    uploadHint: {
-      fontSize: '13px',
-      color: '#6b7280',
-      marginBottom: '16px',
-    },
-    fileInput: {
-      display: 'none',
-    },
-    selectButton: {
-      padding: '10px 24px',
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    buttonGroup: {
-      display: 'flex',
-      gap: '12px',
-    },
-    uploadButton: {
-      flex: 1,
-      padding: '12px',
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '15px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    removeButton: {
-      flex: 1,
-      padding: '12px',
-      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      fontSize: '15px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    message: {
-      padding: '12px 16px',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '500',
-      marginBottom: '16px',
-    },
-    successMessage: {
-      background: '#d1fae5',
-      color: '#065f46',
-      border: '1px solid #34d399',
-    },
-    errorMessage: {
-      background: '#fee2e2',
-      color: '#991b1b',
-      border: '1px solid #f87171',
-    },
-    loadingContainer: {
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
-    },
-    loadingText: {
-      fontSize: '24px',
-      color: '#6b7280',
-      fontWeight: '600',
-    },
-    disabled: {
-      opacity: 0.6,
-      cursor: 'not-allowed',
-    },
+    container: { minHeight: '100vh', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)', padding: '32px' },
+    content: { maxWidth: '500px', margin: '0 auto', background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' },
+    title: { fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 },
+    backBtn: { padding: '10px 20px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    pictureSection: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', marginBottom: '24px' },
+    pictureWrapper: { width: '150px', height: '150px', borderRadius: '50%', overflow: 'hidden', border: '4px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' },
+    picture: { width: '100%', height: '100%', objectFit: 'cover' },
+    placeholder: { fontSize: '60px', color: '#9ca3af' },
+    uploadBox: { width: '100%', padding: '24px', border: '2px dashed #d1d5db', borderRadius: '12px', textAlign: 'center', background: '#f9fafb', marginBottom: '20px' },
+    fileInput: { display: 'none' },
+    selectBtn: { padding: '10px 24px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    buttonGroup: { display: 'flex', gap: '12px' },
+    uploadBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    removeBtn: { flex: 1, padding: '12px', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    message: { padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', marginBottom: '16px', wordBreak: 'break-word' },
+    success: { background: '#d1fae5', color: '#065f46' },
+    error: { background: '#fee2e2', color: '#991b1b' },
+    disabled: { opacity: 0.6, cursor: 'not-allowed' },
+    hint: { fontSize: '13px', color: '#6b7280', marginTop: '8px' },
+    loading: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)' },
   };
 
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.loadingText}>Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <div style={styles.loading}><div>Loading...</div></div>;
 
   return (
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Update Profile Picture</h1>
+          <h1 style={styles.title}>My Profile</h1>
           <button
-            style={styles.backButton}
-            onClick={() => navigate('/teacher/profile')}
+            style={styles.backBtn}
+            onClick={() => navigate('/teacher')}
             onMouseEnter={(e) => e.target.style.background = '#4b5563'}
             onMouseLeave={(e) => e.target.style.background = '#6b7280'}
           >
-            ← Back to Profile
+            ← Back to Dashboard
           </button>
         </div>
-
         {message.text && (
-          <div style={{
-            ...styles.message,
-            ...(message.type === 'success' ? styles.successMessage : styles.errorMessage)
-          }}>
+          <div style={{ ...styles.message, ...(message.type === 'success' ? styles.success : styles.error) }}>
             {message.text}
           </div>
         )}
 
-        {/* Current/Preview Picture */}
-        <div style={styles.pictureContainer}>
+        <div style={styles.pictureSection}>
           <div style={styles.pictureWrapper}>
             {(preview || currentPicture) ? (
-              <img 
-                src={preview || currentPicture} 
-                alt="Profile" 
-                style={styles.picture}
-              />
+              <img src={preview || currentPicture} alt="Profile" style={styles.picture} />
             ) : (
-              <div style={styles.placeholderIcon}>👤</div>
+              <div style={styles.placeholder}>👤</div>
             )}
           </div>
-          {preview && (
-            <p style={{ color: '#10b981', fontSize: '14px', fontWeight: '500' }}>
-              ✓ New picture selected
-            </p>
-          )}
+          {preview && <p style={{ color: '#10b981', fontSize: '14px', fontWeight: '500', margin: 0 }}>✓ New picture selected</p>}
         </div>
 
-        {/* Upload Section */}
-        <div style={styles.uploadSection}>
-          <div style={styles.uploadIcon}>📸</div>
-          <p style={styles.uploadText}>
-            {selectedFile ? selectedFile.name : 'Choose a profile picture'}
+        <div style={styles.uploadBox}>
+          <p style={{ fontSize: '15px', color: '#4b5563', marginBottom: '12px' }}>
+            {selectedFile ? `Selected: ${selectedFile.name}` : 'Choose a profile picture'}
           </p>
-          <p style={styles.uploadHint}>
-            JPG, PNG or GIF (Max size: 5MB)
-          </p>
-          <input
-            type="file"
-            id="fileInput"
-            accept="image/*"
-            onChange={handleFileSelect}
-            style={styles.fileInput}
-            disabled={uploading}
-          />
-          <label htmlFor="fileInput">
-            <button
-              type="button"
-              onClick={() => document.getElementById('fileInput').click()}
-              disabled={uploading}
-              style={{
-                ...styles.selectButton,
-                ...(uploading ? styles.disabled : {})
-              }}
-              onMouseEnter={(e) => !uploading && (e.target.style.transform = 'translateY(-2px)')}
-              onMouseLeave={(e) => !uploading && (e.target.style.transform = 'translateY(0)')}
-            >
-              📁 Select File
-            </button>
-          </label>
+          <input type="file" id="fileInput" accept="image/*" onChange={handleFileSelect} style={styles.fileInput} disabled={uploading} />
+          <button type="button" onClick={() => document.getElementById('fileInput').click()} disabled={uploading} style={{ ...styles.selectBtn, ...(uploading ? styles.disabled : {}) }}>
+            📁 Select File
+          </button>
+          <p style={styles.hint}>JPG, PNG or GIF • Max 2MB</p>
         </div>
 
-        {/* Action Buttons */}
         <div style={styles.buttonGroup}>
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile || uploading}
-            style={{
-              ...styles.uploadButton,
-              ...(!selectedFile || uploading ? styles.disabled : {})
-            }}
-            onMouseEnter={(e) => selectedFile && !uploading && (e.target.style.transform = 'translateY(-2px)')}
-            onMouseLeave={(e) => selectedFile && !uploading && (e.target.style.transform = 'translateY(0)')}
-          >
-            {uploading ? '⏳ Uploading...' : '📤 Upload Picture'}
+          <button onClick={handleUpload} disabled={!selectedFile || uploading} style={{ ...styles.uploadBtn, ...(!selectedFile || uploading ? styles.disabled : {}) }}>
+            {uploading ? '⏳ Uploading...' : '📤 Upload'}
           </button>
           {currentPicture && (
-            <button
-              onClick={handleRemove}
-              disabled={uploading}
-              style={{
-                ...styles.removeButton,
-                ...(uploading ? styles.disabled : {})
-              }}
-              onMouseEnter={(e) => !uploading && (e.target.style.transform = 'translateY(-2px)')}
-              onMouseLeave={(e) => !uploading && (e.target.style.transform = 'translateY(0)')}
-            >
-              🗑️ Remove Picture
+            <button onClick={handleRemove} disabled={uploading} style={{ ...styles.removeBtn, ...(uploading ? styles.disabled : {}) }}>
+              🗑️ Remove
             </button>
           )}
         </div>

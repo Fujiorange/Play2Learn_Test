@@ -33,7 +33,6 @@ export default function ViewProfile() {
     loadProfile();
   }, [navigate]);
 
-  // Define styles BEFORE using them
   const styles = {
     container: {
       minHeight: '100vh',
@@ -41,7 +40,7 @@ export default function ViewProfile() {
       padding: '32px',
     },
     content: {
-      maxWidth: '800px',
+      maxWidth: '600px',
       margin: '0 auto',
       background: 'white',
       borderRadius: '16px',
@@ -71,20 +70,10 @@ export default function ViewProfile() {
       fontSize: '14px',
       fontWeight: '600',
       cursor: 'pointer',
-      transition: 'all 0.3s',
-    },
-    profileSection: {
-      marginBottom: '24px',
-    },
-    sectionTitle: {
-      fontSize: '18px',
-      fontWeight: '600',
-      color: '#1f2937',
-      marginBottom: '16px',
     },
     infoGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+      display: 'flex',
+      flexDirection: 'column',
       gap: '16px',
     },
     infoItem: {
@@ -120,7 +109,6 @@ export default function ViewProfile() {
       fontSize: '15px',
       fontWeight: '600',
       cursor: 'pointer',
-      transition: 'all 0.3s',
     },
     loadingContainer: {
       minHeight: '100vh',
@@ -129,18 +117,12 @@ export default function ViewProfile() {
       justifyContent: 'center',
       background: 'linear-gradient(135deg, #e8eef5 0%, #dce4f0 100%)',
     },
-    loadingText: {
-      fontSize: '24px',
-      color: '#6b7280',
-      fontWeight: '600',
-    },
   };
 
-  // NOW we can use styles in the loading check
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
-        <div style={styles.loadingText}>Loading...</div>
+        <div>Loading...</div>
       </div>
     );
   }
@@ -149,86 +131,37 @@ export default function ViewProfile() {
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>My Profile</h1>
-          <button
-            style={styles.backButton}
-            onClick={() => navigate('/teacher')}
-            onMouseEnter={(e) => e.target.style.background = '#4b5563'}
-            onMouseLeave={(e) => e.target.style.background = '#6b7280'}
-          >
+          <h1 style={styles.title}>👤 My Profile</h1>
+          <button style={styles.backButton} onClick={() => navigate('/teacher')}>
             ← Back to Dashboard
           </button>
         </div>
 
-        {/* Personal Information */}
-        <div style={styles.profileSection}>
-          <h2 style={styles.sectionTitle}>Personal Information</h2>
-          <div style={styles.infoGrid}>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Full Name</div>
-              <div style={styles.value}>{user.name || 'N/A'}</div>
-            </div>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Email Address</div>
-              <div style={styles.value}>{user.email || 'N/A'}</div>
-            </div>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Contact Number</div>
-              <div style={styles.value}>{user.contact || 'Not provided'}</div>
-            </div>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Gender</div>
-              <div style={styles.value}>
-                {user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : 'N/A'}
-              </div>
-            </div>
+        <div style={styles.infoGrid}>
+          <div style={styles.infoItem}>
+            <div style={styles.label}>Full Name</div>
+            <div style={styles.value}>{user.name || 'N/A'}</div>
+          </div>
+          <div style={styles.infoItem}>
+            <div style={styles.label}>Email Address</div>
+            <div style={styles.value}>{user.email || 'N/A'}</div>
+          </div>
+          <div style={styles.infoItem}>
+            <div style={styles.label}>Contact Number</div>
+            <div style={styles.value}>{user.contact || 'Not provided'}</div>
+          </div>
+          <div style={styles.infoItem}>
+            <div style={styles.label}>Role</div>
+            <div style={styles.value}>{user.role || 'Teacher'}</div>
           </div>
         </div>
 
-        {/* Organization Information */}
-        <div style={styles.profileSection}>
-          <h2 style={styles.sectionTitle}>Organization Information</h2>
-          <div style={styles.infoGrid}>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Organization Name</div>
-              <div style={styles.value}>{user.organization_name || 'N/A'}</div>
-            </div>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Organization Type</div>
-              <div style={styles.value}>{user.organization_type || 'N/A'}</div>
-            </div>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Role</div>
-              <div style={styles.value}>
-                {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A'}
-              </div>
-            </div>
-            <div style={styles.infoItem}>
-              <div style={styles.label}>Account Status</div>
-              <div style={styles.value}>
-                {user.is_active ? '✅ Active' : '❌ Inactive'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
         <div style={styles.buttonGroup}>
-          <button
-            style={styles.editButton}
-            onClick={() => navigate('/teacher/profile/edit')}
-            onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
-            onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
-          >
-            ✏️ Edit Profile Details
+          <button style={styles.editButton} onClick={() => navigate('/teacher/profile/edit')}>
+            ✏️ Edit Profile
           </button>
-          <button
-            style={styles.editButton}
-            onClick={() => navigate('/teacher/profile/picture')}
-            onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
-            onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
-          >
-            📸 Update Profile Picture
+          <button style={styles.editButton} onClick={() => navigate('/teacher/profile/picture')}>
+            📸 Update Picture
           </button>
         </div>
       </div>
