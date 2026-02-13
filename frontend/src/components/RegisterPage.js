@@ -19,6 +19,14 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState('');
   const [buttonHovered, setButtonHovered] = useState(false);
+  
+  // PIN verification state
+  const [showPINVerification, setShowPINVerification] = useState(false);
+  const [pin, setPIN] = useState(['', '', '', '', '', '']);
+  const [pinError, setPinError] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
+  const [resendingPIN, setResendingPIN] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -27,6 +35,102 @@ export default function RegisterPage() {
       [name]: value
     }));
     if (error) setError('');
+  };
+
+  // Timer effect for PIN expiration
+  React.useEffect(() => {
+    if (showPINVerification && timeLeft > 0) {
+      const timer = setTimeout(() => {
+        setTimeLeft(timeLeft - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [showPINVerification, timeLeft]);
+
+  // Format time display
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle PIN input
+  const handlePINChange = (index, value) => {
+    if (value.length > 1) return; // Only allow single digit
+    if (value && !/^\d$/.test(value)) return; // Only allow digits
+    
+    const newPIN = [...pin];
+    newPIN[index] = value;
+    setPIN(newPIN);
+    setPinError('');
+    
+    // Auto-focus next input
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`pin-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  // Handle PIN backspace
+  const handlePINKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !pin[index] && index > 0) {
+      const prevInput = document.getElementById(`pin-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
+  // Verify PIN
+  const handleVerifyPIN = async () => {
+    const pinValue = pin.join('');
+    if (pinValue.length !== 6) {
+      setPinError('Please enter all 6 digits');
+      return;
+    }
+
+    setVerifying(true);
+    setPinError('');
+
+    try {
+      const result = await authService.verifyPIN(formData.email, pinValue);
+      
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      } else {
+        setPinError(result.error || 'Invalid PIN. Please try again.');
+        setPIN(['', '', '', '', '', '']);
+        const firstInput = document.getElementById('pin-0');
+        if (firstInput) firstInput.focus();
+      }
+    } catch (err) {
+      setPinError('Verification failed. Please try again.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Resend PIN
+  const handleResendPIN = async () => {
+    setResendingPIN(true);
+    setPinError('');
+
+    try {
+      const result = await authService.resendPIN(formData.email);
+      
+      if (result.success) {
+        setTimeLeft(15 * 60); // Reset timer to 15 minutes
+        setPIN(['', '', '', '', '', '']);
+        alert('New PIN sent to your email!');
+      } else {
+        setPinError(result.error || 'Failed to resend PIN');
+      }
+    } catch (err) {
+      setPinError('Failed to resend PIN. Please try again.');
+    } finally {
+      setResendingPIN(false);
+    }
   };
 
   // Email validation function
@@ -73,7 +177,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Register as institute admin with trial license
+      // Register as institute admin - now sends PIN
       const result = await authService.registerSchoolAdmin({
         email: formData.email,
         password: formData.password,
@@ -82,10 +186,9 @@ export default function RegisterPage() {
       });
 
       if (result.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
+        // Show PIN verification screen
+        setShowPINVerification(true);
+        setTimeLeft(15 * 60); // Start 15-minute timer
       } else {
         setError(result.error || 'Registration failed');
       }
@@ -258,6 +361,69 @@ export default function RegisterPage() {
       fontFamily: 'inherit',
       opacity: loading ? 0.7 : 1,
     },
+    pinContainer: {
+      display: 'flex',
+      gap: '12px',
+      justifyContent: 'center',
+      marginBottom: '20px',
+    },
+    pinInput: {
+      width: '50px',
+      height: '60px',
+      fontSize: '28px',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      border: '2px solid #e5e7eb',
+      borderRadius: '10px',
+      background: '#f9fafb',
+      color: '#1f2937',
+      transition: 'all 0.3s',
+      fontFamily: 'monospace',
+    },
+    pinInputFocus: {
+      borderColor: '#10b981',
+      background: 'white',
+      outline: 'none',
+    },
+    timerBox: {
+      textAlign: 'center',
+      padding: '12px',
+      background: '#fef3c7',
+      border: '2px solid #fbbf24',
+      borderRadius: '10px',
+      marginBottom: '20px',
+      fontSize: '14px',
+      fontWeight: '600',
+      color: '#92400e',
+    },
+    resendButton: {
+      background: 'transparent',
+      border: '2px solid #10b981',
+      color: '#10b981',
+      padding: '12px',
+      borderRadius: '10px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      width: '100%',
+      marginTop: '10px',
+      fontFamily: 'inherit',
+    },
+    verificationTitle: {
+      fontSize: '24px',
+      color: '#1f2937',
+      marginBottom: '12px',
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    verificationSubtitle: {
+      color: '#6b7280',
+      fontSize: '14px',
+      marginBottom: '30px',
+      textAlign: 'center',
+      lineHeight: '1.5',
+    },
     errorMessage: {
       marginTop: '15px',
       padding: '12px 16px',
@@ -372,14 +538,20 @@ export default function RegisterPage() {
             ✨ FREE TRIAL
           </div>
 
-          <h1 style={styles.title}>Start Your Journey!</h1>
+          <h1 style={styles.title}>
+            {showPINVerification ? 'Verify Your Email' : 'Start Your Journey!'}
+          </h1>
           <p style={styles.subtitle}>
-            Register your institute and get started with a free trial account.
+            {showPINVerification 
+              ? `We've sent a 6-digit PIN to ${formData.email}. Please enter it below.`
+              : 'Register your institute and get started with a free trial account.'
+            }
           </p>
 
-          <div>
-            {/* Institution Name */}
-            <div style={styles.formGroup}>
+          {!showPINVerification ? (
+            <div>
+              {/* Registration Form */}
+              <div style={styles.formGroup}>
               <label style={styles.label}>
                 Institution/Organization Name<span style={styles.required}>*</span>
               </label>
@@ -548,14 +720,8 @@ export default function RegisterPage() {
                 cursor: loading ? 'not-allowed' : 'pointer',
               }}
             >
-              {loading ? 'Creating Account...' : 'Start Free Trial'}
+              {loading ? 'Sending PIN...' : 'Start Free Trial'}
             </button>
-
-            {success && (
-              <div style={styles.successMessage}>
-                ✅ Institute registered successfully with free trial! Redirecting to login...
-              </div>
-            )}
 
             {error && (
               <div style={styles.errorMessage}>
@@ -575,6 +741,97 @@ export default function RegisterPage() {
               </Link>
             </p>
           </div>
+          ) : (
+            <div>
+              {/* PIN Verification Screen */}
+              {timeLeft > 0 && (
+                <div style={styles.timerBox}>
+                  ⏰ PIN expires in: {formatTime(timeLeft)}
+                </div>
+              )}
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Enter 6-Digit PIN</label>
+                <div style={styles.pinContainer}>
+                  {pin.map((digit, index) => (
+                    <input
+                      key={index}
+                      id={`pin-${index}`}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength="1"
+                      value={digit}
+                      onChange={(e) => handlePINChange(index, e.target.value)}
+                      onKeyDown={(e) => handlePINKeyDown(index, e)}
+                      disabled={verifying}
+                      style={{
+                        ...styles.pinInput,
+                        ...(document.activeElement?.id === `pin-${index}` ? styles.pinInputFocus : {}),
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleVerifyPIN}
+                disabled={verifying || pin.join('').length !== 6}
+                style={{
+                  ...styles.button,
+                  cursor: (verifying || pin.join('').length !== 6) ? 'not-allowed' : 'pointer',
+                  opacity: (verifying || pin.join('').length !== 6) ? 0.5 : 1,
+                }}
+              >
+                {verifying ? 'Verifying...' : 'Verify PIN'}
+              </button>
+
+              <button
+                onClick={handleResendPIN}
+                disabled={resendingPIN}
+                style={{
+                  ...styles.resendButton,
+                  cursor: resendingPIN ? 'not-allowed' : 'pointer',
+                  opacity: resendingPIN ? 0.5 : 1,
+                }}
+              >
+                {resendingPIN ? 'Sending...' : '📧 Resend PIN'}
+              </button>
+
+              {success && (
+                <div style={styles.successMessage}>
+                  ✅ Email verified! Your institute has been registered. Redirecting to login...
+                </div>
+              )}
+
+              {pinError && (
+                <div style={styles.errorMessage}>
+                  ⚠️ {pinError}
+                </div>
+              )}
+
+              <p style={styles.loginLink}>
+                <button
+                  onClick={() => {
+                    setShowPINVerification(false);
+                    setPIN(['', '', '', '', '', '']);
+                    setPinError('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#10b981',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: '14px',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to registration
+                </button>
+              </p>
+            </div>
+          )}
         </div>
 
         <div style={styles.infoSection}>

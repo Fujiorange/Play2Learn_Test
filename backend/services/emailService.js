@@ -417,7 +417,7 @@ async function sendVerificationPIN(email, pin, institutionName) {
           .header { background: #7C3AED; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
           .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
           .pin-box { background: white; border: 3px solid #7C3AED; padding: 30px; text-align: center; margin: 20px 0; border-radius: 8px; }
-          .pin { font-size: 48px; font-weight: bold; color: #7C3AED; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .pin { font-size: 48px; font-weight: bold; color: #7C3AED; letter-spacing: 12px; font-family: 'Courier New', monospace; white-space: nowrap; }
           .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
           .warning { background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; }
         </style>

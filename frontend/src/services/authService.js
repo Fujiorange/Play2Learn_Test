@@ -29,6 +29,32 @@ class AuthService {
     }
   }
 
+  async verifyPIN(email, pin) {
+    try {
+      const res = await fetch(`${API_URL}/mongo/auth/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, pin }),
+      });
+      return await res.json();
+    } catch (e) {
+      return { success: false, error: 'Verification failed. Please try again.' };
+    }
+  }
+
+  async resendPIN(email) {
+    try {
+      const res = await fetch(`${API_URL}/mongo/auth/resend-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      return await res.json();
+    } catch (e) {
+      return { success: false, error: 'Failed to resend PIN. Please try again.' };
+    }
+  }
+
   async login(email, password) {
     try {
       const res = await fetch(`${API_URL}/mongo/auth/login`, {
