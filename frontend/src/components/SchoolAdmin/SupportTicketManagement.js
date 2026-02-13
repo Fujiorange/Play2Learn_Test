@@ -35,7 +35,7 @@ function SupportTicketManagement() {
       ]);
       
       if (ticketsResponse.success) {
-        setTickets(ticketsResponse.data || []);
+        setTickets(ticketsResponse.tickets || []);
       }
       if (statsResponse.success) {
         setStats(statsResponse.data || { open: 0, pending: 0, closed: 0, total: 0 });
