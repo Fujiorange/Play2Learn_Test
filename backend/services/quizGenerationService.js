@@ -123,7 +123,7 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
     is_active: true
   });
   
-  if (questionsPool.length < 1) {
+  if (questionsPool.length === 0) {
     throw new Error(`No questions found for quiz level ${quizLevel}. Please add questions to the question bank.`);
   }
   
