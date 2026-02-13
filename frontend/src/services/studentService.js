@@ -611,6 +611,168 @@ const studentService = {
     }
   },
 
+  // ==================== SKILL MATRIX UTILITY METHODS ====================
+  
+  /**
+   * Get color for skill based on current level
+   * @param {number} level - Current skill level (0-5)
+   * @param {number} maxLevel - Maximum level (typically 5)
+   * @returns {string} Hex color code
+   */
+  getSkillColor(level, maxLevel) {
+    const percentage = (level / maxLevel) * 100;
+    if (percentage >= 80) return '#10b981'; // Green
+    if (percentage >= 60) return '#f59e0b'; // Orange
+    if (percentage >= 40) return '#3b82f6'; // Blue
+    if (percentage >= 20) return '#a855f7'; // Purple
+    return '#ef4444'; // Red
+  },
+
+  /**
+   * Get emoji icon for skill type
+   * @param {string} skillName - Name of the skill
+   * @returns {string} Emoji icon
+   */
+  getSkillIcon(skillName) {
+    const name = (skillName || '').toLowerCase();
+    if (name.includes('addition')) return '➕';
+    if (name.includes('subtraction')) return '➖';
+    if (name.includes('multiplication')) return '✖️';
+    if (name.includes('division')) return '➗';
+    return '📊';
+  },
+
+  /**
+   * Get skill level label and color
+   * @param {number} level - Current skill level (0-5)
+   * @returns {Object} { label: string, color: string }
+   */
+  getSkillLevel(level) {
+    if (level >= 5) return { label: '🏆 Master', color: '#10b981' };
+    if (level >= 4) return { label: '⭐ Advanced', color: '#f59e0b' };
+    if (level >= 3) return { label: '📈 Intermediate', color: '#3b82f6' };
+    if (level >= 2) return { label: '🌟 Beginner', color: '#a855f7' };
+    if (level >= 1) return { label: '🌱 Learning', color: '#8b5cf6' };
+    return { label: '✨ Novice', color: '#ef4444' };
+  },
+
+  /**
+   * Get point range for a specific level
+   * @param {number} level - Current skill level (0-5)
+   * @returns {string} Point range string
+   */
+  getLevelPointRange(level) {
+    const ranges = [
+      '0-24',      // Level 0
+      '25-49',     // Level 1
+      '50-99',     // Level 2
+      '100-199',   // Level 3
+      '200-399',   // Level 4
+      '400+'       // Level 5
+    ];
+    return ranges[level] || '0-24';
+  },
+
+  /**
+   * Get points needed for next level
+   * @param {number} currentLevel - Current skill level (0-5)
+   * @returns {number|null} Points needed, or null if at max level
+   */
+  getNextLevelThreshold(currentLevel) {
+    const thresholds = [25, 50, 100, 200, 400];
+    if (currentLevel >= 5) return null; // Max level reached
+    return thresholds[currentLevel];
+  },
+
+  /**
+   * Calculate level from points
+   * @param {number} points - Current points
+   * @returns {number} Level (0-5)
+   */
+  calculateLevelFromPoints(points) {
+    if (points >= 400) return 5;
+    if (points >= 200) return 4;
+    if (points >= 100) return 3;
+    if (points >= 50) return 2;
+    if (points >= 25) return 1;
+    return 0;
+  },
+
+  /**
+   * Calculate progress percentage within current level
+   * @param {number} points - Current points
+   * @returns {number} Percentage (0-100)
+   */
+  calculateLevelProgress(points) {
+    const level = this.calculateLevelFromPoints(points);
+    const ranges = [
+      { min: 0, max: 25 },      // Level 0
+      { min: 25, max: 50 },     // Level 1
+      { min: 50, max: 100 },    // Level 2
+      { min: 100, max: 200 },   // Level 3
+      { min: 200, max: 400 },   // Level 4
+      { min: 400, max: Infinity } // Level 5
+    ];
+    
+    const range = ranges[level];
+    
+    // If at max level, return 100%
+    if (level === 5) return 100;
+    
+    // Calculate percentage progress within current level range
+    const rangeSize = range.max - range.min;
+    const progressInRange = points - range.min;
+    return Math.min(100, Math.floor((progressInRange / rangeSize) * 100));
+  },
+
+  // ==================== GENERAL UTILITY METHODS ====================
+
+  /**
+   * Format date for display
+   * @param {string|Date} dateString - Date to format
+   * @returns {string} Formatted date
+   */
+  formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-SG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  },
+
+  /**
+   * Format time for display
+   * @param {string|Date} dateString - Date to format
+   * @returns {string} Formatted time
+   */
+  formatTime(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-SG', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  },
+
+  /**
+   * Get color for grade
+   * @param {string} grade - Grade letter (A, B, C, D, F)
+   * @returns {string} Hex color code
+   */
+  getGradeColor(grade) {
+    const gradeColors = {
+      'A': '#10b981',
+      'B': '#3b82f6',
+      'C': '#f59e0b',
+      'D': '#ef4444',
+      'F': '#991b1b',
+      'N/A': '#6b7280'
+    };
+    return gradeColors[grade] || gradeColors['N/A'];
+  },
+
   // ==================== ALIASES ====================
   getProgress() {
     return this.getMathProgress();

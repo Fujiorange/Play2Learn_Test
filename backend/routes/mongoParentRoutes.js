@@ -3,6 +3,7 @@
 // ✅ Phase 2: Testimonials, Feedback, Performance (UPDATED), Progress
 // ✅ Phase 2.5: Skill Matrix
 // ✅ Phase 2.7: Performance Report with REAL DATA (NEW)
+// ✅ FIXED: Skill Matrix percentage calculation now matches student view
 
 const express = require('express');
 const router = express.Router();
@@ -13,6 +14,8 @@ const Quiz = require('../models/Quiz');
 const QuizAttempt = require('../models/QuizAttempt');
 const Testimonial = require('../models/Testimonial');
 const SupportTicket = require('../models/SupportTicket');
+const MathProfile = require('../models/MathProfile');
+const MathSkill = require('../models/MathSkill');
 const { authMiddleware } = require('../middleware/auth');
 const Sentiment = require('sentiment');
 const sentiment = new Sentiment();
@@ -22,7 +25,45 @@ const mongoose = require('mongoose');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
+// ==================== LEVEL THRESHOLDS ====================
+// Level thresholds for points-based leveling system
+// Each entry defines the min points required to reach that level
+const LEVEL_THRESHOLDS = [
+  { level: 0, min: 0, max: 25 },      // Level 0: 0-24 points
+  { level: 1, min: 25, max: 50 },     // Level 1: 25-49 points
+  { level: 2, min: 50, max: 100 },    // Level 2: 50-99 points
+  { level: 3, min: 100, max: 200 },   // Level 3: 100-199 points
+  { level: 4, min: 200, max: 400 },   // Level 4: 200-399 points
+  { level: 5, min: 400, max: Infinity } // Level 5: 400+ points (max level)
+];
+
+// Helper function to calculate level from points
+function calculateLevelFromPoints(points) {
+  // Find the highest level threshold that the points meet
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (points >= LEVEL_THRESHOLDS[i].min) {
+      return LEVEL_THRESHOLDS[i].level;
+    }
+  }
+  return 0;
+}
+
+// Helper function to calculate progress percentage within current level
+function calculateLevelProgress(points) {
+  const level = calculateLevelFromPoints(points);
+  const threshold = LEVEL_THRESHOLDS[level];
+  
+  // If at max level, return 100%
+  if (level === 5) return 100;
+  
+  // Calculate percentage progress within current level range
+  const rangeSize = threshold.max - threshold.min;
+  const progressInRange = points - threshold.min;
+  return Math.min(100, Math.floor((progressInRange / rangeSize) * 100));
+}
+
 // ==================== SCHOOL SCHEMA ====================
+// Only define School if it doesn't exist in models folder
 if (!mongoose.models.School) {
   const schoolSchema = new mongoose.Schema({
     organization_name: { type: String, required: true },
@@ -40,58 +81,6 @@ if (!mongoose.models.School) {
 }
 
 const School = mongoose.model('School');
-
-// ==================== MATHSKILL SCHEMA ====================
-if (!mongoose.models.MathSkill) {
-  const mathSkillSchema = new mongoose.Schema({
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    skill_name: { type: String, required: true },
-    current_level: { type: Number, default: 0, min: 0, max: 5 },
-    xp: { type: Number, default: 0 },
-    points: { type: Number, default: 0 },
-    unlocked: { type: Boolean, default: true },
-    updatedAt: { type: Date, default: Date.now }
-  });
-  mathSkillSchema.index({ student_id: 1, skill_name: 1 }, { unique: true });
-  mongoose.model('MathSkill', mathSkillSchema);
-}
-
-const MathSkill = mongoose.model('MathSkill');
-
-// ==================== MATHPROFILE SCHEMA ====================
-if (!mongoose.models.MathProfile) {
-  const mathProfileSchema = new mongoose.Schema({
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    current_profile: { type: Number, default: 1, min: 1, max: 10 },
-    placement_completed: { type: Boolean, default: false },
-    total_points: { type: Number, default: 0 },
-    consecutive_fails: { type: Number, default: 0 },
-    quizzes_today: { type: Number, default: 0 },
-    last_reset_date: { type: Date, default: Date.now },
-    streak: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-  });
-  mongoose.model('MathProfile', mathProfileSchema);
-}
-
-const MathProfile = mongoose.model('MathProfile');
-
-// ==================== QUIZ SCHEMA (NEW FOR PHASE 2.7) ====================
-if (!mongoose.models.Quiz) {
-  const quizSchema = new mongoose.Schema({
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    quiz_id: { type: String, required: true },
-    quiz_type: { type: String, enum: ['placement', 'regular'], default: 'regular' },
-    profile_level: { type: Number, required: true },
-    score: { type: Number, required: true },
-    total_questions: { type: Number, required: true },
-    percentage: { type: Number, required: true },
-    points_earned: { type: Number, default: 0 },
-    completed_at: { type: Date, default: Date.now }
-  });
-  mongoose.model('Quiz', quizSchema);
-}
 
 // ==================== SUPPORT TICKET SCHEMA ====================
 const supportTicketSchema = new mongoose.Schema({
@@ -1126,7 +1115,7 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     // Format quiz data as "activities"
     const recentActivities = recentQuizzes.map(quiz => {
       const percentage = quiz.percentage || 0;
-      const scoreEmoji = percentage >= 70 ? '🎉' : percentage >= 50 ? '�' : '�';
+      const scoreEmoji = percentage >= 70 ? '🎉' : percentage >= 50 ? '👍' : '📝';
       
       return {
         description: `${scoreEmoji} Completed Profile ${quiz.profile_level} Quiz - Score: ${quiz.score}/${quiz.total_questions} (${percentage}%)`,
@@ -1270,7 +1259,8 @@ router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
         xp: skill.xp || 0,
         points: skill.points || 0,
         max_level: 5, // Fixed max level
-        percentage: skill.xp || 0, // XP is the percentage (0-100)
+        // ✅ FIXED: Use calculateLevelProgress instead of raw xp value
+        percentage: calculateLevelProgress(skill.points || 0),
         unlocked: skill.unlocked !== undefined ? skill.unlocked : true
       }));
 
@@ -1309,6 +1299,103 @@ router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
       success: false,
       error: 'Failed to load child skill matrix',
       details: error.message
+    });
+  }
+});
+
+// ========================================
+// QUIZ HISTORY ENDPOINT (NEW)
+// ========================================
+
+/**
+ * @route   GET /api/mongo/parent/child/:studentId/quiz-history
+ * @desc    Get child's quiz history (adaptive quizzes)
+ * @access  Private (Parent only)
+ */
+router.get('/child/:studentId/quiz-history', authenticateParent, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    console.log('📊 Fetching quiz history for student:', studentId);
+    
+    // Verify parent is linked to this student
+    const parent = await User.findById(req.user.userId).select('linkedStudents');
+    
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Parent not found'
+      });
+    }
+
+    const isLinked = parent.linkedStudents?.some(
+      ls => ls.studentId.toString() === studentId
+    );
+
+    if (!isLinked) {
+      return res.status(403).json({
+        success: false,
+        error: 'This student is not linked to your account'
+      });
+    }
+
+    // ✅ FIXED: Fetch quiz attempts and populate quiz details to filter by type
+    const quizHistory = await QuizAttempt.find({ 
+      userId: studentId,
+      is_completed: true  // Only completed quizzes
+    })
+    .populate('quizId')  // Populate the full quiz object
+    .sort({ completedAt: -1 })
+    .limit(50)
+    .lean();
+
+    console.log(`✅ Found ${quizHistory.length} total quiz attempts`);
+
+    // ✅ Filter out placement quizzes - only show adaptive quizzes
+    const adaptiveQuizzes = quizHistory.filter(quiz => {
+      // If quizId is populated and has quiz_type, check it
+      if (quiz.quizId && quiz.quizId.quiz_type) {
+        return quiz.quizId.quiz_type === 'adaptive';
+      }
+      // If no quiz_type, check if quizLevel exists (placement quizzes typically don't have levels 1-10)
+      // Adaptive quizzes have quizLevel 1-10
+      return quiz.quizLevel >= 1 && quiz.quizLevel <= 10;
+    });
+
+    console.log(`✅ Filtered to ${adaptiveQuizzes.length} adaptive quizzes (excluded ${quizHistory.length - adaptiveQuizzes.length} placement quizzes)`);
+
+    // Format the quiz history to match the student's format
+    const formattedHistory = adaptiveQuizzes.map(quiz => ({
+      quizId: quiz.quizId || quiz._id,
+      quizType: 'adaptive', // All quizattempts are adaptive quizzes
+      profile: quiz.quizLevel,
+      quiz_level: quiz.quizLevel,
+      score: Math.round(quiz.correct_count || 0),
+      totalQuestions: quiz.total_answered || 20,
+      // ✅ FIXED: Calculate percentage from correct_count/total_answered, not from score field
+      percentage: Math.round(((quiz.correct_count || 0) / (quiz.total_answered || 20)) * 100),
+      pointsEarned: quiz.performanceScore || 0,
+      date: quiz.completedAt ? new Date(quiz.completedAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }) : 'N/A',
+      timestamp: quiz.completedAt
+    }));
+
+    res.json({
+      success: true,
+      history: formattedHistory,
+      totalQuizzes: formattedHistory.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching quiz history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load quiz history',
+      details: error.message,
+      history: []
     });
   }
 });
