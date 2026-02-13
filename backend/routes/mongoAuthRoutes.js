@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const User = require('../models/User');
 const School = require('../models/School');
@@ -209,8 +210,12 @@ router.post('/verify-pin', async (req, res) => {
       });
     }
 
-    // Verify PIN
-    if (registrationRecord.pin !== pin) {
+    // Verify PIN using timing-safe comparison to prevent timing attacks
+    const expectedPIN = Buffer.from(registrationRecord.pin);
+    const providedPIN = Buffer.from(pin);
+    
+    // Ensure both buffers are same length for timingSafeEqual
+    if (expectedPIN.length !== providedPIN.length || !crypto.timingSafeEqual(expectedPIN, providedPIN)) {
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid PIN. Please check and try again.' 

@@ -12,8 +12,8 @@ const registrationPINSchema = new mongoose.Schema({
   pin: {
     type: String,
     required: true,
-    minlength: 6,
-    maxlength: 6
+    minLength: 6,
+    maxLength: 6
   },
   registrationData: {
     institutionName: {
