@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
 import { validatePassword } from '../utils/passwordValidator';
@@ -27,6 +27,8 @@ export default function RegisterPage() {
   const [verifying, setVerifying] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
   const [resendingPIN, setResendingPIN] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [focusedPINIndex, setFocusedPINIndex] = useState(-1);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,7 +40,7 @@ export default function RegisterPage() {
   };
 
   // Timer effect for PIN expiration
-  React.useEffect(() => {
+  useEffect(() => {
     if (showPINVerification && timeLeft > 0) {
       const timer = setTimeout(() => {
         setTimeLeft(timeLeft - 1);
@@ -87,6 +89,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (timeLeft <= 0) {
+      setPinError('PIN has expired. Please request a new one.');
+      return;
+    }
+
     setVerifying(true);
     setPinError('');
 
@@ -101,6 +108,7 @@ export default function RegisterPage() {
       } else {
         setPinError(result.error || 'Invalid PIN. Please try again.');
         setPIN(['', '', '', '', '', '']);
+        setFocusedPINIndex(0);
         const firstInput = document.getElementById('pin-0');
         if (firstInput) firstInput.focus();
       }
@@ -115,6 +123,7 @@ export default function RegisterPage() {
   const handleResendPIN = async () => {
     setResendingPIN(true);
     setPinError('');
+    setResendSuccess(false);
 
     try {
       const result = await authService.resendPIN(formData.email);
@@ -122,7 +131,9 @@ export default function RegisterPage() {
       if (result.success) {
         setTimeLeft(15 * 60); // Reset timer to 15 minutes
         setPIN(['', '', '', '', '', '']);
-        alert('New PIN sent to your email!');
+        setResendSuccess(true);
+        // Clear success message after 3 seconds
+        setTimeout(() => setResendSuccess(false), 3000);
       } else {
         setPinError(result.error || 'Failed to resend PIN');
       }
@@ -454,6 +465,16 @@ export default function RegisterPage() {
       fontSize: '14px',
       fontWeight: '500',
     },
+    infoMessage: {
+      marginTop: '15px',
+      padding: '12px 16px',
+      background: '#eff6ff',
+      border: '2px solid #bfdbfe',
+      borderRadius: '10px',
+      color: '#1e40af',
+      fontSize: '14px',
+      fontWeight: '500',
+    },
     loginLink: {
       textAlign: 'center',
       marginTop: '25px',
@@ -744,9 +765,13 @@ export default function RegisterPage() {
           ) : (
             <div>
               {/* PIN Verification Screen */}
-              {timeLeft > 0 && (
+              {timeLeft > 0 ? (
                 <div style={styles.timerBox}>
                   ⏰ PIN expires in: {formatTime(timeLeft)}
+                </div>
+              ) : (
+                <div style={styles.errorMessage}>
+                  ⚠️ PIN has expired. Please click "Resend PIN" to get a new one.
                 </div>
               )}
 
@@ -763,10 +788,12 @@ export default function RegisterPage() {
                       value={digit}
                       onChange={(e) => handlePINChange(index, e.target.value)}
                       onKeyDown={(e) => handlePINKeyDown(index, e)}
-                      disabled={verifying}
+                      onFocus={() => setFocusedPINIndex(index)}
+                      onBlur={() => setFocusedPINIndex(-1)}
+                      disabled={verifying || timeLeft <= 0}
                       style={{
                         ...styles.pinInput,
-                        ...(document.activeElement?.id === `pin-${index}` ? styles.pinInputFocus : {}),
+                        ...(focusedPINIndex === index ? styles.pinInputFocus : {}),
                       }}
                     />
                   ))}
@@ -775,7 +802,7 @@ export default function RegisterPage() {
 
               <button
                 onClick={handleVerifyPIN}
-                disabled={verifying || pin.join('').length !== 6}
+                disabled={verifying || pin.join('').length !== 6 || timeLeft <= 0}
                 style={{
                   ...styles.button,
                   cursor: (verifying || pin.join('').length !== 6) ? 'not-allowed' : 'pointer',
@@ -796,6 +823,12 @@ export default function RegisterPage() {
               >
                 {resendingPIN ? 'Sending...' : '📧 Resend PIN'}
               </button>
+
+              {resendSuccess && (
+                <div style={styles.infoMessage}>
+                  ✉️ New PIN sent to your email! Please check your inbox.
+                </div>
+              )}
 
               {success && (
                 <div style={styles.successMessage}>
