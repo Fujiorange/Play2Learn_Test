@@ -3474,7 +3474,7 @@ router.get('/support-tickets', authenticateSchoolAdmin, async (req, res) => {
     
     // Get school admin info to filter tickets by school
     const schoolAdmin = await User.findById(req.user.userId);
-    if (!schoolAdmin || !schoolAdmin.school) {
+    if (!schoolAdmin || !schoolAdmin.schoolId) {
       return res.status(400).json({
         success: false,
         error: 'School information not found'
@@ -3484,7 +3484,7 @@ router.get('/support-tickets', authenticateSchoolAdmin, async (req, res) => {
     // Build query - only school-related tickets from this school
     const query = { 
       category: 'school',
-      school_id: schoolAdmin.school
+      school_id: schoolAdmin.schoolId
     };
     
     if (status && status !== 'all') {
@@ -3551,7 +3551,7 @@ router.get('/support-tickets/:id', authenticateSchoolAdmin, async (req, res) => 
     
     const ticket = await SupportTicket.findOne({
       _id: req.params.id,
-      school_id: schoolAdmin.school // Ensure admin can only view tickets from their school
+      school_id: schoolAdmin.schoolId // Ensure admin can only view tickets from their school
     })
       .populate('user_id', 'name email school')
       .populate('school_id', 'name')
@@ -3616,7 +3616,7 @@ router.post('/support-tickets/:id/reply', authenticateSchoolAdmin, async (req, r
     
     const ticket = await SupportTicket.findOne({
       _id: req.params.id,
-      school_id: schoolAdmin.school
+      school_id: schoolAdmin.schoolId
     });
     
     if (!ticket) {
@@ -3659,7 +3659,7 @@ router.post('/support-tickets/:id/close', authenticateSchoolAdmin, async (req, r
     
     const ticket = await SupportTicket.findOne({
       _id: req.params.id,
-      school_id: schoolAdmin.school
+      school_id: schoolAdmin.schoolId
     });
     
     if (!ticket) {
@@ -3693,15 +3693,55 @@ router.post('/support-tickets/:id/close', authenticateSchoolAdmin, async (req, r
   }
 });
 
+// Delete a support ticket
+router.delete('/support-tickets/:id', authenticateSchoolAdmin, async (req, res) => {
+  try {
+    const schoolAdmin = await User.findById(req.user.userId);
+    
+    const ticket = await SupportTicket.findOne({
+      _id: req.params.id,
+      school_id: schoolAdmin.schoolId
+    });
+    
+    if (!ticket) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Ticket not found' 
+      });
+    }
+    
+    // Only allow deletion of closed tickets
+    if (ticket.status !== 'closed') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Only closed tickets can be deleted' 
+      });
+    }
+    
+    await SupportTicket.findByIdAndDelete(req.params.id);
+    
+    res.json({
+      success: true,
+      message: 'Ticket deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete support ticket error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete ticket' 
+    });
+  }
+});
+
 // Get support ticket statistics
 router.get('/support-tickets-stats', authenticateSchoolAdmin, async (req, res) => {
   try {
     const schoolAdmin = await User.findById(req.user.userId);
     
     const [openCount, pendingCount, closedCount] = await Promise.all([
-      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'open' }),
-      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'pending' }),
-      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.school, status: 'closed' })
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.schoolId, status: 'open' }),
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.schoolId, status: 'pending' }),
+      SupportTicket.countDocuments({ category: 'school', school_id: schoolAdmin.schoolId, status: 'closed' })
     ]);
     
     res.json({
@@ -3750,7 +3790,7 @@ router.post('/my-support-tickets', authenticateSchoolAdmin, async (req, res) => 
       user_name: schoolAdmin.name,
       user_email: schoolAdmin.email,
       user_role: 'School Admin',
-      school_id: schoolAdmin.school,
+      school_id: schoolAdmin.schoolId,
       school_name: schoolAdmin.schoolName || '',
       subject,
       category: 'website', // School admins only create website-related tickets
