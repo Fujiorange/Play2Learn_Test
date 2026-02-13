@@ -2058,8 +2058,10 @@ router.put('/users/:id/password', authenticateSchoolAdmin, async (req, res) => {
     // Return temp password for one-time viewing by school admin
     res.json({ 
       success: true, 
-      message: 'Password reset successfully and credentials sent via email',
-      tempPassword: tempPassword,
+      message: emailSent 
+        ? 'Password reset successfully and credentials sent via email'
+        : 'Password reset successfully. Credentials available on Pending Credentials page.',
+      tempPassword: emailSent ? undefined : tempPassword,
       emailSent: emailSent,
       userId: user._id,
       email: user.email,
