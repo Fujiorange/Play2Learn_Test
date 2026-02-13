@@ -8,6 +8,7 @@ const quizAttemptSchema = new mongoose.Schema({
     questionId: { type: mongoose.Schema.Types.ObjectId },
     question_text: { type: String },
     difficulty: { type: Number },
+    topic: { type: String }, // Topic for skill matrix tracking
     answer: { type: String },
     correct_answer: { type: String },
     isCorrect: { type: Boolean },
