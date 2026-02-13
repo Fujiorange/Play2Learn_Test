@@ -151,11 +151,11 @@ async function analyzeQuestionDistribution() {
   console.log(`\x1b[31m❌ Insufficient Questions: ${insufficientCount} levels${RESET}\n`);
 
   if (readyCount >= 8) {
-    console.log('\x1b[32m✨ EXCELLENT: Most levels are ready for pure adaptive quiz system!${RESET}');
+    console.log(`\x1b[32m✨ EXCELLENT: Most levels are ready for pure adaptive quiz system!${RESET}`);
   } else if (readyCount >= 5) {
-    console.log('\x1b[33m⚠️  FAIR: Some levels may need more questions for optimal variety${RESET}');
+    console.log(`\x1b[33m⚠️  FAIR: Some levels may need more questions for optimal variety${RESET}`);
   } else {
-    console.log('\x1b[31m❌ INSUFFICIENT: Many levels need more questions before enabling pure adaptive${RESET}');
+    console.log(`\x1b[31m❌ INSUFFICIENT: Many levels need more questions before enabling pure adaptive${RESET}`);
   }
 
   console.log('\n💡 Recommendations:');
