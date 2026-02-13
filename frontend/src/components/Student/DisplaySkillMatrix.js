@@ -63,8 +63,8 @@ export default function DisplaySkillMatrix() {
           const fallback = sortSkillsBySequence([
             { skill_name: "Addition", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
             { skill_name: "Subtraction", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
-            { skill_name: "Multiplication", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: false, percentage: 0 },
-            { skill_name: "Division", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: false, percentage: 0 },
+            { skill_name: "Multiplication", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
+            { skill_name: "Division", current_level: 0, xp: 0, points: 0, max_level: 5, unlocked: true, percentage: 0 },
           ]);
           setSkills(fallback);
           setCurrentProfile(1);
@@ -169,30 +169,7 @@ export default function DisplaySkillMatrix() {
       boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
       position: "relative",
       overflow: "hidden",
-    },
-
-    lockedOverlay: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: "rgba(0,0,0,0.65)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      color: "white",
-      zIndex: 5,
-      gap: "6px",
-    },
-    lockIcon: { fontSize: "44px" },
-    lockText: {
-      fontSize: "14px",
-      fontWeight: "700",
-      textAlign: "center",
-      padding: "0 18px",
-      lineHeight: 1.4,
+      transition: "transform 0.2s",
     },
 
     skillHeader: { display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" },
@@ -250,14 +227,14 @@ export default function DisplaySkillMatrix() {
 
           <p style={styles.subtitle}>
             Track your progress in math skills. Earn points by completing quizzes correctly - harder questions award more points! 
-            Each skill has 6 levels (0-5) based on points earned.
+            Each skill has 6 levels (0-5) based on points earned. All skills are available to practice!
           </p>
 
           {error && <div style={styles.errorMessage}>⚠️ {error}</div>}
 
           <div style={styles.infoBox}>
             <div style={styles.infoText}>
-              🎯 You are currently at Profile {currentProfile}. Multiplication & Division will unlock at Profile 6!
+              🎯 You are currently at Profile {currentProfile}. Keep practicing to level up your skills!
               <br />
               💡 Points-based leveling: Level 0 (0-24pts) → Level 1 (25-49pts) → Level 2 (50-99pts) → Level 3 (100-199pts) → Level 4 (200-399pts) → Level 5 (400+pts)
             </div>
@@ -275,23 +252,13 @@ export default function DisplaySkillMatrix() {
             const color = getSkillColor(skill.current_level, skill.max_level);
             const levelInfo = getSkillLevel(skill.current_level);
 
-            // Lock rule by profile (spec): ×/÷ locked below 6 (only for base skills)
-            const isAdvanced = ["Multiplication", "Division"].includes(skill.skill_name);
-            const isLocked = isAdvanced && currentProfile < 6;
-
             return (
-              <div key={idx} style={styles.skillCard}>
-                {isLocked && (
-                  <div style={styles.lockedOverlay}>
-                    <div style={styles.lockIcon}>🔒</div>
-                    <div style={styles.lockText}>
-                      Unlocks at Profile 6
-                      <br />
-                      Keep practicing!
-                    </div>
-                  </div>
-                )}
-
+              <div 
+                key={idx} 
+                style={styles.skillCard}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-4px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
                 <div style={styles.skillHeader}>
                   <div style={styles.skillIcon}>{getSkillIcon(skill.skill_name)}</div>
                   <div style={styles.skillName}>{skill.skill_name}</div>
