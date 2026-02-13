@@ -96,23 +96,14 @@ function calculateProgressiveScore(attempt, quiz, timeElapsedSeconds) {
 }
 
 // ==================== LEVEL PROGRESSION (ACCURACY FIRST) ====================
-/**
- * Determines next quiz level based on performance
- * PRIMARY RULE: Must have 70%+ accuracy to level up
- * @param {number} currentLevel - Current quiz level (1-10)
- * @param {object} scoreData - { accuracyScore, speedBonus, difficultyBonus, score }
- * @returns {object} - { nextLevel, progression, levelChange, reason }
- */
 function determineNextLevel(currentLevel, scoreData) {
   const { accuracyScore, speedBonus, difficultyBonus, score } = scoreData;
   
-  // ✅ GATE 1: MINIMUM ACCURACY REQUIREMENT (70%)
   const MIN_ACCURACY_TO_ADVANCE = 0.70;
   const MIN_ACCURACY_TO_STAY = 0.40;
   
   console.log(`📊 Level Decision: Current=${currentLevel}, Accuracy=${Math.round(accuracyScore * 100)}%, Score=${score.toFixed(2)}`);
   
-  // ❌ LEVEL DOWN: Accuracy < 40%
   if (accuracyScore < MIN_ACCURACY_TO_STAY) {
     const nextLevel = Math.max(1, currentLevel - 1);
     console.log(`⬇️ Level DOWN: ${currentLevel} → ${nextLevel} (accuracy too low)`);
@@ -126,7 +117,6 @@ function determineNextLevel(currentLevel, scoreData) {
     };
   }
   
-  // ❌ STAY: Accuracy 40-69% (BLOCKED from advancing)
   if (accuracyScore < MIN_ACCURACY_TO_ADVANCE) {
     console.log(`➡️ STAY: Blocked by accuracy requirement (${Math.round(accuracyScore * 100)}% < 70%)`);
     
@@ -140,31 +130,25 @@ function determineNextLevel(currentLevel, scoreData) {
     };
   }
   
-  // ✅ GATE 2: Accuracy >= 70%, now check TOTAL SCORE with bonuses
-  
-  // THRESHOLDS (with bonuses applied)
-  const THRESHOLD_STAY = 0.85;      // Need 0.85 score to level up
-  const THRESHOLD_SKIP = 1.20;      // Need 1.20 score to skip levels
+  const THRESHOLD_STAY = 0.85;
+  const THRESHOLD_SKIP = 1.20;
   
   let nextLevel = currentLevel;
   let progression = 'stay';
   let reason = '';
   
-  // 🚀 SKIP +2: Excellent performance (85%+ accuracy + 1.20+ score)
   if (accuracyScore >= 0.85 && score >= THRESHOLD_SKIP) {
     nextLevel = Math.min(10, currentLevel + 2);
     progression = 'skip_one';
     reason = `🎉 Excellent! You scored ${Math.round(accuracyScore * 100)}% with great speed. Skipping ahead!`;
     console.log(`⏫ SKIP: ${currentLevel} → ${nextLevel} (excellent performance)`);
   }
-  // ⬆️ LEVEL UP +1: Good performance (75%+ accuracy + 0.85+ score)
   else if (accuracyScore >= 0.75 && score >= THRESHOLD_STAY) {
     nextLevel = Math.min(10, currentLevel + 1);
     progression = 'up_one';
     reason = `✨ Well done! You scored ${Math.round(accuracyScore * 100)}%. Ready for the next level!`;
     console.log(`⬆️ LEVEL UP: ${currentLevel} → ${nextLevel} (good performance)`);
   }
-  // ➡️ STAY: 70-74% accuracy OR score < 0.85
   else {
     nextLevel = currentLevel;
     progression = 'stay';
@@ -172,7 +156,6 @@ function determineNextLevel(currentLevel, scoreData) {
     console.log(`➡️ STAY: ${currentLevel} (accuracy OK but need better score)`);
   }
   
-  // 🔒 MAX LEVEL CAP
   if (nextLevel >= 10) {
     nextLevel = 10;
     progression = nextLevel === currentLevel ? 'stay' : 'max_reached';
@@ -323,7 +306,6 @@ async function updateSkillsFromAdaptiveQuiz(userId, answers) {
   }
 }
 
-// ✅ FIXED: Helper function to update streak and points when adaptive quiz is completed
 async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, totalAnswered) {
   try {
     const mathProfile = await MathProfile.findOne({ student_id: userId });
@@ -333,8 +315,8 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
       console.log(`⚠️ No math profile found for user ${userId} - creating new profile`);
       const newProfile = new MathProfile({
         student_id: userId,
-        streak: 1, // ✅ First Quiz Journey quiz = streak 1
-        last_quiz_date: new Date(), // ✅ Correct field name
+        streak: 1,
+        last_quiz_date: new Date(),
         total_points: pointsEarned,
         placement_completed: false,
         current_profile: 1,
@@ -345,12 +327,8 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
       return;
     }
 
-    // ✅ Use shared updateStreakOnCompletion function
     const newStreak = updateStreakOnCompletion(mathProfile);
-    
-    // Update points
     mathProfile.total_points = (mathProfile.total_points || 0) + pointsEarned;
-    
     await mathProfile.save();
     
     console.log(`✅ Quiz Journey completed for user ${userId}:`);
@@ -363,7 +341,6 @@ async function updateStreakAndPointsOnQuizCompletion(userId, correctCount, total
 }
 
 // ==================== GET STUDENT'S CURRENT LEVEL ====================
-// ✅ CRITICAL: This reads placement quiz result from MathProfile.current_profile
 router.get('/student/current-level', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -379,11 +356,7 @@ router.get('/student/current-level', authenticateToken, async (req, res) => {
       });
     }
     
-    // ✅ CRITICAL FIX: Read adaptive_quiz_level (set by placement quiz)
-    // If not set, fall back to current_profile (also set by placement quiz)
     const currentLevel = mathProfile.adaptive_quiz_level || mathProfile.current_profile || 1;
-    
-    // Generate array of unlocked levels (1 up to current)
     const unlockedLevels = Array.from({ length: currentLevel }, (_, i) => i + 1);
     
     console.log(`✅ Student ${userId} - Placement Level: ${currentLevel}, Unlocked: ${unlockedLevels}`);
@@ -403,12 +376,11 @@ router.get('/student/current-level', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all available adaptive quizzes - SHOW ALL LEVELS
+// Get all available adaptive quizzes
 router.get('/quizzes', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     
-    // Get ALL active adaptive quizzes (ignore launch status for adaptive quizzes)
     const quizzes = await Quiz.find({ 
       quiz_type: 'adaptive',
       is_active: true
@@ -473,7 +445,6 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
         });
       }
       
-      // Find quiz regardless of launch status
       quiz = await Quiz.findOne({
         quiz_level: level,
         quiz_type: 'adaptive',
@@ -495,7 +466,6 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
       });
     }
 
-    // ✅ CRITICAL: Check if student has unlocked this level based on placement
     const mathProfile = await MathProfile.findOne({ student_id: userId });
     const studentLevel = mathProfile?.adaptive_quiz_level || mathProfile?.current_profile || 1;
     const quizLevel = quiz.quiz_level || 1;
@@ -517,7 +487,6 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
 
     console.log(`✅ Access GRANTED: Student can access Level ${quizLevel}`);
 
-    // Auto-launch quiz if not launched
     if (!quiz.is_launched) {
       console.log(`🚀 Auto-launching quiz level ${quizLevel} for student ${userId}`);
       quiz.is_launched = true;
@@ -551,7 +520,7 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
     const attempt = new QuizAttempt({
       userId,
       quizId: quiz._id,
-      current_difficulty: quiz.adaptive_config?.starting_difficulty || 1,
+      current_difficulty: 1, // ✅ PURE ADAPTIVE: Always start at difficulty 1
       correct_count: 0,
       total_answered: 0,
       is_completed: false
@@ -561,14 +530,16 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Quiz attempt started',
+      message: '🎯 Pure Adaptive Quiz Started - Difficulty adjusts after every answer!',
       data: {
         attemptId: attempt._id,
         quizTitle: quiz.title,
         quizLevel: quiz.quiz_level,
         target_correct_answers: 20,
         current_difficulty: attempt.current_difficulty,
-        correct_count: attempt.correct_count
+        correct_count: attempt.correct_count,
+        adaptiveMode: 'pure', // ✅ Indicate this is pure adaptive
+        description: 'Answer correctly to increase difficulty, incorrectly to decrease'
       }
     });
   } catch (error) {
@@ -580,7 +551,7 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
   }
 });
 
-// Get next question - ADAPTIVE with flexible fallback to reach 20 questions
+// Get next question - Serves question at current difficulty
 router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -650,11 +621,8 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       
       await attempt.save();
       await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
-      
-      // ✅ UPDATE STREAK - This is Quiz Journey!
       await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
 
-      // ✅ CRITICAL FIX: Update student's adaptive_quiz_level in MathProfile (both UP and DOWN)
       let confirmedLevel = currentLevel;
       try {
         console.log(`📊 Attempting to update student level from ${currentLevel} to ${levelDecision.nextLevel}`);
@@ -663,16 +631,14 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
         if (mathProfile) {
           const targetLevel = levelDecision.nextLevel;
           
-          // ✅ FIX: Update level regardless of whether it goes up or down
           if (targetLevel !== mathProfile.adaptive_quiz_level) {
             const direction = targetLevel > mathProfile.adaptive_quiz_level ? 'UP' : 'DOWN';
             console.log(`🔄 Updating level ${direction}: ${mathProfile.adaptive_quiz_level} → ${targetLevel}`);
             
             mathProfile.adaptive_quiz_level = targetLevel;
-            mathProfile.current_profile = targetLevel; // Keep in sync
+            mathProfile.current_profile = targetLevel;
             await mathProfile.save();
             
-            // Verify the save worked
             const verifiedProfile = await MathProfile.findOne({ student_id: userId });
             confirmedLevel = verifiedProfile.adaptive_quiz_level;
             
@@ -708,166 +674,58 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       });
     }
 
-    // 🎯 ADAPTIVE QUESTION SELECTION - Flexible to always reach 20 questions
+    // 🎯 PURE ADAPTIVE: Get question at current difficulty
     const answeredIds = attempt.answers.map(a => a.questionId.toString());
-    const recentlyAnsweredIds = attempt.answers.slice(-3).map(a => a.questionId.toString());
+    const recentlyAnsweredIds = attempt.answers.slice(-2).map(a => a.questionId.toString()); // Only last 2
 
     let nextQuestion = null;
-    const currentDifficulty = attempt.current_difficulty;
+    const targetDifficulty = attempt.current_difficulty;
 
-    console.log(`🔍 Question ${attempt.total_answered + 1}/20 - Looking for difficulty ${currentDifficulty}`);
+    console.log(`🎯 PURE ADAPTIVE: Question ${attempt.total_answered + 1}/20 - Target difficulty ${targetDifficulty}`);
 
     // PRIORITY 1: Exact difficulty, not recently answered
     const exactNotRecent = quiz.questions.filter(q => {
       const qId = q._id.toString();
-      return q.difficulty === currentDifficulty && !recentlyAnsweredIds.includes(qId);
+      return q.difficulty === targetDifficulty && !recentlyAnsweredIds.includes(qId);
     });
 
     if (exactNotRecent.length > 0) {
       nextQuestion = exactNotRecent[Math.floor(Math.random() * exactNotRecent.length)];
-      console.log(`✅ Found question at difficulty ${currentDifficulty} (Priority 1 - Exact match)`);
+      console.log(`✅ Found difficulty ${targetDifficulty} question`);
     }
 
-    // PRIORITY 2: Current +1 difficulty, not recently answered
-    if (!nextQuestion && currentDifficulty < 5) {
-      const higherNotRecent = quiz.questions.filter(q => {
-        const qId = q._id.toString();
-        return q.difficulty === currentDifficulty + 1 && !recentlyAnsweredIds.includes(qId);
-      });
-      
-      if (higherNotRecent.length > 0) {
-        nextQuestion = higherNotRecent[Math.floor(Math.random() * higherNotRecent.length)];
-        console.log(`⬆️ Using difficulty ${currentDifficulty + 1} (Priority 2 - One higher)`);
-      }
-    }
-
-    // PRIORITY 3: ANY difficulty at or above current, not recently answered
+    // PRIORITY 2: Exact difficulty, allow reuse
     if (!nextQuestion) {
-      const anyAtOrAbove = quiz.questions.filter(q => {
-        const qId = q._id.toString();
-        return q.difficulty >= currentDifficulty && !recentlyAnsweredIds.includes(qId);
-      });
-      
-      if (anyAtOrAbove.length > 0) {
-        nextQuestion = anyAtOrAbove[Math.floor(Math.random() * anyAtOrAbove.length)];
-        console.log(`📊 Using difficulty ${nextQuestion.difficulty} (Priority 3 - At/above current)`);
+      const allAtDifficulty = quiz.questions.filter(q => q.difficulty === targetDifficulty);
+      if (allAtDifficulty.length > 0) {
+        nextQuestion = allAtDifficulty[Math.floor(Math.random() * allAtDifficulty.length)];
+        console.log(`♻️ Reusing difficulty ${targetDifficulty} question`);
       }
     }
 
-    // PRIORITY 4: Current difficulty -1, not recently answered
-    if (!nextQuestion && currentDifficulty > 1) {
-      const lowerNotRecent = quiz.questions.filter(q => {
-        const qId = q._id.toString();
-        return q.difficulty === currentDifficulty - 1 && !recentlyAnsweredIds.includes(qId);
-      });
-      
-      if (lowerNotRecent.length > 0) {
-        nextQuestion = lowerNotRecent[Math.floor(Math.random() * lowerNotRecent.length)];
-        console.log(`⬇️ Using difficulty ${currentDifficulty - 1} (Priority 4 - One lower)`);
-      }
-    }
-
-    // PRIORITY 5: ANY question not recently answered
+    // PRIORITY 3: Nearby difficulty (±1)
     if (!nextQuestion) {
-      const anyNotRecent = quiz.questions.filter(q => {
-        const qId = q._id.toString();
-        return !recentlyAnsweredIds.includes(qId);
-      });
-      
-      if (anyNotRecent.length > 0) {
-        nextQuestion = anyNotRecent[Math.floor(Math.random() * anyNotRecent.length)];
-        console.log(`🔄 Using difficulty ${nextQuestion.difficulty} (Priority 5 - Any not recent)`);
-      }
-    }
-
-    // PRIORITY 6: ABSOLUTELY ANY QUESTION (FORCE REUSE)
-    if (!nextQuestion) {
-      if (quiz.questions.length > 0) {
-        nextQuestion = quiz.questions[Math.floor(Math.random() * quiz.questions.length)];
-        console.log(`♻️ Forced reuse - difficulty ${nextQuestion.difficulty} (Priority 6 - Any question)`);
-      }
-    }
-
-    // ONLY complete early if NO questions exist at all
-    if (!nextQuestion) {
-      console.log('❌ CRITICAL: No questions available in quiz - completing early');
-      
-      const timeElapsedMs = new Date() - new Date(attempt.startedAt);
-      const timeElapsedSeconds = Math.floor(timeElapsedMs / 1000);
-      
-      const scoreData = calculateProgressiveScore(attempt, quiz, timeElapsedSeconds);
-      const currentLevel = quiz.quiz_level || 1;
-      const levelDecision = determineNextLevel(currentLevel, scoreData);
-      
-      const nextQuiz = await Quiz.findOne({
-        quiz_level: levelDecision.nextLevel,
-        quiz_type: 'adaptive',
-        is_active: true
-      }).sort({ createdAt: -1 });
-      
-      attempt.is_completed = true;
-      attempt.completedAt = new Date();
-      attempt.score = scoreData.score;
-      attempt.progressionData = {
-        accuracyScore: scoreData.accuracyScore,
-        speedBonus: scoreData.speedBonus,
-        difficultyBonus: scoreData.difficultyBonus,
-        finalScore: scoreData.score,
-        timeElapsedSeconds,
-        progression: levelDecision.progression,
-        currentLevel,
-        nextLevel: levelDecision.nextLevel,
-        levelChange: levelDecision.levelChange,
-        reason: levelDecision.reason,
-        blocked: levelDecision.blocked,
-        stats: levelDecision.stats
-      };
-      await attempt.save();
-      
-      await updateSkillsFromAdaptiveQuiz(userId, attempt.answers);
-      
-      // ✅ UPDATE STREAK
-      await updateStreakAndPointsOnQuizCompletion(userId, attempt.correct_count, attempt.total_answered);
-
-      // ✅ FIX: Update level both UP and DOWN
-      let confirmedLevel = currentLevel;
-      try {
-        const mathProfile = await MathProfile.findOne({ student_id: userId });
-        if (mathProfile) {
-          if (levelDecision.nextLevel !== mathProfile.adaptive_quiz_level) {
-            mathProfile.adaptive_quiz_level = levelDecision.nextLevel;
-            mathProfile.current_profile = levelDecision.nextLevel;
-            await mathProfile.save();
-            
-            const verifiedProfile = await MathProfile.findOne({ student_id: userId });
-            confirmedLevel = verifiedProfile.adaptive_quiz_level;
-          } else {
-            confirmedLevel = mathProfile.adaptive_quiz_level;
-          }
+      const nearbyDifficulties = [targetDifficulty + 1, targetDifficulty - 1].filter(d => d >= 1 && d <= 5);
+      for (const diff of nearbyDifficulties) {
+        const nearbyQuestions = quiz.questions.filter(q => q.difficulty === diff && !recentlyAnsweredIds.includes(q._id.toString()));
+        if (nearbyQuestions.length > 0) {
+          nextQuestion = nearbyQuestions[Math.floor(Math.random() * nearbyQuestions.length)];
+          console.log(`📊 Using nearby difficulty ${diff}`);
+          break;
         }
-      } catch (error) {
-        console.error('Failed to update adaptive quiz level:', error);
       }
+    }
 
-      return res.json({
-        success: true,
-        completed: true,
-        message: 'Quiz completed (no questions available)',
-        data: {
-          correct_count: attempt.correct_count,
-          total_answered: attempt.total_answered,
-          target_questions: 20,
-          scoreData: scoreData,
-          levelDecision: {
-            ...levelDecision,
-            confirmedLevel: confirmedLevel
-          },
-          hasNextLevel: !!nextQuiz,
-          nextQuizId: nextQuiz ? nextQuiz._id : null,
-          nextQuizLevel: nextQuiz ? nextQuiz.quiz_level : null,
-          nextQuizTitle: nextQuiz ? nextQuiz.title : null,
-          timeElapsedSeconds
-        }
+    // PRIORITY 4: ANY question
+    if (!nextQuestion && quiz.questions.length > 0) {
+      nextQuestion = quiz.questions[Math.floor(Math.random() * quiz.questions.length)];
+      console.log(`🔄 Using any available question (difficulty ${nextQuestion.difficulty})`);
+    }
+
+    if (!nextQuestion) {
+      return res.status(500).json({
+        success: false,
+        error: 'No questions available in quiz'
       });
     }
 
@@ -887,6 +745,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
           total_answered: attempt.total_answered,
           target_questions: 20,
           current_difficulty: attempt.current_difficulty,
+          actual_question_difficulty: nextQuestion.difficulty,
           questionsRemaining: 20 - attempt.total_answered
         }
       }
@@ -900,7 +759,7 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
   }
 });
 
-// Submit answer - ADAPTIVE difficulty progression
+// ==================== SUBMIT ANSWER - PURE ADAPTIVE LOGIC ====================
 router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -962,6 +821,7 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
 
     const isCorrect = answer.toString().trim().toLowerCase() === question.answer.toString().trim().toLowerCase();
 
+    // Record the answer
     attempt.answers.push({
       questionId: question._id,
       question_text: question.text,
@@ -977,52 +837,63 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       attempt.correct_count += 1;
     }
 
-    // 🎯 ADAPTIVE: Only count answers AT CURRENT DIFFICULTY LEVEL
-    const answersAtCurrentDifficulty = attempt.answers.filter(
-      a => a.difficulty === attempt.current_difficulty
-    );
-    
-    const recentAtDifficulty = answersAtCurrentDifficulty.slice(-4);
-    const recentCorrect = recentAtDifficulty.filter(a => a.isCorrect).length;
-    
-    console.log(`📊 ADAPTIVE Performance at Difficulty ${attempt.current_difficulty}:`);
-    console.log(`   - Total answered at this difficulty: ${answersAtCurrentDifficulty.length}`);
-    console.log(`   - Recent 4: ${recentCorrect}/${recentAtDifficulty.length} correct`);
-    console.log(`   - Pattern: ${recentAtDifficulty.map(a => a.isCorrect ? '✓' : '✗').join(' ')}`);
-    
-    // Check if at max difficulty and mastered it
-    let shouldCompleteQuiz = false;
-    
-    if (attempt.current_difficulty === 5 && recentCorrect === 4 && recentAtDifficulty.length === 4) {
-      console.log(`🏆 Mastered maximum difficulty!`);
-      shouldCompleteQuiz = true;
-    }
-    // Increase difficulty if ALL 4 consecutive answers at current difficulty are correct
-    else if (recentCorrect === 4 && recentAtDifficulty.length === 4 && attempt.current_difficulty < 5) {
-      attempt.current_difficulty += 1;
-      console.log(`✨ ADAPTIVE: Difficulty increased to ${attempt.current_difficulty} after 4 consecutive correct`);
-    } 
-    // Decrease difficulty if 3+ consecutive wrong answers
-    else if (recentCorrect === 0 && recentAtDifficulty.length >= 3 && attempt.current_difficulty > 1) {
-      attempt.current_difficulty -= 1;
-      console.log(`📉 ADAPTIVE: Difficulty decreased to ${attempt.current_difficulty}`);
-    }
-    else {
-      console.log(`➡️ ADAPTIVE: Staying at difficulty ${attempt.current_difficulty}`);
+    // 🎯 PURE ADAPTIVE LOGIC - ADJUST DIFFICULTY IMMEDIATELY AFTER EVERY ANSWER
+    const oldDifficulty = attempt.current_difficulty;
+    let difficultyChanged = false;
+    let message = '';
+
+    if (isCorrect) {
+      // ✅ CORRECT → INCREASE DIFFICULTY (if not at max)
+      if (attempt.current_difficulty < 5) {
+        attempt.current_difficulty += 1;
+        difficultyChanged = true;
+        message = `✅ Correct! Difficulty increased: ${oldDifficulty} → ${attempt.current_difficulty}`;
+        console.log(`⬆️ PURE ADAPTIVE UP: ${oldDifficulty} → ${attempt.current_difficulty}`);
+      } else {
+        message = `✅ Correct! You're at maximum difficulty (5). Excellent work!`;
+        console.log(`✅ Correct at max difficulty`);
+      }
+    } else {
+      // ❌ WRONG → DECREASE DIFFICULTY (if not at min)
+      if (attempt.current_difficulty > 1) {
+        attempt.current_difficulty -= 1;
+        difficultyChanged = true;
+        message = `❌ Wrong. Difficulty decreased: ${oldDifficulty} → ${attempt.current_difficulty}`;
+        console.log(`⬇️ PURE ADAPTIVE DOWN: ${oldDifficulty} → ${attempt.current_difficulty}`);
+      } else {
+        message = `❌ Wrong. You're at minimum difficulty (1). Keep trying!`;
+        console.log(`❌ Wrong at min difficulty`);
+      }
     }
 
     await attempt.save();
+
+    const shouldComplete = attempt.total_answered >= 20;
+    const currentAccuracy = attempt.total_answered > 0 
+      ? Math.round((attempt.correct_count / attempt.total_answered) * 100) 
+      : 0;
 
     res.json({
       success: true,
       data: {
         isCorrect,
         correct_answer: question.answer,
+        old_difficulty: oldDifficulty,
         new_difficulty: attempt.current_difficulty,
+        difficultyChanged: difficultyChanged,
         correct_count: attempt.correct_count,
         total_answered: attempt.total_answered,
         questionsRemaining: 20 - attempt.total_answered,
-        shouldComplete: shouldCompleteQuiz
+        shouldComplete: shouldComplete,
+        message: message,
+        currentAccuracy: currentAccuracy,
+        adaptiveInfo: {
+          questionDifficulty: question.difficulty,
+          nextQuestionWillBe: attempt.current_difficulty,
+          atMaxDifficulty: attempt.current_difficulty === 5,
+          atMinDifficulty: attempt.current_difficulty === 1,
+          difficultyChange: attempt.current_difficulty - oldDifficulty
+        }
       }
     });
   } catch (error) {
