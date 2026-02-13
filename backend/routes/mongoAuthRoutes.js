@@ -211,11 +211,21 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     // Verify PIN using timing-safe comparison to prevent timing attacks
-    const expectedPIN = Buffer.from(registrationRecord.pin);
-    const providedPIN = Buffer.from(pin);
+    // Pad both PINs to fixed length to prevent timing attacks on length comparison
+    const maxLength = 10; // Slightly longer than expected 6 digits for safety
+    const expectedPIN = Buffer.from(registrationRecord.pin.padEnd(maxLength, '\0'));
+    const providedPIN = Buffer.from(pin.padEnd(maxLength, '\0'));
     
-    // Ensure both buffers are same length for timingSafeEqual
-    if (expectedPIN.length !== providedPIN.length || !crypto.timingSafeEqual(expectedPIN, providedPIN)) {
+    // Use timing-safe comparison
+    let isValid = false;
+    try {
+      isValid = crypto.timingSafeEqual(expectedPIN, providedPIN);
+    } catch (error) {
+      // If comparison fails for any reason, treat as invalid
+      isValid = false;
+    }
+    
+    if (!isValid) {
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid PIN. Please check and try again.' 
@@ -223,7 +233,7 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     // PIN is valid - proceed with school and admin creation
-    const { institutionName, password, referralSource } = registrationRecord.registrationData;
+    const { institutionName, password: hashedPassword, referralSource } = registrationRecord.registrationData;
 
     // Find the trial license
     const trialLicense = await License.findOne({ 
@@ -267,7 +277,7 @@ router.post('/verify-pin', async (req, res) => {
     const newUser = new User({
       name: displayName,
       email: email.toLowerCase(),
-      password: password, // Already hashed
+      password: hashedPassword, // Already hashed during registration
       role: 'School Admin',
       schoolId: newSchool._id.toString(),
       contact: null,
