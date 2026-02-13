@@ -3575,7 +3575,7 @@ router.get('/support-tickets/:id', authenticateSchoolAdmin, async (req, res) => 
     
     res.json({
       success: true,
-      ticket: {
+      data: {
         _id: ticket._id,
         user_name: ticket.user_name || 'Unknown',
         user_email: ticket.user_email || 'N/A',
