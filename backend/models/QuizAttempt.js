@@ -14,9 +14,11 @@ const quizAttemptSchema = new mongoose.Schema({
     answeredAt: { type: Date, default: Date.now }
   }],
   current_difficulty: { type: Number, default: 1 },
+  last_question_difficulty: { type: Number, default: 1 }, // Track what was actually served
   correct_count: { type: Number, default: 0 },
   total_answered: { type: Number, default: 0 },
   is_completed: { type: Boolean, default: false },
+  progressionData: { type: Object }, // Store level progression info
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date },
   timeSpent: { type: Number } // in seconds

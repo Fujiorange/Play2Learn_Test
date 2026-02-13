@@ -5,7 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "check-questions": "node scripts/check-question-distribution.js",
+    "regenerate-quizzes": "node scripts/regenerate-adaptive-quizzes.js",
+    "setup-adaptive": "node scripts/setup-adaptive-quizzes.js",
+    "regenerate-quizzes-yes": "node scripts/regenerate-adaptive-quizzes.js --yes",
+    "regenerate-level": "node scripts/regenerate-adaptive-quizzes.js --levels="
   },
   "keywords": [
     "education",

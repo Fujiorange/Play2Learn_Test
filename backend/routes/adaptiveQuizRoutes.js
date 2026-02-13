@@ -434,7 +434,8 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
     const attempt = new QuizAttempt({
       userId,
       quizId,
-      current_difficulty: quiz.adaptive_config?.starting_difficulty || 1,
+      current_difficulty: 1, // Always start at difficulty 1 for pure adaptive
+      last_question_difficulty: 1,
       correct_count: 0,
       total_answered: 0,
       is_completed: false
@@ -444,13 +445,16 @@ router.post('/quizzes/:quizId/start', authenticateToken, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Quiz attempt started',
+      message: '🎯 Pure Adaptive Quiz Started - Difficulty adjusts after every answer!',
       data: {
         attemptId: attempt._id,
         quizTitle: quiz.title,
-        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 10,
+        quizLevel: quiz.quiz_level,
+        target_correct_answers: quiz.adaptive_config?.target_correct_answers || 20,
         current_difficulty: attempt.current_difficulty,
-        correct_count: attempt.correct_count
+        correct_count: attempt.correct_count,
+        adaptiveMode: 'pure',
+        description: 'Answer correctly to increase difficulty, incorrectly to decrease'
       }
     });
   } catch (error) {
@@ -521,35 +525,48 @@ router.get('/attempts/:attemptId/next-question', authenticateToken, async (req, 
       });
     }
 
-    // Get already answered question IDs
-    const answeredIds = attempt.answers.map(a => a.questionId.toString());
+    // Get recently answered question IDs (last 2 questions instead of all)
+    const recentlyAnsweredIds = attempt.answers.slice(-2).map(a => a.questionId.toString());
 
-    // Find questions at current difficulty that haven't been answered
-    const availableQuestions = quiz.questions.filter(q => 
+    // Priority 1: Try exact difficulty, not recently answered
+    let availableQuestions = quiz.questions.filter(q => 
       q.difficulty === attempt.current_difficulty && 
-      !answeredIds.includes(q.question_id?.toString() || q._id.toString())
+      !recentlyAnsweredIds.includes(q.question_id?.toString() || q._id.toString())
     );
 
-    // If no questions at current difficulty, try adjacent difficulties
     let nextQuestion = null;
+    let fallbackUsed = false;
+
     if (availableQuestions.length > 0) {
+      // Found questions at exact difficulty that weren't recently answered
       nextQuestion = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
     } else {
-      // Try difficulty +1 or -1
-      const alternativeDifficulties = [
-        attempt.current_difficulty + 1,
-        attempt.current_difficulty - 1
-      ].filter(d => d >= 1 && d <= 5);
+      // Priority 2: Try exact difficulty, allow reuse
+      availableQuestions = quiz.questions.filter(q => 
+        q.difficulty === attempt.current_difficulty
+      );
+      
+      if (availableQuestions.length > 0) {
+        nextQuestion = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+        fallbackUsed = true;
+      } else {
+        // Priority 3: Try adjacent difficulties (±1)
+        const alternativeDifficulties = [
+          attempt.current_difficulty + 1,
+          attempt.current_difficulty - 1
+        ].filter(d => d >= 1 && d <= 5);
 
-      for (const altDiff of alternativeDifficulties) {
-        const altQuestions = quiz.questions.filter(q => 
-          q.difficulty === altDiff && 
-          !answeredIds.includes(q.question_id?.toString() || q._id.toString())
-        );
-        
-        if (altQuestions.length > 0) {
-          nextQuestion = altQuestions[Math.floor(Math.random() * altQuestions.length)];
-          break;
+        for (const altDiff of alternativeDifficulties) {
+          const altQuestions = quiz.questions.filter(q => 
+            q.difficulty === altDiff && 
+            !recentlyAnsweredIds.includes(q.question_id?.toString() || q._id.toString())
+          );
+          
+          if (altQuestions.length > 0) {
+            nextQuestion = altQuestions[Math.floor(Math.random() * altQuestions.length)];
+            fallbackUsed = true;
+            break;
+          }
         }
       }
     }
@@ -679,6 +696,7 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       questionId: question.question_id || question._id,
       question_text: question.text,
       difficulty: question.difficulty,
+      topic: question.topic || 'General',
       answer: answer,
       correct_answer: question.answer,
       isCorrect: isCorrect
@@ -689,47 +707,45 @@ router.post('/attempts/:attemptId/submit-answer', authenticateToken, async (req,
       attempt.correct_count += 1;
     }
 
-    // Adjust difficulty based on performance and progression strategy
-    const progression = quiz.adaptive_config?.difficulty_progression || 'gradual';
-    
-    if (progression === 'immediate') {
-      // Immediate: increase on correct, decrease on incorrect
-      if (isCorrect && attempt.current_difficulty < 5) {
+    // 🎯 PURE ADAPTIVE LOGIC - Adjust difficulty after EVERY answer
+    const oldDifficulty = attempt.current_difficulty;
+    let difficultyChanged = false;
+    let message = '';
+
+    if (isCorrect) {
+      // ✅ CORRECT → INCREASE DIFFICULTY (if not at max)
+      if (attempt.current_difficulty < 5) {
         attempt.current_difficulty += 1;
-      } else if (!isCorrect && attempt.current_difficulty > 1) {
-        attempt.current_difficulty -= 1;
+        difficultyChanged = true;
+        message = `✅ Correct! Difficulty increased: ${oldDifficulty} → ${attempt.current_difficulty}`;
+      } else {
+        message = `✅ Correct! You're at maximum difficulty (5). Excellent work!`;
       }
-    } else if (progression === 'gradual') {
-      // Gradual: adjust based on recent performance (last 3 answers)
-      const recentAnswers = attempt.answers.slice(-3);
-      const recentCorrect = recentAnswers.filter(a => a.isCorrect).length;
-      
-      if (recentCorrect >= 2 && attempt.current_difficulty < 5) {
-        attempt.current_difficulty += 1;
-      } else if (recentCorrect <= 1 && attempt.current_difficulty > 1 && recentAnswers.length >= 3) {
+    } else {
+      // ❌ WRONG → DECREASE DIFFICULTY (if not at min)
+      if (attempt.current_difficulty > 1) {
         attempt.current_difficulty -= 1;
-      }
-    } else if (progression === 'ml-based') {
-      // ML-based: Simple algorithm based on overall accuracy
-      const accuracy = attempt.correct_count / attempt.total_answered;
-      const targetDifficulty = Math.min(5, Math.max(1, Math.ceil(accuracy * 5)));
-      
-      // Gradually move towards target difficulty
-      if (targetDifficulty > attempt.current_difficulty && attempt.current_difficulty < 5) {
-        attempt.current_difficulty += 1;
-      } else if (targetDifficulty < attempt.current_difficulty && attempt.current_difficulty > 1) {
-        attempt.current_difficulty -= 1;
+        difficultyChanged = true;
+        message = `❌ Wrong. Difficulty decreased: ${oldDifficulty} → ${attempt.current_difficulty}`;
+      } else {
+        message = `❌ Wrong. You're at minimum difficulty (1). Keep trying!`;
       }
     }
+
+    // Track the difficulty of the question that was actually served
+    attempt.last_question_difficulty = question.difficulty;
 
     await attempt.save();
 
     res.json({
       success: true,
+      message,
       data: {
         isCorrect,
         correct_answer: question.answer,
+        old_difficulty: oldDifficulty,
         new_difficulty: attempt.current_difficulty,
+        difficulty_changed: difficultyChanged,
         correct_count: attempt.correct_count,
         total_answered: attempt.total_answered
       }
