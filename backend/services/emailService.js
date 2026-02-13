@@ -401,9 +401,92 @@ async function sendSchoolAdminWelcomeEmail(admin, tempPassword, schoolName) {
   }
 }
 
+// Send email verification PIN
+async function sendVerificationPIN(email, pin, institutionName) {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: 'Verify Your Play2Learn Registration 🔐',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #7C3AED; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+          .pin-box { background: white; border: 3px solid #7C3AED; padding: 30px; text-align: center; margin: 20px 0; border-radius: 8px; }
+          .pin { font-size: 48px; font-weight: bold; color: #7C3AED; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+          .warning { background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎓 Welcome to Play2Learn!</h1>
+          </div>
+          <div class="content">
+            <p>Hi there,</p>
+            
+            <p>Thank you for registering <strong>${institutionName}</strong> with Play2Learn!</p>
+            
+            <p>To complete your registration, please verify your email address using the PIN below:</p>
+            
+            <div class="pin-box">
+              <p style="margin: 0; color: #6b7280; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Verification PIN</p>
+              <div class="pin">${pin}</div>
+            </div>
+            
+            <div class="warning">
+              <p style="margin: 0;"><strong>⏰ Important:</strong> This PIN will expire in <strong>15 minutes</strong>.</p>
+            </div>
+            
+            <p>If you didn't request this registration, you can safely ignore this email.</p>
+            
+            <p style="margin-top: 30px;">
+              Need help? Contact our support team.
+            </p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message from Play2Learn.<br>
+            Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Verification PIN sent to ${email}`);
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`❌ Failed to send verification PIN to ${email}`);
+    console.error(`   Error: ${error.message}`);
+    console.error(`   Error code: ${error.code || 'N/A'}`);
+    
+    if (error.code === 'EAUTH') {
+      console.error('   ⚠️  AUTHENTICATION FAILED - Check EMAIL_USER and EMAIL_PASSWORD');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   ⚠️  CONNECTION FAILED - Check EMAIL_HOST and EMAIL_PORT');
+    } else if (error.message && error.message.includes('invalid address')) {
+      console.error('   ⚠️  INVALID EMAIL ADDRESS - Check EMAIL_FROM format');
+      console.error('   EMAIL_FROM must be: "Display Name <email@domain.com>" or "email@domain.com"');
+    }
+    
+    return { success: false, error: error.message, errorCode: error.code };
+  }
+}
+
 module.exports = {
   sendTeacherWelcomeEmail,
   sendParentWelcomeEmail,
   sendStudentCredentialsToParent,
   sendSchoolAdminWelcomeEmail,
+  sendVerificationPIN,
 };

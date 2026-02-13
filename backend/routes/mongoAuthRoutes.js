@@ -6,6 +6,9 @@ const mongoose = require('mongoose');
 
 const User = require('../models/User');
 const MarketSurvey = require('../models/MarketSurvey');
+const RegistrationPIN = require('../models/RegistrationPIN');
+const { sendVerificationPIN } = require('../services/emailService');
+const { generateSixDigitPIN } = require('../utils/pinGenerator');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 function normalizeRole(role) {
@@ -75,7 +78,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /register-school-admin - Register an institute with free trial
+// POST /register-school-admin - Step 1: Send verification PIN
 router.post('/register-school-admin', async (req, res) => {
   try {
     const {
@@ -101,7 +104,6 @@ router.post('/register-school-admin', async (req, res) => {
 
     // Check if institution name already exists
     const School = require('../models/School');
-    const License = require('../models/License');
     
     // Escape special regex characters to prevent regex injection
     const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -116,6 +118,110 @@ router.post('/register-school-admin', async (req, res) => {
         error: 'An organization with this name already exists. Please use a different name.' 
       });
     }
+
+    // Generate 6-digit PIN
+    const pin = generateSixDigitPIN();
+    
+    // Set expiry time to 15 minutes from now
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Hash the password before storing
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Store or update registration data with PIN
+    await RegistrationPIN.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      {
+        email: email.toLowerCase(),
+        pin: pin,
+        registrationData: {
+          institutionName: institutionName,
+          password: hashedPassword,
+          referralSource: referralSource || null
+        },
+        expiresAt: expiresAt,
+        createdAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    // Send verification PIN email
+    const emailResult = await sendVerificationPIN(email.toLowerCase(), pin, institutionName);
+    
+    if (!emailResult.success) {
+      // If email fails, delete the PIN record
+      await RegistrationPIN.deleteOne({ email: email.toLowerCase() });
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to send verification email. Please try again.' 
+      });
+    }
+
+    console.log(`📧 Verification PIN sent to ${email} for institution: ${institutionName}`);
+    console.log(`   PIN expires at: ${expiresAt.toISOString()}`);
+
+    return res.json({ 
+      success: true, 
+      message: 'Verification PIN sent to your email. Please check your inbox.',
+      email: email.toLowerCase(),
+      expiresIn: 15 // minutes
+    });
+  } catch (error) {
+    console.error('Registration PIN generation error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Registration failed. Please try again.' 
+    });
+  }
+});
+
+// POST /verify-pin - Step 2: Verify PIN and create school/admin
+router.post('/verify-pin', async (req, res) => {
+  try {
+    const { email, pin } = req.body;
+
+    // Validation
+    if (!email || !pin) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email and PIN are required' 
+      });
+    }
+
+    // Find the registration record
+    const registrationRecord = await RegistrationPIN.findOne({ 
+      email: email.toLowerCase() 
+    });
+
+    if (!registrationRecord) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No pending registration found for this email. Please register again.' 
+      });
+    }
+
+    // Check if PIN has expired
+    if (registrationRecord.isExpired()) {
+      await RegistrationPIN.deleteOne({ email: email.toLowerCase() });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'PIN has expired. Please register again to receive a new PIN.' 
+      });
+    }
+
+    // Verify PIN
+    if (registrationRecord.pin !== pin) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid PIN. Please check and try again.' 
+      });
+    }
+
+    // PIN is valid - proceed with school and admin creation
+    const { institutionName, password, referralSource } = registrationRecord.registrationData;
+    
+    const School = require('../models/School');
+    const License = require('../models/License');
 
     // Find the trial license
     const trialLicense = await License.findOne({ 
@@ -138,7 +244,7 @@ router.post('/register-school-admin', async (req, res) => {
       organization_type: 'school',
       licenseId: trialLicense._id,
       licenseExpiresAt: null, // Free trial is perpetual (no expiration)
-      contact: email, // Use email as contact
+      contact: email.toLowerCase(), // Use email as contact
       is_active: true,
       current_teachers: 0,
       current_students: 0,
@@ -146,9 +252,6 @@ router.post('/register-school-admin', async (req, res) => {
     });
 
     await newSchool.save();
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Generate user-friendly name from email
     // e.g., "john.doe@example.com" -> "John Doe"
@@ -162,7 +265,7 @@ router.post('/register-school-admin', async (req, res) => {
     const newUser = new User({
       name: displayName,
       email: email.toLowerCase(),
-      password: hashedPassword,
+      password: password, // Already hashed
       role: 'School Admin',
       schoolId: newSchool._id.toString(),
       contact: null,
@@ -182,7 +285,7 @@ router.post('/register-school-admin', async (req, res) => {
       const surveyEntry = new MarketSurvey({
         type: 'registration_referral',
         reason: referralSource,
-        otherReason: null, // Registration dropdown doesn't have "Other" option currently
+        otherReason: null,
         schoolId: newSchool._id,
         schoolName: newSchool.organization_name,
         userEmail: email.toLowerCase()
@@ -190,19 +293,91 @@ router.post('/register-school-admin', async (req, res) => {
       await surveyEntry.save();
     }
 
-    console.log(`✅ New institute registered: ${email} for ${institutionName}`);
+    // Delete the registration record after successful creation
+    await RegistrationPIN.deleteOne({ email: email.toLowerCase() });
+
+    console.log(`✅ Institute registered after PIN verification: ${email} for ${institutionName}`);
     console.log(`   License: ${trialLicense.name} (Teachers: 0/${trialLicense.maxTeachers}, Students: 0/${trialLicense.maxStudents}, Classes: 0/${trialLicense.maxClasses})`);
 
     return res.json({ 
       success: true, 
-      message: 'Institute registered successfully with free trial',
+      message: 'Email verified successfully! Your institute has been registered.',
       schoolId: newSchool._id
     });
   } catch (error) {
-    console.error('School admin registration error:', error);
+    console.error('PIN verification error:', error);
     return res.status(500).json({ 
       success: false, 
-      error: 'Registration failed. Please try again.' 
+      error: 'Verification failed. Please try again.' 
+    });
+  }
+});
+
+// POST /resend-pin - Resend verification PIN
+router.post('/resend-pin', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validation
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email is required' 
+      });
+    }
+
+    // Find the registration record
+    const registrationRecord = await RegistrationPIN.findOne({ 
+      email: email.toLowerCase() 
+    });
+
+    if (!registrationRecord) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No pending registration found for this email. Please register again.' 
+      });
+    }
+
+    // Generate new 6-digit PIN
+    const newPin = generateSixDigitPIN();
+    
+    // Set new expiry time to 15 minutes from now
+    const newExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Update the registration record with new PIN and expiry
+    registrationRecord.pin = newPin;
+    registrationRecord.expiresAt = newExpiresAt;
+    registrationRecord.createdAt = new Date();
+    await registrationRecord.save();
+
+    // Send new verification PIN email
+    const emailResult = await sendVerificationPIN(
+      email.toLowerCase(), 
+      newPin, 
+      registrationRecord.registrationData.institutionName
+    );
+    
+    if (!emailResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to send verification email. Please try again.' 
+      });
+    }
+
+    console.log(`📧 New verification PIN sent to ${email}`);
+    console.log(`   New PIN expires at: ${newExpiresAt.toISOString()}`);
+
+    return res.json({ 
+      success: true, 
+      message: 'New verification PIN sent to your email. Please check your inbox.',
+      email: email.toLowerCase(),
+      expiresIn: 15 // minutes
+    });
+  } catch (error) {
+    console.error('Resend PIN error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to resend PIN. Please try again.' 
     });
   }
 });
