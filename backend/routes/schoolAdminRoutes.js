@@ -4602,30 +4602,55 @@ router.post('/classes/bulk-upload-csv', authenticateSchoolAdmin, upload.single('
     const userRows = rows.slice(1); // Skip first row which is class metadata
     let newTeachersCount = 0;
     let newStudentsCount = 0;
+    const validationErrors = [];
 
-    for (const row of userRows) {
+    // Collect all emails from CSV to check existence in a single query
+    const emailsInCSV = userRows
+      .map(row => (row.Email || row.email || '').trim())
+      .filter(email => email);
+    
+    // Fetch all existing users with these emails in one query
+    const existingUsers = await User.find({ email: { $in: emailsInCSV } });
+    const existingEmailsSet = new Set(existingUsers.map(u => u.email));
+
+    // Normalize role helper
+    const roleMap = {
+      'student': 'Student',
+      'teacher': 'Teacher',
+      'parent': 'Parent',
+      'Student': 'Student',
+      'Teacher': 'Teacher',
+      'Parent': 'Parent'
+    };
+
+    for (const [index, row] of userRows.entries()) {
+      const rowNumber = index + 2; // +1 for class metadata row, +1 for 0-indexed to 1-indexed
+      const name = (row.Name || row.name || '').trim();
       const email = (row.Email || row.email || '').trim();
       const rawRole = (row.Role || row.role || '').trim();
-      
-      // Normalize role
-      const roleMap = {
-        'student': 'Student',
-        'teacher': 'Teacher',
-        'parent': 'Parent',
-        'Student': 'Student',
-        'Teacher': 'Teacher',
-        'Parent': 'Parent'
-      };
       const role = roleMap[rawRole] || rawRole;
 
-      if (!email || !role) {
-        continue; // Skip invalid rows for now
+      // Validate required fields
+      if (!name || !email || !role) {
+        validationErrors.push({
+          row: rowNumber,
+          error: 'Missing required fields (Name, Email, or Role)'
+        });
+        continue;
       }
 
-      // Check if user already exists
-      const existingUser = await User.findOne({ email: email });
+      // Validate role
+      if (!['Student', 'Teacher', 'Parent'].includes(role)) {
+        validationErrors.push({
+          row: rowNumber,
+          email: email,
+          error: `Invalid role: ${rawRole}. Must be Student, Teacher, or Parent`
+        });
+        continue;
+      }
 
-      if (!existingUser) {
+      // Count new users (not already in database)
+      if (!existingEmailsSet.has(email)) {
         if (role === 'Teacher') {
           newTeachersCount++;
         } else if (role === 'Student') {
@@ -4633,6 +4658,16 @@ router.post('/classes/bulk-upload-csv', authenticateSchoolAdmin, upload.single('
         }
         // Parents don't have limits, so we don't count them
       }
+    }
+
+    // If there are validation errors, return them before proceeding
+    if (validationErrors.length > 0) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        success: false,
+        error: `CSV validation failed with ${validationErrors.length} error(s)`,
+        validationErrors: validationErrors
+      });
     }
 
     // Check if adding new users would exceed license limits
