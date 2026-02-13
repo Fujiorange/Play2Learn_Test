@@ -4665,7 +4665,7 @@ router.post('/classes/bulk-upload-csv', authenticateSchoolAdmin, upload.single('
       fs.unlinkSync(req.file.path);
       return res.status(400).json({
         success: false,
-        error: `CSV validation failed with ${validationErrors.length} error(s)`,
+        error: `CSV validation failed with ${validationErrors.length} error(s). Please review the errors below and correct your CSV file.`,
         validationErrors: validationErrors
       });
     }
