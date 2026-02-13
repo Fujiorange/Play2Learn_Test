@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
 const User = require('../models/User');
+const School = require('../models/School');
+const License = require('../models/License');
 const MarketSurvey = require('../models/MarketSurvey');
 const RegistrationPIN = require('../models/RegistrationPIN');
 const { sendVerificationPIN } = require('../services/emailService');
@@ -103,8 +105,6 @@ router.post('/register-school-admin', async (req, res) => {
     }
 
     // Check if institution name already exists
-    const School = require('../models/School');
-    
     // Escape special regex characters to prevent regex injection
     const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedInstitutionName = escapeRegex(institutionName);
@@ -219,9 +219,6 @@ router.post('/verify-pin', async (req, res) => {
 
     // PIN is valid - proceed with school and admin creation
     const { institutionName, password, referralSource } = registrationRecord.registrationData;
-    
-    const School = require('../models/School');
-    const License = require('../models/License');
 
     // Find the trial license
     const trialLicense = await License.findOne({ 
