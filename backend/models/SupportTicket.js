@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 /**
  * Unified Support Ticket Schema
- * Supports tickets from students, teachers, and parents
+ * Supports tickets from students, teachers, parents, and school admins
  * 
  * Migration Note: The legacy fields (student_id, student_name, student_email) are maintained
  * for backward compatibility with existing code that references these fields.
@@ -19,11 +19,11 @@ const mongoose = require('mongoose');
  * And set user_role to 'Student' for existing records
  */
 const supportTicketSchema = new mongoose.Schema({
-  // User information - generic for student, teacher, or parent
+  // User information - generic for student, teacher, parent, or school admin
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   user_name: { type: String, required: true },
   user_email: { type: String, required: true },
-  user_role: { type: String, enum: ['Student', 'Teacher', 'Parent'], default: 'Student' },
+  user_role: { type: String, enum: ['Student', 'Teacher', 'Parent', 'School Admin'], default: 'Student' },
   
   // School information
   school_id: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
