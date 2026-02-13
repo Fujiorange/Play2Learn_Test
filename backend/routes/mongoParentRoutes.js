@@ -25,6 +25,12 @@ const mongoose = require('mongoose');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
+// ✅ Import streak utilities for automatic midnight reset
+const { 
+  computeEffectiveStreak,
+  persistStreakReset
+} = require('../utils/streakUtils');
+
 // ==================== LEVEL THRESHOLDS ====================
 // Level thresholds for points-based leveling system
 // Each entry defines the min points required to reach that level
@@ -963,8 +969,19 @@ router.get('/child/:studentId/performance', authenticateParent, async (req, res)
     // 1. Get Math Profile (for current_profile, streak, total_points)
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
     
+    // ✅ NEW: Check and persist automatic midnight streak reset
+    let streak = 0;
+    if (mathProfile) {
+      const { effective: effectiveStreak, shouldPersistReset } = computeEffectiveStreak(mathProfile);
+      
+      if (shouldPersistReset) {
+        await persistStreakReset(mathProfile);
+      }
+      
+      streak = effectiveStreak;
+    }
+    
     const currentProfile = mathProfile?.current_profile || 1;
-    const streak = mathProfile?.streak || 0;
     const totalPoints = mathProfile?.total_points || 0;
 
     console.log('📊 MathProfile data:', { currentProfile, streak, totalPoints });
@@ -1095,9 +1112,20 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     // Get Math Profile data
     const mathProfile = await MathProfile.findOne({ student_id: studentId });
     
+    // ✅ NEW: Check and persist automatic midnight streak reset
+    let streak = 0;
+    if (mathProfile) {
+      const { effective: effectiveStreak, shouldPersistReset } = computeEffectiveStreak(mathProfile);
+      
+      if (shouldPersistReset) {
+        await persistStreakReset(mathProfile);
+      }
+      
+      streak = effectiveStreak;
+    }
+    
     const currentLevel = mathProfile?.current_profile || 1;
     const totalPoints = mathProfile?.total_points || 0;
-    const streak = mathProfile?.streak || 0;
 
     // Get recent quiz attempts (last 10 for activities)
     // ✅ FIX: Query StudentQuiz collection (quiz attempts), not Quiz collection
