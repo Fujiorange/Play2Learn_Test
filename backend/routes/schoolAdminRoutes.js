@@ -4598,6 +4598,67 @@ router.post('/classes/bulk-upload-csv', authenticateSchoolAdmin, upload.single('
       });
     }
 
+    // Pre-validate: Count how many new teachers and students will be created from CSV
+    const userRows = rows.slice(1); // Skip first row which is class metadata
+    let newTeachersCount = 0;
+    let newStudentsCount = 0;
+
+    for (const row of userRows) {
+      const email = (row.Email || row.email || '').trim();
+      const rawRole = (row.Role || row.role || '').trim();
+      
+      // Normalize role
+      const roleMap = {
+        'student': 'Student',
+        'teacher': 'Teacher',
+        'parent': 'Parent',
+        'Student': 'Student',
+        'Teacher': 'Teacher',
+        'Parent': 'Parent'
+      };
+      const role = roleMap[rawRole] || rawRole;
+
+      if (!email || !role) {
+        continue; // Skip invalid rows for now
+      }
+
+      // Check if user already exists
+      const existingUser = await User.findOne({ email: email });
+
+      if (!existingUser) {
+        if (role === 'Teacher') {
+          newTeachersCount++;
+        } else if (role === 'Student') {
+          newStudentsCount++;
+        }
+        // Parents don't have limits, so we don't count them
+      }
+    }
+
+    // Check if adding new users would exceed license limits
+    const currentTeachers = school.current_teachers || 0;
+    const currentStudents = school.current_students || 0;
+    const teacherLimit = license.maxTeachers;
+    const studentLimit = license.maxStudents;
+
+    // Check teacher limit
+    if (teacherLimit !== -1 && (currentTeachers + newTeachersCount) > teacherLimit) {
+      fs.unlinkSync(req.file.path);
+      return res.status(403).json({
+        success: false,
+        error: `Cannot upload CSV: Creating ${newTeachersCount} new teacher(s) would exceed the teacher limit. Current: ${currentTeachers}/${teacherLimit}, Attempting to add: ${newTeachersCount}. Please upgrade your plan or reduce the number of teachers in the CSV.`
+      });
+    }
+
+    // Check student limit
+    if (studentLimit !== -1 && (currentStudents + newStudentsCount) > studentLimit) {
+      fs.unlinkSync(req.file.path);
+      return res.status(403).json({
+        success: false,
+        error: `Cannot upload CSV: Creating ${newStudentsCount} new student(s) would exceed the student limit. Current: ${currentStudents}/${studentLimit}, Attempting to add: ${newStudentsCount}. Please upgrade your plan or reduce the number of students in the CSV.`
+      });
+    }
+
     // Create the class first
     const newClass = new Class({
       class_name: className,
@@ -4616,8 +4677,7 @@ router.post('/classes/bulk-upload-csv', authenticateSchoolAdmin, upload.single('
     school.current_classes = (school.current_classes || 0) + 1;
     await school.save();
 
-    // Process users (skip first row which is class metadata)
-    const userRows = rows.slice(1);
+    // Process users (userRows already defined during pre-validation)
     const teacherIds = [];
     const studentIds = [];
     const createdUsers = []; // Store temp passwords for pending credentials
