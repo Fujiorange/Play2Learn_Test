@@ -3,6 +3,7 @@
 // ✅ Phase 2: Testimonials, Feedback, Performance (UPDATED), Progress
 // ✅ Phase 2.5: Skill Matrix
 // ✅ Phase 2.7: Performance Report with REAL DATA (NEW)
+// ✅ FIXED: Skill Matrix percentage calculation now matches student view
 
 const express = require('express');
 const router = express.Router();
@@ -23,6 +24,43 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
+
+// ==================== LEVEL THRESHOLDS ====================
+// Level thresholds for points-based leveling system
+// Each entry defines the min points required to reach that level
+const LEVEL_THRESHOLDS = [
+  { level: 0, min: 0, max: 25 },      // Level 0: 0-24 points
+  { level: 1, min: 25, max: 50 },     // Level 1: 25-49 points
+  { level: 2, min: 50, max: 100 },    // Level 2: 50-99 points
+  { level: 3, min: 100, max: 200 },   // Level 3: 100-199 points
+  { level: 4, min: 200, max: 400 },   // Level 4: 200-399 points
+  { level: 5, min: 400, max: Infinity } // Level 5: 400+ points (max level)
+];
+
+// Helper function to calculate level from points
+function calculateLevelFromPoints(points) {
+  // Find the highest level threshold that the points meet
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (points >= LEVEL_THRESHOLDS[i].min) {
+      return LEVEL_THRESHOLDS[i].level;
+    }
+  }
+  return 0;
+}
+
+// Helper function to calculate progress percentage within current level
+function calculateLevelProgress(points) {
+  const level = calculateLevelFromPoints(points);
+  const threshold = LEVEL_THRESHOLDS[level];
+  
+  // If at max level, return 100%
+  if (level === 5) return 100;
+  
+  // Calculate percentage progress within current level range
+  const rangeSize = threshold.max - threshold.min;
+  const progressInRange = points - threshold.min;
+  return Math.min(100, Math.floor((progressInRange / rangeSize) * 100));
+}
 
 // ==================== SCHOOL SCHEMA ====================
 // Only define School if it doesn't exist in models folder
@@ -1077,7 +1115,7 @@ router.get('/child/:studentId/progress', authenticateParent, async (req, res) =>
     // Format quiz data as "activities"
     const recentActivities = recentQuizzes.map(quiz => {
       const percentage = quiz.percentage || 0;
-      const scoreEmoji = percentage >= 70 ? '🎉' : percentage >= 50 ? '�' : '�';
+      const scoreEmoji = percentage >= 70 ? '🎉' : percentage >= 50 ? '👍' : '📝';
       
       return {
         description: `${scoreEmoji} Completed Profile ${quiz.profile_level} Quiz - Score: ${quiz.score}/${quiz.total_questions} (${percentage}%)`,
@@ -1221,7 +1259,8 @@ router.get('/child/:studentId/skills', authenticateParent, async (req, res) => {
         xp: skill.xp || 0,
         points: skill.points || 0,
         max_level: 5, // Fixed max level
-        percentage: skill.xp || 0, // XP is the percentage (0-100)
+        // ✅ FIXED: Use calculateLevelProgress instead of raw xp value
+        percentage: calculateLevelProgress(skill.points || 0),
         unlocked: skill.unlocked !== undefined ? skill.unlocked : true
       }));
 
