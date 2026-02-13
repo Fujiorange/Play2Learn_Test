@@ -18,7 +18,7 @@ async function testQuizGeneration() {
     console.log('\n📊 Test 1: Checking quiz generation availability...');
     for (let level = 1; level <= 10; level++) {
       const availability = await checkGenerationAvailability(level);
-      console.log(`Level ${level}: ${availability.available ? '✅' : '❌'} (${availability.questionCount}/40 questions)`);
+      console.log(`Level ${level}: ${availability.available ? '✅' : '❌'} (${availability.questionCount} questions available)`);
     }
 
     // Test 2: Try to generate a quiz for level 1
@@ -43,7 +43,8 @@ async function testQuizGeneration() {
       // Check for duplicates
       const questionIds = quiz.questions.map(q => q.question_id.toString());
       const uniqueIds = [...new Set(questionIds)];
-      console.log(`   - Unique questions: ${uniqueIds.length}/20 ${uniqueIds.length === 20 ? '✅' : '❌'}`);
+      const expectedCount = quiz.questions.length;
+      console.log(`   - Unique questions: ${uniqueIds.length}/${expectedCount} ${uniqueIds.length === expectedCount ? '✅' : '❌'}`);
       
       // Test 3: Check question usage tracking
       console.log('\n📈 Test 3: Checking question usage tracking...');
