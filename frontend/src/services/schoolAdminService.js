@@ -839,6 +839,32 @@ const schoolAdminService = {
     }
   },
 
+  async deleteSupportTicket(ticketId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(`${API_URL}/mongo/school-admin/support-tickets/${ticketId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete ticket');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('deleteSupportTicket error:', error);
+      return { success: false, error: error.message || 'Failed to delete ticket' };
+    }
+  },
+
   async getSupportTicketStats() {
     try {
       const token = this.getToken();

@@ -116,6 +116,34 @@ function SupportTicketManagement() {
     }
   };
 
+  const handleDeleteTicket = async () => {
+    if (selectedTicket.status !== 'closed') {
+      setMessage({ type: 'error', text: 'Only closed tickets can be deleted' });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this ticket?\n\nThis action cannot be undone.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setSubmitting(true);
+      const response = await schoolAdminService.deleteSupportTicket(selectedTicket._id);
+      if (response.success) {
+        setMessage({ type: 'success', text: 'Ticket deleted successfully' });
+        setSelectedTicket(null);
+        loadTickets();
+      }
+    } catch (error) {
+      console.error('Failed to delete ticket:', error);
+      setMessage({ type: 'error', text: error.message || 'Failed to delete ticket' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
@@ -200,6 +228,7 @@ function SupportTicketManagement() {
     actionButtons: { display: 'flex', gap: '12px', marginTop: '16px' },
     replyButton: { flex: 1, padding: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     closeTicketButton: { flex: 1, padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+    deleteTicketButton: { flex: 1, padding: '12px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
     messageAlert: { padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     successAlert: { background: '#d1fae5', color: '#065f46' },
     errorAlert: { background: '#fee2e2', color: '#991b1b' },
@@ -414,6 +443,15 @@ function SupportTicketManagement() {
                       disabled={submitting}
                     >
                       {submitting ? 'Closing...' : '✓ Close Ticket'}
+                    </button>
+                  )}
+                  {selectedTicket.status === 'closed' && (
+                    <button
+                      style={{...styles.deleteTicketButton, opacity: submitting ? 0.5 : 1}}
+                      onClick={handleDeleteTicket}
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Deleting...' : '🗑️ Delete Ticket'}
                     </button>
                   )}
                 </div>
