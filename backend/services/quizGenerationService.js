@@ -117,14 +117,14 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
     }
   }
   
-  // Step 1: Verify criteria - need at least 40 questions in quiz_level
+  // Step 1: Verify criteria - need at least 1 question in quiz_level
   const questionsPool = await Question.find({
     quiz_level: quizLevel,
     is_active: true
   });
   
-  if (questionsPool.length < 40) {
-    throw new Error(`Insufficient questions for quiz level ${quizLevel}. Need at least 40, found ${questionsPool.length}`);
+  if (questionsPool.length < 1) {
+    throw new Error(`No questions found for quiz level ${quizLevel}. Please add questions to the question bank.`);
   }
   
   // Step 2: Calculate max time gap for freshness weighting
@@ -137,12 +137,15 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
     weight: calculateQuestionWeight(q, oneYear)
   }));
   
-  // Step 4: Select 20 questions with adaptive difficulty progression
+  // Step 4: Select ALL questions from the question bank
   const selectedQuestions = [];
   const availableQuestions = [...weightedQuestions];
   let currentDifficulty = 1;
   
-  for (let i = 0; i < 20; i++) {
+  // Use all questions from the pool
+  const totalQuestions = availableQuestions.length;
+  
+  for (let i = 0; i < totalQuestions; i++) {
     // Filter by current difficulty
     let difficultyPool = availableQuestions.filter(q => q.difficulty === currentDifficulty);
     
@@ -196,7 +199,7 @@ async function generateQuiz(quizLevel, studentId = null, triggerReason = 'manual
     }
     
     // Calculate next difficulty for adaptive progression (not for last question)
-    if (i < 19) {
+    if (i < totalQuestions - 1) {
       currentDifficulty = calculateNextDifficulty(currentDifficulty);
     }
   }
@@ -251,12 +254,12 @@ async function checkGenerationAvailability(quizLevel) {
   });
   
   return {
-    available: questionCount >= 40,
+    available: questionCount >= 1,
     questionCount,
-    required: 40,
-    message: questionCount >= 40 
+    required: 1,
+    message: questionCount >= 1 
       ? `${questionCount} questions available for level ${quizLevel}` 
-      : `Only ${questionCount}/40 questions available for level ${quizLevel}`
+      : `No questions available for level ${quizLevel}. Please add questions to the question bank.`
   };
 }
 

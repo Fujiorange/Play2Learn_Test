@@ -221,18 +221,18 @@ function QuizManager() {
                     <option value={10}>Quiz Level 10</option>
                   </select>
                   <p className="help-text">
-                    Select the quiz level for which to generate a quiz. The system will automatically select 20 questions with adaptive difficulty progression.
+                    Select the quiz level for which to generate a quiz. The system will automatically include ALL questions from the selected quiz level with adaptive difficulty progression.
                   </p>
                 </div>
 
                 <div className="info-box">
                   <h4>✨ Auto-Generation Features</h4>
                   <ul>
-                    <li>✅ 20 questions per quiz</li>
+                    <li>✅ All questions from the selected quiz level</li>
                     <li>✅ Questions selected with freshness weighting</li>
                     <li>✅ Adaptive difficulty progression</li>
                     <li>✅ Unique sequence for each generation</li>
-                    <li>✅ Requires at least 40 questions in the quiz level</li>
+                    <li>✅ Dynamically adjusts to question bank size</li>
                   </ul>
                 </div>
 
