@@ -128,7 +128,7 @@ async function sendStudentCredentialsToParent(student, tempPassword, parentEmail
             </ol>
             
             <center>
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Go to Login Page</a>
+              <a href="${process.env.FRONTEND_URL || 'https://play2learn-test.onrender.com'}/login" class="button">Go to Login Page</a>
             </center>
           </div>
           <div class="footer">
@@ -206,7 +206,7 @@ async function sendTeacherWelcomeEmail(teacher, tempPassword, schoolName) {
             </div>
             
             <center>
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Login Now</a>
+              <a href="${process.env.FRONTEND_URL || 'https://play2learn-test.onrender.com'}/login" class="button">Login Now</a>
             </center>
           </div>
           <div class="footer">
@@ -279,7 +279,7 @@ async function sendParentWelcomeEmail(parent, tempPassword, studentName, schoolN
             </div>
             
             <center>
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">View Progress Now</a>
+              <a href="${process.env.FRONTEND_URL || 'https://play2learn-test.onrender.com'}/login" class="button">View Progress Now</a>
             </center>
           </div>
           <div class="footer">
@@ -361,7 +361,7 @@ async function sendSchoolAdminWelcomeEmail(admin, tempPassword, schoolName) {
             </div>
             
             <center>
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">Login to Dashboard</a>
+              <a href="${process.env.FRONTEND_URL || 'https://play2learn-test.onrender.com'}/login" class="button">Login to Dashboard</a>
             </center>
             
             <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
