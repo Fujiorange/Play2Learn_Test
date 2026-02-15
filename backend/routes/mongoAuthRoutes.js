@@ -27,6 +27,20 @@ function normalizeRole(role) {
   return role;
 }
 
+// Helper function to fetch school name for a user
+async function getSchoolNameForUser(user) {
+  if (!user.schoolId || !['School Admin', 'Teacher', 'Trial Teacher'].includes(user.role)) {
+    return null;
+  }
+  try {
+    const school = await School.findById(user.schoolId);
+    return school ? school.organization_name : null;
+  } catch (error) {
+    console.error('Error fetching school name:', error);
+    return null;
+  }
+}
+
 router.post('/register', async (req, res) => {
   try {
     const {
@@ -416,14 +430,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign({ userId: user._id, email: user.email, role: user.role, schoolId: user.schoolId }, JWT_SECRET, { expiresIn: '7d' });
 
     // Fetch school name for School Admins and Teachers
-    let schoolName = null;
-    if (user.schoolId && (user.role === 'School Admin' || user.role === 'Teacher' || user.role === 'Trial Teacher')) {
-      const School = require('../models/School');
-      const school = await School.findById(user.schoolId);
-      if (school) {
-        schoolName = school.organization_name;
-      }
-    }
+    const schoolName = await getSchoolNameForUser(user);
 
     return res.json({
       success: true,
@@ -463,14 +470,7 @@ router.get('/me', async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     // Fetch school name for School Admins and Teachers
-    let schoolName = null;
-    if (user.schoolId && (user.role === 'School Admin' || user.role === 'Teacher' || user.role === 'Trial Teacher')) {
-      const School = require('../models/School');
-      const school = await School.findById(user.schoolId);
-      if (school) {
-        schoolName = school.organization_name;
-      }
-    }
+    const schoolName = await getSchoolNameForUser(user);
 
     return res.json({
       success: true,
