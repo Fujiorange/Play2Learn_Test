@@ -260,7 +260,7 @@ export default function TeacherDashboard() {
         {/* Welcome Section */}
         <div style={styles.welcomeSection}>
           <h1 style={styles.welcomeTitle}>Welcome back, {userName}! 👋</h1>
-          <p style={styles.welcomeSubtitle}>Primary 1 Mathematics - Manage your classes and students</p>
+          <p style={styles.welcomeSubtitle}>Manage your classes and students</p>
         </div>
 
         {/* Stats Cards - ONLY Students and Classes */}

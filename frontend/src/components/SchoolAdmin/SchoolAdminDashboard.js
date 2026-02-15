@@ -114,7 +114,7 @@ export default function SchoolAdminDashboard() {
         <div style={styles.headerContent}>
           <div style={styles.logo}>
             <div style={styles.logoIcon}>P</div>
-            <span style={styles.logoText}>Play2Learn - Primary 1 Mathematics</span>
+            <span style={styles.logoText}>Play2Learn</span>
           </div>
           <div style={styles.headerRight}>
             <div style={styles.userInfo}>
@@ -128,8 +128,8 @@ export default function SchoolAdminDashboard() {
 
       <main style={styles.main}>
         <div style={styles.welcomeSection}>
-          <h1 style={styles.welcomeTitle}>Welcome back, {user.name?.split(' ')[0]}! 👋</h1>
-          <p style={styles.welcomeSubtitle}>Manage your Primary 1 Mathematics adaptive learning platform.</p>
+          <h1 style={styles.welcomeTitle}>Welcome back, {user.schoolName || user.name?.split(' ')[0]} Admin! 👋</h1>
+          <p style={styles.welcomeSubtitle}>Manage your adaptive learning platform.</p>
         </div>
 
         <div style={styles.statsGrid}>
