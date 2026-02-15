@@ -9,6 +9,7 @@ export default function SchoolAdminDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [schoolName, setSchoolName] = useState('');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -30,22 +31,29 @@ export default function SchoolAdminDashboard() {
     setLoading(true);
     try {
       // REAL API CALL - Fetches from database!
-      const result = await schoolAdminService.getDashboardStats();
+      const [statsResult, schoolResult] = await Promise.all([
+        schoolAdminService.getDashboardStats(),
+        schoolAdminService.getSchoolInfo()
+      ]);
 
-      if (result.success) {
+      if (statsResult.success) {
         setDashboardData({
-          total_students: result.total_students || 0,
-          total_classes: result.total_classes || 0,
-          total_teachers: result.total_teachers || 0,
-          total_parents: result.total_parents || 0,
+          total_students: statsResult.total_students || 0,
+          total_classes: statsResult.total_classes || 0,
+          total_teachers: statsResult.total_teachers || 0,
+          total_parents: statsResult.total_parents || 0,
         });
       } else {
-        console.error('Failed to load dashboard stats:', result.error);
+        console.error('Failed to load dashboard stats:', statsResult.error);
         setDashboardData({
           total_students: 0,
           total_classes: 0,
           total_teachers: 0,
         });
+      }
+
+      if (schoolResult.success && schoolResult.school) {
+        setSchoolName(schoolResult.school.organization_name || '');
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -114,7 +122,7 @@ export default function SchoolAdminDashboard() {
         <div style={styles.headerContent}>
           <div style={styles.logo}>
             <div style={styles.logoIcon}>P</div>
-            <span style={styles.logoText}>Play2Learn - Primary 1 Mathematics</span>
+            <span style={styles.logoText}>Play2Learn</span>
           </div>
           <div style={styles.headerRight}>
             <div style={styles.userInfo}>
@@ -128,8 +136,8 @@ export default function SchoolAdminDashboard() {
 
       <main style={styles.main}>
         <div style={styles.welcomeSection}>
-          <h1 style={styles.welcomeTitle}>Welcome back, {user.name?.split(' ')[0]}! 👋</h1>
-          <p style={styles.welcomeSubtitle}>Manage your Primary 1 Mathematics adaptive learning platform.</p>
+          <h1 style={styles.welcomeTitle}>Welcome back, {schoolName ? `${schoolName} ` : ''}Admin! 👋</h1>
+          <p style={styles.welcomeSubtitle}>Manage your adaptive learning platform.</p>
         </div>
 
         <div style={styles.statsGrid}>
