@@ -61,6 +61,13 @@ export default function TrackTicket() {
     return { background: '#f3f4f6', color: '#6b7280' };
   };
 
+  const getPriorityColor = (priority) => {
+    if (priority === 'high' || priority === 'urgent') return '#ef4444';
+    if (priority === 'medium' || priority === 'normal') return '#f59e0b';
+    if (priority === 'low') return '#10b981';
+    return '#6b7280';
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);

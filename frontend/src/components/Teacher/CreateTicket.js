@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 import teacherService from '../../services/teacherService';
 
 export default function CreateTicket() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
