@@ -136,7 +136,7 @@ export default function SchoolAdminDashboard() {
 
       <main style={styles.main}>
         <div style={styles.welcomeSection}>
-          <h1 style={styles.welcomeTitle}>Welcome back, {schoolName ? `${schoolName} ` : ''}Admin! 👋</h1>
+          <h1 style={styles.welcomeTitle}>Welcome back, {schoolName ? `${schoolName} ` : 'School '}Admin! 👋</h1>
           <p style={styles.welcomeSubtitle}>Manage your adaptive learning platform.</p>
         </div>
 
