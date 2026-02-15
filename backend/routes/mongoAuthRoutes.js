@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
 const User = require('../models/User');
+const School = require('../models/School');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-this-in-production';
 
 function normalizeRole(role) {
@@ -18,6 +19,17 @@ function normalizeRole(role) {
   if (lower.includes('trial student')) return 'Trial Student';
   if (lower.includes('trial teacher')) return 'Trial Teacher';
   return role;
+}
+
+async function getSchoolName(schoolId) {
+  if (!schoolId) return null;
+  try {
+    const school = await School.findById(schoolId);
+    return school ? school.organization_name : null;
+  } catch (error) {
+    console.error('Error fetching school name:', error);
+    return null;
+  }
 }
 
 router.post('/register', async (req, res) => {
@@ -217,14 +229,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
     // Fetch school name if user has a schoolId
-    let schoolName = null;
-    if (user.schoolId) {
-      const School = require('../models/School');
-      const school = await School.findById(user.schoolId);
-      if (school) {
-        schoolName = school.organization_name;
-      }
-    }
+    const schoolName = await getSchoolName(user.schoolId);
 
     return res.json({
       success: true,
@@ -264,14 +269,7 @@ router.get('/me', async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     // Fetch school name if user has a schoolId
-    let schoolName = null;
-    if (user.schoolId) {
-      const School = require('../models/School');
-      const school = await School.findById(user.schoolId);
-      if (school) {
-        schoolName = school.organization_name;
-      }
-    }
+    const schoolName = await getSchoolName(user.schoolId);
 
     return res.json({
       success: true,
