@@ -62,7 +62,7 @@ function P2LAdminDashboard() {
       <header className="dashboard-header">
         <h1>P2L Admin Dashboard</h1>
         <div className="header-actions">
-          <span className="user-info">Welcome, {user?.name}</span>
+          <span className="user-info">Welcome, p2l admin</span>
           <button onClick={handleLogout} className="btn-logout">Logout</button>
         </div>
       </header>

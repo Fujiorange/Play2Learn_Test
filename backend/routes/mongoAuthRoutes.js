@@ -216,6 +216,16 @@ router.post('/login', async (req, res) => {
     // This improves security by preventing role spoofing attempts
     const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
+    // Fetch school name if user has a schoolId
+    let schoolName = null;
+    if (user.schoolId) {
+      const School = require('../models/School');
+      const school = await School.findById(user.schoolId);
+      if (school) {
+        schoolName = school.organization_name;
+      }
+    }
+
     return res.json({
       success: true,
       token,
@@ -229,6 +239,7 @@ router.post('/login', async (req, res) => {
         date_of_birth: user.date_of_birth,
         profile_picture: user.profile_picture,
         schoolId: user.schoolId,
+        schoolName: schoolName,
         class: user.class,
         gradeLevel: user.gradeLevel,
         subject: user.subject,
@@ -252,6 +263,16 @@ router.get('/me', async (req, res) => {
     const user = await User.findById(decoded.userId).select('-password');
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
+    // Fetch school name if user has a schoolId
+    let schoolName = null;
+    if (user.schoolId) {
+      const School = require('../models/School');
+      const school = await School.findById(user.schoolId);
+      if (school) {
+        schoolName = school.organization_name;
+      }
+    }
+
     return res.json({
       success: true,
       user: {
@@ -264,6 +285,7 @@ router.get('/me', async (req, res) => {
         date_of_birth: user.date_of_birth,
         profile_picture: user.profile_picture,
         schoolId: user.schoolId,
+        schoolName: schoolName,
         class: user.class,
         gradeLevel: user.gradeLevel,
         subject: user.subject,
