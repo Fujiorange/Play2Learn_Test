@@ -128,7 +128,7 @@ export default function SchoolAdminDashboard() {
 
       <main style={styles.main}>
         <div style={styles.welcomeSection}>
-          <h1 style={styles.welcomeTitle}>Welcome back, {user.schoolName || user.name?.split(' ')[0]} Admin! 👋</h1>
+          <h1 style={styles.welcomeTitle}>Welcome back, {user.schoolName ? `${user.schoolName} Admin` : user.name?.split(' ')[0]}! 👋</h1>
           <p style={styles.welcomeSubtitle}>Manage your adaptive learning platform.</p>
         </div>
 
