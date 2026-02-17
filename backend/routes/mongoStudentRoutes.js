@@ -1,11 +1,10 @@
-// backend/routes/mongoStudentRoutes.js - COMPLETE FIXED VERSION
+// backend/routes/mongoStudentRoutes.js - COMPLETE WITH AUTOMATIC MIDNIGHT STREAK RESET
 // ✅ All endpoints match frontend expectations
 // ✅ Field names corrected for compatibility
-// ✅ Daily limit set to 2 quizzes (matching frontend)
 // ✅ Placement quizzes excluded from all statistics
 // ✅ Quiz model points to quiz_attempts collection (CRITICAL FIX!)
 // ✅ CRITICAL FIX: Placement quiz now sets adaptive_quiz_level for Quiz Journey!
-// ✅ STREAK FIX: Using shared utility - placement quiz does NOT update streak
+// ✅ STREAK FIX: Automatic midnight reset - simplified logic
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -13,12 +12,13 @@ const jwt = require("jsonwebtoken");
 
 const router = express.Router();
 
-// ✅ Import shared streak utilities
+// ✅ Import shared streak utilities (NOW WITH persistStreakReset)
 const { 
   getSingaporeTime, 
   getSgtMidnightTime, 
   updateStreakOnCompletion, 
   computeEffectiveStreak,
+  persistStreakReset, // NEW: Auto-reset helper
   MS_PER_DAY 
 } = require('../utils/streakUtils');
 
@@ -371,6 +371,13 @@ router.get("/dashboard", async (req, res) => {
       });
     }
 
+    // ✅ NEW: Check and persist automatic midnight streak reset
+    const { effective: effectiveStreak, shouldPersistReset } = computeEffectiveStreak(mathProfile);
+    
+    if (shouldPersistReset) {
+      await persistStreakReset(mathProfile);
+    }
+
     // ✅ FIX: Get all regular quizzes, then filter out unsubmitted ones
     const allRegularQuizzes = await StudentQuiz.find({ 
       student_id: studentId,
@@ -390,7 +397,6 @@ router.get("/dashboard", async (req, res) => {
     const completedQuizzes = completedRegularQuizzes + completedAdaptiveQuizzes;
 
     const user = await User.findById(studentId);
-    const { effective: effectiveStreak } = computeEffectiveStreak(mathProfile);
 
     // ✅ NEW: Get earned badges count to show as achievements
     const db = mongoose.connection.db;
@@ -406,7 +412,7 @@ router.get("/dashboard", async (req, res) => {
         completedQuizzes: completedQuizzes || 0,
         currentProfile: mathProfile.current_profile || 1,
         gradeLevel: user?.gradeLevel || 'Primary 1',
-        streak: effectiveStreak || 0,
+        streak: effectiveStreak || 0, // Use effective streak (0 if broken)
         placementCompleted: mathProfile.placement_completed || false,
         achievements: achievementsCount,
       },
@@ -415,7 +421,7 @@ router.get("/dashboard", async (req, res) => {
         quizzesTaken: completedQuizzes || 0,
         level: mathProfile.current_profile || 1,
         gradeLevel: user?.gradeLevel || 'Primary 1',
-        streak: effectiveStreak || 0,
+        streak: effectiveStreak || 0, // Use effective streak (0 if broken)
         achievements: achievementsCount,
       }
     });
@@ -445,6 +451,13 @@ router.get("/math-profile", async (req, res) => {
       });
     }
 
+    // ✅ NEW: Check and persist automatic midnight streak reset
+    const { effective: effectiveStreak, shouldPersistReset } = computeEffectiveStreak(mathProfile);
+    
+    if (shouldPersistReset) {
+      await persistStreakReset(mathProfile);
+    }
+
     // Reset daily quizzes if needed
     const now = getSingaporeTime();
     const lastResetMid = getSgtMidnightTime(mathProfile.last_reset_date || now);
@@ -456,7 +469,6 @@ router.get("/math-profile", async (req, res) => {
       await mathProfile.save();
     }
 
-    const { effective: effectiveStreak } = computeEffectiveStreak(mathProfile);
     const dailyLimit = 2; // Frontend expects 2 quizzes per day
 
     // ✅ FIXED: Return "mathProfile" to match frontend expectations
@@ -467,7 +479,7 @@ router.get("/math-profile", async (req, res) => {
         placement_completed: mathProfile.placement_completed,
         total_points: mathProfile.total_points,
         consecutive_fails: mathProfile.consecutive_fails,
-        streak: effectiveStreak,
+        streak: effectiveStreak, // Use effective streak (0 if broken)
         quizzes_today: mathProfile.quizzes_today,
         quizzes_remaining: Math.max(0, dailyLimit - mathProfile.quizzes_today),
         attemptsToday: mathProfile.quizzes_today,
@@ -734,54 +746,72 @@ router.get("/math-progress", async (req, res) => {
   try {
     const studentId = req.user.userId;
 
-    const mathProfile = await MathProfile.findOne({ student_id: studentId });
+    let mathProfile = await MathProfile.findOne({ student_id: studentId });
 
-    // Get all quizzes (regular)
-    const allRegularQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
-      .sort({ completed_at: -1 })
-      .lean();
-    
-    const regularQuizzes = allRegularQuizzes.filter(isQuizCompleted);
+    // ✅ NEW: Check and persist automatic midnight streak reset
+    if (mathProfile) {
+      const { effective: effectiveStreak, shouldPersistReset } = computeEffectiveStreak(mathProfile);
+      
+      if (shouldPersistReset) {
+        await persistStreakReset(mathProfile);
+      }
 
-    // Get all adaptive quizzes
-    const adaptiveAttempts = await QuizAttempt.find({ 
-      userId: studentId, 
-      is_completed: true 
-    }).sort({ completedAt: -1 }).lean();
+      // Get all quizzes (regular)
+      const allRegularQuizzes = await StudentQuiz.find({ student_id: studentId, quiz_type: "regular" })
+        .sort({ completed_at: -1 })
+        .lean();
+      
+      const regularQuizzes = allRegularQuizzes.filter(isQuizCompleted);
 
-    // Get effective streak
-    const { effective: streak } = computeEffectiveStreak(mathProfile);
+      // Get all adaptive quizzes
+      const adaptiveAttempts = await QuizAttempt.find({ 
+        userId: studentId, 
+        is_completed: true 
+      }).sort({ completedAt: -1 }).lean();
 
-    const totalQuizzes = regularQuizzes.length + adaptiveAttempts.length;
-    const averageScore =
-      totalQuizzes > 0
-        ? Math.round(
-            (regularQuizzes.reduce((sum, q) => sum + q.percentage, 0) +
-              adaptiveAttempts.reduce((sum, a) => sum + ((a.correct_count / a.total_answered) * 100 || 0), 0)) /
-              totalQuizzes
-          )
-        : 0;
+      const totalQuizzes = regularQuizzes.length + adaptiveAttempts.length;
+      const averageScore =
+        totalQuizzes > 0
+          ? Math.round(
+              (regularQuizzes.reduce((sum, q) => sum + q.percentage, 0) +
+                adaptiveAttempts.reduce((sum, a) => sum + ((a.correct_count / a.total_answered) * 100 || 0), 0)) /
+                totalQuizzes
+            )
+          : 0;
 
-    const totalPoints = mathProfile ? (mathProfile.total_points || 0) : 0;
+      const totalPoints = mathProfile.total_points || 0;
 
-    res.json({
-      success: true,
-      progressData: {
-        currentProfile: mathProfile ? mathProfile.current_profile : 1,
-        totalQuizzes,
-        averageScore,
-        totalPoints,
-        streak,
-        recentQuizzes: regularQuizzes.slice(0, 10).map((q) => ({
-          date: q.completed_at.toLocaleDateString(),
-          time: q.completed_at.toLocaleTimeString(),
-          profile: q.profile_level,
-          score: q.score,
-          total: q.total_questions,
-          percentage: q.percentage,
-        })),
-      },
-    });
+      res.json({
+        success: true,
+        progressData: {
+          currentProfile: mathProfile.current_profile,
+          totalQuizzes,
+          averageScore,
+          totalPoints,
+          streak: effectiveStreak, // Use effective streak (0 if broken)
+          recentQuizzes: regularQuizzes.slice(0, 10).map((q) => ({
+            date: q.completed_at.toLocaleDateString(),
+            time: q.completed_at.toLocaleTimeString(),
+            profile: q.profile_level,
+            score: q.score,
+            total: q.total_questions,
+            percentage: q.percentage,
+          })),
+        },
+      });
+    } else {
+      res.json({
+        success: true,
+        progressData: {
+          currentProfile: 1,
+          totalQuizzes: 0,
+          averageScore: 0,
+          totalPoints: 0,
+          streak: 0,
+          recentQuizzes: [],
+        },
+      });
+    }
   } catch (error) {
     console.error("❌ Math progress error:", error);
     res.status(500).json({ success: false, error: "Failed to load progress data" });
@@ -1559,10 +1589,13 @@ router.get("/badges/progress", async (req, res) => {
       }
     }
 
+    // ✅ IMPORTANT: Get current effective streak (with automatic reset)
+    const { effective: currentStreak } = computeEffectiveStreak(mathProfile);
+
     // Calculate progress for different criteria
     const progress = {
       quizzes_completed: totalCompletedCount,
-      login_streak: mathProfile?.streak || 0,
+      login_streak: currentStreak, // Use effective streak (0 if broken)
       perfect_scores: perfectScoresCount + perfectScoresAdaptive,
       high_scores: highScoresRegular + highScoresAdaptive,
       points_earned: mathProfile?.total_points || 0

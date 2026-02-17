@@ -1,4 +1,4 @@
-// backend/utils/streakUtils.js
+// backend/utils/streakUtils.js - SIMPLIFIED MIDNIGHT RESET VERSION
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function getSingaporeTime() {
@@ -16,7 +16,12 @@ function getSgtMidnightTime(date) {
 }
 
 /**
- * Updates streak when a quiz is completed
+ * SIMPLIFIED: Updates streak when a quiz is completed
+ * Logic:
+ * - If no quiz yesterday: streak = 1 (start fresh)
+ * - If quiz was yesterday: streak = previous + 1 (continue streak)
+ * - If quiz was today already: no change (only 1 quiz per day counts)
+ * 
  * @param {Object} mathProfile - The student's math profile
  * @returns {Number} - The updated streak value
  */
@@ -26,21 +31,22 @@ function updateStreakOnCompletion(mathProfile) {
   const storedStreak = Number.isFinite(mathProfile.streak) ? mathProfile.streak : 0;
   const lastMid = mathProfile.last_quiz_date ? getSgtMidnightTime(mathProfile.last_quiz_date) : null;
 
-  let nextStreak = storedStreak;
+  let nextStreak;
 
   if (!lastMid) {
-    // ✅ FIX: First quiz ever should set streak to 1
+    // First quiz ever
     nextStreak = 1;
-  } else if (todayMid === lastMid) {
-    // Same day - no change to streak
-    nextStreak = storedStreak;
   } else {
     const diffDays = Math.round((todayMid - lastMid) / MS_PER_DAY);
-    if (diffDays === 1) {
-      // ✅ Consecutive day - increment streak
+    
+    if (diffDays === 0) {
+      // Same day - no change (already completed quiz today)
+      nextStreak = storedStreak;
+    } else if (diffDays === 1) {
+      // Consecutive day - increment streak
       nextStreak = storedStreak + 1;
     } else {
-      // ✅ FIX: Skipped days - reset to 1 (not 0) because they just completed a quiz
+      // Missed 1+ days - reset to 1 (because they just completed a quiz)
       nextStreak = 1;
     }
   }
@@ -51,7 +57,16 @@ function updateStreakOnCompletion(mathProfile) {
 }
 
 /**
- * Computes effective streak (for display without saving)
+ * SIMPLIFIED: Computes effective streak for display
+ * Logic:
+ * - If last quiz was today or yesterday: show stored streak
+ * - If last quiz was 2+ days ago: show 0 AND mark for reset
+ * 
+ * This checks if the streak should be 0 due to missing days, without
+ * requiring a quiz completion to trigger the check.
+ * 
+ * @param {Object} mathProfile - The student's math profile
+ * @returns {Object} - { effective: number, shouldPersistReset: boolean }
  */
 function computeEffectiveStreak(mathProfile) {
   if (!mathProfile) return { effective: 0, shouldPersistReset: false };
@@ -61,12 +76,34 @@ function computeEffectiveStreak(mathProfile) {
   const storedStreak = Number.isFinite(mathProfile.streak) ? mathProfile.streak : 0;
   const lastMid = mathProfile.last_quiz_date ? getSgtMidnightTime(mathProfile.last_quiz_date) : null;
 
-  if (!lastMid) return { effective: 0, shouldPersistReset: storedStreak !== 0 };
+  // No quiz ever completed
+  if (!lastMid) {
+    return { effective: 0, shouldPersistReset: storedStreak !== 0 };
+  }
 
   const diffDays = Math.round((todayMid - lastMid) / MS_PER_DAY);
-  if (diffDays <= 1) return { effective: storedStreak, shouldPersistReset: false };
+  
+  // Last quiz was today or yesterday - streak is active
+  if (diffDays <= 1) {
+    return { effective: storedStreak, shouldPersistReset: false };
+  }
 
+  // Last quiz was 2+ days ago - streak is broken (reset at midnight)
   return { effective: 0, shouldPersistReset: storedStreak !== 0 };
+}
+
+/**
+ * HELPER: Persists the streak reset to the database
+ * Call this after computeEffectiveStreak indicates shouldPersistReset = true
+ * 
+ * @param {Object} mathProfile - The student's math profile
+ */
+async function persistStreakReset(mathProfile) {
+  if (mathProfile.streak !== 0) {
+    mathProfile.streak = 0;
+    await mathProfile.save();
+    console.log(`🔄 Streak reset to 0 for student ${mathProfile.student_id} (missed days)`);
+  }
 }
 
 module.exports = {
@@ -75,5 +112,6 @@ module.exports = {
   getSgtMidnightTime,
   updateStreakOnCompletion,
   computeEffectiveStreak,
+  persistStreakReset,
   MS_PER_DAY
 };
